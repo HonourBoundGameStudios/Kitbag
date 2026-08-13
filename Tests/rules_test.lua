@@ -105,7 +105,7 @@ H.ok(byKey.combat.label ~= nil, "every condition carries a human label for the e
 -- Every condition in the catalogue must exist in the state snapshot, or it can never match and the
 -- editor cheerfully offers a rule that will never fire.
 local STATE_KEYS = { form = true, combat = true, stealth = true, mounted = true, resting = true,
-    zone = true }
+    zone = true, spell = true }
 for _, c in ipairs(R.CONDITIONS) do
     H.ok(STATE_KEYS[c.key] == true, c.key .. " is a key KitbagEvents actually reports")
 end
@@ -152,6 +152,28 @@ H.eq(R.Coerce({ zone = "" }).zone, nil, "an empty box is no condition at all")
 H.eq(R.Coerce({ form = "abc" }).form, nil, "unparseable input is dropped rather than stored as junk")
 H.eq(R.Coerce({ nonsense = true }).nonsense, nil, "a key that is not a condition is not stored")
 H.eq(next(R.Coerce(nil)), nil, "coercing nothing is an empty condition set, not an error")
+
+-- ---------------------------------------------------------------------------
+-- Spell-cast conditions (RULE-3)
+-- ---------------------------------------------------------------------------
+--
+-- "The fishing pole when I cast Fishing, the pick when I mine." The spell is a condition like any
+-- other — the work is in KitbagEvents putting the spell name into the snapshot while a cast is in
+-- flight and taking it out again afterwards — but it must read as a sentence and match exactly.
+
+H.eq(byKey.spell.kind, "text", "the spell is typed in, since the list of them is the whole spellbook")
+H.eq(R.Describe({ set = "Fishing", when = { spell = "Fishing" } }), "when casting Fishing",
+    "a spell condition reads as what it is")
+H.eq(R.Describe({ set = "X", when = { spell = "Mining", combat = false } }),
+    "out of combat and when casting Mining",
+    "…and combines with the others in catalogue order like anything else")
+
+-- Exact match, not a prefix: "Fish" must not fire on "Fishing", or a rule written for one spell
+-- silently governs a dozen. Match already compares with ==; this pins it as intended, not incidental.
+local castRules = { rule("Rod", 10, { spell = "Fishing" }) }
+H.eq(R.Match(castRules, { spell = "Fishing" }).set, "Rod", "the named spell matches")
+H.eq(R.Match(castRules, { spell = "Fish" }), nil, "a shorter name is a different spell")
+H.eq(R.Match(castRules, { spell = false }), nil, "no cast in flight matches no spell rule")
 
 -- ---------------------------------------------------------------------------
 -- Restore-previous (RULE-4)

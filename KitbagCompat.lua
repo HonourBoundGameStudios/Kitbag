@@ -97,6 +97,23 @@ function Compat.FormLabels()
     return labels
 end
 
+--- The spell name out of a UNIT_SPELLCAST_* event's payload, or nil.
+--
+-- The payload changed shape between flavours: modern clients send (unit, target, castGUID, spellID)
+-- and the oldest Classic builds sent (unit, spellName, rank, target). A numeric fourth argument is
+-- the discriminator — it is a spell id and nothing else ever is. Guessing wrong would not error, it
+-- would just make every spell rule silently dead, which is the failure mode worth spending a branch
+-- to avoid.
+function Compat.CastSpellName(_, second, _, fourth)
+    local spellId = tonumber(fourth)
+    if spellId then
+        local name = _G.GetSpellInfo and _G.GetSpellInfo(spellId)
+        return name
+    end
+    if type(second) == "string" then return second end
+    return nil
+end
+
 --- The key this character's sets are stored under: "Name - Realm".
 --
 -- The realm has to be in it. Two characters can share a name across realms on one account, and a

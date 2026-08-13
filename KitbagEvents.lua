@@ -11,6 +11,7 @@ local Rules = Kitbag.Rules
 local Sets = Kitbag.Sets
 local Core = Kitbag.Core
 local Inventory = Kitbag.Inventory
+local Compat = Kitbag.Compat
 
 local Events = {}
 
@@ -23,7 +24,21 @@ local WATCHED = {
     "UPDATE_STEALTH",
     "PLAYER_UPDATE_RESTING",
     "PLAYER_MOUNT_DISPLAY_CHANGED",
+    -- Spell-cast conditions (RULE-3). SENT rather than START: the pole has to be on before the cast
+    -- resolves, and SENT is the earliest the client tells anyone. The four endings are all needed —
+    -- a cast that fails must clear the condition exactly like one that succeeds, or the rule stays
+    -- matched forever and the gear never comes back.
+    "UNIT_SPELLCAST_SENT",
+    "UNIT_SPELLCAST_SUCCEEDED",
+    "UNIT_SPELLCAST_STOP",
+    "UNIT_SPELLCAST_FAILED",
+    "UNIT_SPELLCAST_INTERRUPTED",
+    "UNIT_SPELLCAST_CHANNEL_STOP",
 }
+
+-- The spell the player is currently casting, or nil. Kept here rather than read on demand because
+-- there is nothing to read: by the time a swap has been decided the cast is usually already over.
+local casting = nil
 
 local frame = CreateFrame("Frame")
 local pending = nil   -- a Rules.Next step deferred until combat ends
@@ -44,6 +59,9 @@ function Events.State()
         mounted = IsMounted() and true or false,
         resting = IsResting() and true or false,
         zone = GetRealZoneText() or "",
+        -- false, not nil: a state key that is absent can never be compared against, and Rules
+        -- compares state[k] to when[k] directly.
+        spell = casting or false,
     }
 end
 
@@ -84,7 +102,54 @@ local function apply()
     perform(step)
 end
 
-function frame:OnEvent(event)
+-- Spell casts only matter for the player, and UNIT_SPELLCAST_* fires for every unit in range.
+--
+-- Two things about this feature are worth being plain about, because both look like bugs.
+--
+-- First, equipping cancels a cast in progress, so the attempt that triggers the swap is the one that
+-- pays for it: you click Fishing, the pole goes on, that cast is lost, and the next one works.
+-- SENT is the earliest hook the client offers, so this is inherent rather than a shortcut, and
+-- ItemRack behaved the same way for the same reason.
+--
+-- Second, and the reason for the grace window: that cancelled cast fires FAILED immediately. Clear
+-- the condition there and the rule stops matching, the restore fires, and the pole comes straight
+-- back off — the feature would undo itself within a frame of working. So a finished cast only
+-- expires the condition after a pause, and casting again inside that pause holds the gear on. The
+-- gear comes off when you stop, which is also the behaviour a player would describe if asked.
+local CAST_GRACE = 12
+
+local castExpiry = nil
+
+local function onCast(event, unit, ...)
+    if unit ~= "player" then return false end
+
+    if event == "UNIT_SPELLCAST_SENT" then
+        casting, castExpiry = Compat.CastSpellName(unit, ...), nil
+        return true
+    end
+
+    if not casting then return false end
+    castExpiry = GetTime() + CAST_GRACE
+    -- Nothing has changed yet — the condition still holds until the window closes.
+    return false
+end
+
+-- Checked on a frame handler rather than a timer so it needs nothing from the flavour, and so a
+-- reload cannot leave a scheduled callback holding a stale set name.
+frame:SetScript("OnUpdate", function()
+    if castExpiry and GetTime() >= castExpiry then
+        casting, castExpiry = nil, nil
+        apply()
+    end
+end)
+
+function frame:OnEvent(event, ...)
+    if string.sub(event, 1, 15) == "UNIT_SPELLCAST_" then
+        if not onCast(event, ...) then return end
+        apply()
+        return
+    end
+
     if event == "PLAYER_REGEN_ENABLED" and pending then
         local step = pending
         pending = nil

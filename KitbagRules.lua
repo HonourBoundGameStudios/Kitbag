@@ -117,6 +117,10 @@ Rules.CONDITIONS = {
     { key = "mounted", label = "Mounted",    kind = "boolean", yes = "mounted",   no = "not mounted" },
     { key = "resting", label = "Resting",    kind = "boolean", yes = "resting",   no = "not resting" },
     { key = "zone",    label = "Zone",       kind = "text",    prefix = "in " },
+    -- Typed rather than chosen: the list of castable spells is the whole spellbook, and the useful
+    -- ones (Fishing, Mining, Herb Gathering) are three words the player already knows. The name must
+    -- match exactly — Match compares with ==, so "Fish" does not govern "Fishing".
+    { key = "spell",   label = "Casting",    kind = "text",    prefix = "when casting " },
 }
 
 local conditionByKey = {}
