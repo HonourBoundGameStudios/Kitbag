@@ -6,15 +6,15 @@ and are referenced by path, never `@import`ed.
 
 ## Project Overview
 
-**Panoply** is a gear-set manager for **World of Warcraft Classic** — the job ItemRack used to do,
+**Loadout** is a gear-set manager for **World of Warcraft Classic** — the job ItemRack used to do,
 rebuilt. Save what you're wearing as a named set, swap it back in one click, and let rules swap it
 for you on form/combat/stealth/zone.
 
 - **Stack:** Lua 5.1 (the WoW runtime), Blizzard FrameXML. No XML files, no libraries, no build step
   — the client compiles the Lua at load and you iterate with `/reload`.
-- **Flavours:** Classic Era (`Panoply.toc`) and Mists Classic (`Panoply_Mists.toc`) from one file
+- **Flavours:** Classic Era (`Loadout.toc`) and Mists Classic (`Loadout_Mists.toc`) from one file
   list. Retail is a backlog item, not a second repo.
-- **SavedVariables:** `PanoplyDB`, schema-versioned — see `PanoplyDB.lua`.
+- **SavedVariables:** `LoadoutDB`, schema-versioned — see `LoadoutDB.lua`.
 
 **The design premise, and the reason this rewrite exists:** the parts that decide anything are
 **pure** and are tested outside the game. Every "it half-applied my set / equipped the wrong ring /
@@ -23,16 +23,16 @@ only be tested by wearing the bug.
 
 | File | Role |
 |---|---|
-| `PanoplyCore.lua` | **PURE.** Item identity, set capture, the equip planner. No WoW API. |
-| `PanoplyRules.lua` | **PURE.** Which set wins for a given world state, and `Explain()` for why. |
-| `PanoplyCompat.lua` | **The only file allowed to branch on the game flavour.** |
-| `PanoplyDB.lua` | SavedVariables schema, defaults, migrations. |
-| `PanoplyInventory.lua` | Reads the client into the plain tables the planner takes. No decisions. |
-| `PanoplyEquip.lua` | Performs a plan: one action per frame, verify each, bounded retries. |
-| `PanoplySets.lua` | The one code path that equips a set. UI, slash and rules all go through it. |
-| `PanoplyEvents.lua` | Events in, state snapshot out, hands it to `PanoplyRules`. |
-| `PanoplyUI.lua` / `PanoplyMinimap.lua` | The window and its launcher. |
-| `Panoply.lua` | Bootstrap: load order, SavedVariables handoff, slash commands. Loads last. |
+| `LoadoutCore.lua` | **PURE.** Item identity, set capture, the equip planner. No WoW API. |
+| `LoadoutRules.lua` | **PURE.** Which set wins for a given world state, and `Explain()` for why. |
+| `LoadoutCompat.lua` | **The only file allowed to branch on the game flavour.** |
+| `LoadoutDB.lua` | SavedVariables schema, defaults, migrations. |
+| `LoadoutInventory.lua` | Reads the client into the plain tables the planner takes. No decisions. |
+| `LoadoutEquip.lua` | Performs a plan: one action per frame, verify each, bounded retries. |
+| `LoadoutSets.lua` | The one code path that equips a set. UI, slash and rules all go through it. |
+| `LoadoutEvents.lua` | Events in, state snapshot out, hands it to `LoadoutRules`. |
+| `LoadoutUI.lua` / `LoadoutMinimap.lua` | The window and its launcher. |
+| `Loadout.lua` | Bootstrap: load order, SavedVariables handoff, slash commands. Loads last. |
 
 ## The Process — NON-NEGOTIABLE
 
@@ -65,16 +65,16 @@ pwsh -File deploy.ps1                           # copy into the WoW AddOns folde
 pwsh -File deploy.ps1 -WowPath "D:\WoW\_classic_era_"
 ```
 
-In-game: `/reload` to pick up changes, `/pan` to open, `/pan why` to see which rule is choosing.
+In-game: `/reload` to pick up changes, `/lo` to open, `/lo why` to see which rule is choosing.
 Enable Lua errors while developing: `/console scriptErrors 1` (or run BugSack).
 
 `Tests/` is **not** shipped — `deploy.ps1` copies only `*.lua` at the root and `*.toc`.
 
 ## Code Style
 
-- **Locals over globals.** The single sanctioned global is the `Panoply` namespace table (plus the
-  `PanoplyDB` SavedVariables and the `SLASH_*` pairs the client requires by name).
-- Each module ends `Panoply.X = X; return X` — the `return` is what lets `Tests/` load it with
+- **Locals over globals.** The single sanctioned global is the `Loadout` namespace table (plus the
+  `LoadoutDB` SavedVariables and the `SLASH_*` pairs the client requires by name).
+- Each module ends `Loadout.X = X; return X` — the `return` is what lets `Tests/` load it with
   `dofile()` outside the game, where the addon-private `...` table does not exist.
 - **4 spaces**, no tabs. Functions small. `PascalCase` for module functions, `localCamelCase` for
   file-locals.
@@ -83,17 +83,17 @@ Enable Lua errors while developing: `/console scriptErrors 1` (or run BugSack).
 
 ## Gotchas
 
-- **Load order is load-bearing.** Every module reads its dependencies out of `Panoply` at load time,
-  so a module must appear in the `.toc` *after* everything it uses. `Panoply.lua` is last.
-- **Both `.toc` files must list the same files.** Adding a module and forgetting `Panoply_Mists.toc`
+- **Load order is load-bearing.** Every module reads its dependencies out of `Loadout` at load time,
+  so a module must appear in the `.toc` *after* everything it uses. `Loadout.lua` is last.
+- **Both `.toc` files must list the same files.** Adding a module and forgetting `Loadout_Mists.toc`
   breaks that flavour only, and only at runtime.
 - **`## Interface` numbers go stale every patch** and a stale one can refuse to load. Verify against
   the live client.
 - **`GetItemInfo` returns nil for an uncached item.** Never treat nil as "not a two-hander" — that is
-  the path that silently reintroduces the half-applied swap. `PanoplyInventory.Meta` only asks about
+  the path that silently reintroduces the half-applied swap. `LoadoutInventory.Meta` only asks about
   keys a set actually names, to keep the window for this small.
 - **Equipping is asynchronous.** Firing a whole plan in one frame means later actions read a world
-  that hasn't caught up. `PanoplyEquip` does one action per frame and verifies each; don't "optimise"
+  that hasn't caught up. `LoadoutEquip` does one action per frame and verifies each; don't "optimise"
   that away.
 - **PowerShell writes CRLF.** Use the editor (or the agent's write tool) for tracked files; if
   PowerShell wrote one, `git add --renormalize <file>`.
@@ -128,7 +128,7 @@ Co-Authored-By: <Agent name> <noreply@anthropic.com>
 
 ## Fleet Comms 📡 — you are part of a fleet
 
-**Panoply** is one ship in a fleet of projects coordinated by the **Orchestrai** flagship. Ships
+**Loadout** is one ship in a fleet of projects coordinated by the **Orchestrai** flagship. Ships
 talk to each other through **Subspace**: file-based messages (Markdown + YAML frontmatter) dropped
 into a recipient's `Process/subspace/inbox/`. All repos share the local filesystem, so this needs no
 network — the flagship's `tools/fleet-comms.ps1` resolves each ship's path from its registry.

@@ -1,4 +1,4 @@
--- PanoplyUI — the main window.
+-- LoadoutUI — the main window.
 --
 -- The brief is "better UI", and the specific thing being fixed is legibility of *state*. ItemRack
 -- told you a set existed; it did not tell you whether you could actually wear it. Every row here
@@ -8,10 +8,10 @@
 -- This is a scaffold: the window is real and usable, but the rule editor, the per-slot flyouts and
 -- the set icon picker are backlog items (Process/Backlog.md, EPIC-UI).
 
-Panoply = Panoply or {}
+Loadout = Loadout or {}
 
-local Sets = Panoply.Sets
-local Equip = Panoply.Equip
+local Sets = Loadout.Sets
+local Equip = Loadout.Equip
 
 local UI = {}
 
@@ -71,7 +71,7 @@ local function createRow(parent, index)
 end
 
 local function build()
-    frame = CreateFrame("Frame", "PanoplyFrame", UIParent, "BasicFrameTemplateWithInset")
+    frame = CreateFrame("Frame", "LoadoutFrame", UIParent, "BasicFrameTemplateWithInset")
     frame:SetSize(400, 340)
     frame:SetPoint("CENTER")
     frame:SetMovable(true)
@@ -83,11 +83,11 @@ local function build()
     frame:Hide()
 
     -- Esc closes it, like every other panel in the game.
-    tinsert(UISpecialFrames, "PanoplyFrame")
+    tinsert(UISpecialFrames, "LoadoutFrame")
 
     frame.title = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     frame.title:SetPoint("TOP", frame, "TOP", 0, -5)
-    frame.title:SetText("Panoply")
+    frame.title:SetText("Loadout")
 
     local list = CreateFrame("Frame", nil, frame)
     list:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -32)
@@ -125,7 +125,7 @@ local function build()
 end
 
 --- Redraw. Called after anything that could change what a row should say — which is why every
---- mutating path in PanoplySets ends in Panoply.Refresh().
+--- mutating path in LoadoutSets ends in Loadout.Refresh().
 function UI.Refresh()
     if not frame or not frame:IsShown() then return end
 
@@ -165,5 +165,5 @@ function UI.Toggle()
     end
 end
 
-Panoply.UI = UI
+Loadout.UI = UI
 return UI

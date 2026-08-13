@@ -1,20 +1,20 @@
--- PanoplyMinimap — the minimap button.
+-- LoadoutMinimap — the minimap button.
 --
 -- Hand-rolled rather than pulled from LibDBIcon, deliberately: the fleet's dependency policy is
 -- offline-first and zero-cost, and a 60-line button is cheaper to own than a vendored library.
--- If Panoply later wants a full LibDataBroker surface (so Titan/Bazooka/Sigil can host it), that is
+-- If Loadout later wants a full LibDataBroker surface (so Titan/Bazooka/Sigil can host it), that is
 -- a backlog item, not a reason to take the dependency now.
 
-Panoply = Panoply or {}
+Loadout = Loadout or {}
 
-local UI = Panoply.UI
+local UI = Loadout.UI
 
 local Minimap_ = {}
 
 local button
 
 local function position(self)
-    local angle = math.rad(Panoply.db.options.minimap.angle or 200)
+    local angle = math.rad(Loadout.db.options.minimap.angle or 200)
     self:SetPoint("CENTER", Minimap, "CENTER", 80 * math.cos(angle), 80 * math.sin(angle))
 end
 
@@ -22,14 +22,14 @@ local function onDragUpdate(self)
     local mx, my = Minimap:GetCenter()
     local cx, cy = GetCursorPosition()
     local scale = Minimap:GetEffectiveScale()
-    Panoply.db.options.minimap.angle = math.deg(math.atan2(cy / scale - my, cx / scale - mx))
+    Loadout.db.options.minimap.angle = math.deg(math.atan2(cy / scale - my, cx / scale - mx))
     position(self)
 end
 
 function Minimap_.Create()
     if button then return button end
 
-    button = CreateFrame("Button", "PanoplyMinimapButton", Minimap)
+    button = CreateFrame("Button", "LoadoutMinimapButton", Minimap)
     button:SetSize(31, 31)
     button:SetFrameStrata("MEDIUM")
     button:SetMovable(true)
@@ -53,23 +53,23 @@ function Minimap_.Create()
     button:SetScript("OnDragStop", function(self) self:SetScript("OnUpdate", nil) end)
     button:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-        GameTooltip:AddLine("Panoply")
+        GameTooltip:AddLine("Loadout")
         GameTooltip:AddLine("Click to open. Drag to move.", 1, 1, 1)
         GameTooltip:Show()
     end)
     button:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
     position(button)
-    if Panoply.db.options.minimap.hide then button:Hide() end
+    if Loadout.db.options.minimap.hide then button:Hide() end
     return button
 end
 
 function Minimap_.SetHidden(hide)
-    Panoply.db.options.minimap.hide = hide and true or false
+    Loadout.db.options.minimap.hide = hide and true or false
     if button then
         if hide then button:Hide() else button:Show() end
     end
 end
 
-Panoply.Minimap = Minimap_
+Loadout.Minimap = Minimap_
 return Minimap_

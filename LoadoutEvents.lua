@@ -1,14 +1,14 @@
--- PanoplyEvents — turn game events into a state snapshot and hand it to the rule engine.
+-- LoadoutEvents — turn game events into a state snapshot and hand it to the rule engine.
 --
 -- The division of labour that ItemRack never had: this file knows about events and nothing about
--- which set should win; PanoplyRules knows which set should win and nothing about events. So the
+-- which set should win; LoadoutRules knows which set should win and nothing about events. So the
 -- part that used to be untestable is now a table, and the part left here is a dozen lines of
 -- wiring.
 
-Panoply = Panoply or {}
+Loadout = Loadout or {}
 
-local Rules = Panoply.Rules
-local Sets = Panoply.Sets
+local Rules = Loadout.Rules
+local Sets = Loadout.Sets
 
 local Events = {}
 
@@ -40,7 +40,7 @@ function Events.State()
 end
 
 local function apply()
-    local db = Panoply.db
+    local db = Loadout.db
     if not db.options.autoSwap then return end
 
     local winner = Rules.Match(db.rules, Events.State())
@@ -72,10 +72,10 @@ function Events.Enable()
     frame:SetScript("OnEvent", frame.OnEvent)
 end
 
---- Why is the current state producing the set it is? Backs `/pan why`.
+--- Why is the current state producing the set it is? Backs `/lo why`.
 function Events.Explain()
-    return Rules.Explain(Panoply.db.rules, Events.State())
+    return Rules.Explain(Loadout.db.rules, Events.State())
 end
 
-Panoply.Events = Events
+Loadout.Events = Events
 return Events

@@ -1,16 +1,16 @@
--- PanoplyCore — pure item identity + equip planning.
+-- LoadoutCore — pure item identity + equip planning.
 --
 -- This is the file ItemRack never had. Every "it equipped the wrong thing / left a slot empty /
 -- dropped my offhand into the void" complaint is a *planning* bug, and a planner that only exists
--- inside the client can only be tested by wearing the bug. So Panoply's planner takes plain tables
+-- inside the client can only be tested by wearing the bug. So Loadout's planner takes plain tables
 -- in and returns a plain ordered plan out, and lives here where it can be cornered.
 --
 -- Usage: lua Tests/core_test.lua   (run from the project root)
 
 local H = dofile("Tests/harness.lua")
-local C = dofile("PanoplyCore.lua")
+local C = dofile("LoadoutCore.lua")
 
-H.start("PanoplyCore")
+H.start("LoadoutCore")
 
 -- ---------------------------------------------------------------------------
 -- Slots

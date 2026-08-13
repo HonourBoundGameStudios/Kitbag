@@ -1,35 +1,35 @@
--- Panoply — a gear-set manager for World of Warcraft Classic.
+-- Loadout — a gear-set manager for World of Warcraft Classic.
 --
 -- Bootstrap only: load order, SavedVariables handoff, and the slash commands. Everything that makes
 -- a decision lives in a module beside this one, and the ones that decide anything interesting
--- (PanoplyCore, PanoplyRules) are pure and tested under plain Lua — see Tests/ and CLAUDE.md.
+-- (LoadoutCore, LoadoutRules) are pure and tested under plain Lua — see Tests/ and CLAUDE.md.
 
 local ADDON = ...
 
-Panoply = Panoply or {}
+Loadout = Loadout or {}
 
-local Sets = Panoply.Sets
-local UI = Panoply.UI
-local Events = Panoply.Events
-local Minimap_ = Panoply.Minimap
-local DB = Panoply.DB
+local Sets = Loadout.Sets
+local UI = Loadout.UI
+local Events = Loadout.Events
+local Minimap_ = Loadout.Minimap
+local DB = Loadout.DB
 
 --- Anything that changes stored state calls this. One redraw entry point means a new surface (the
 --- rule editor, a broker plugin) gets kept in step by existing code rather than by remembering to.
-function Panoply.Refresh()
+function Loadout.Refresh()
     UI.Refresh()
 end
 
 local function help()
     local say = Sets.Say
     say("commands:")
-    say("  |cffffd100/pan|r — open the window")
-    say("  |cffffd100/pan save <name>|r — save what you're wearing")
-    say("  |cffffd100/pan equip <name>|r — wear a set")
-    say("  |cffffd100/pan delete <name>|r — remove a set")
-    say("  |cffffd100/pan list|r — what's saved")
-    say("  |cffffd100/pan why|r — which rule is choosing your set, and why")
-    say("  |cffffd100/pan minimap|r — toggle the minimap button")
+    say("  |cffffd100/lo|r — open the window")
+    say("  |cffffd100/lo save <name>|r — save what you're wearing")
+    say("  |cffffd100/lo equip <name>|r — wear a set")
+    say("  |cffffd100/lo delete <name>|r — remove a set")
+    say("  |cffffd100/lo list|r — what's saved")
+    say("  |cffffd100/lo why|r — which rule is choosing your set, and why")
+    say("  |cffffd100/lo minimap|r — toggle the minimap button")
 end
 
 local function why()
@@ -59,12 +59,12 @@ local function command(input)
     elseif cmd == "list" then
         local names = Sets.Names()
         if #names == 0 then
-            Sets.Say("no sets yet — |cffffd100/pan save <name>|r saves what you're wearing.")
+            Sets.Say("no sets yet — |cffffd100/lo save <name>|r saves what you're wearing.")
         else
             Sets.Say("%d set(s): %s", #names, table.concat(names, ", "))
         end
     elseif cmd == "why" then why()
-    elseif cmd == "minimap" then Minimap_.SetHidden(not Panoply.db.options.minimap.hide)
+    elseif cmd == "minimap" then Minimap_.SetHidden(not Loadout.db.options.minimap.hide)
     else help()
     end
 end
@@ -74,16 +74,16 @@ loader:RegisterEvent("ADDON_LOADED")
 loader:RegisterEvent("PLAYER_LOGIN")
 loader:SetScript("OnEvent", function(_, event, name)
     if event == "ADDON_LOADED" and name == ADDON then
-        -- PanoplyDB is where the old-data question is answered; nothing else reads the raw global.
-        PanoplyDB = DB.Load(PanoplyDB)
-        Panoply.db = PanoplyDB
+        -- LoadoutDB is where the old-data question is answered; nothing else reads the raw global.
+        LoadoutDB = DB.Load(LoadoutDB)
+        Loadout.db = LoadoutDB
     elseif event == "PLAYER_LOGIN" then
         Minimap_.Create()
         Events.Enable()
-        Sets.Say("loaded. |cffffd100/pan|r to open, |cffffd100/pan help|r for commands.")
+        Sets.Say("loaded. |cffffd100/lo|r to open, |cffffd100/lo help|r for commands.")
     end
 end)
 
-SLASH_PANOPLY1 = "/panoply"
-SLASH_PANOPLY2 = "/pan"
-SlashCmdList["PANOPLY"] = command
+SLASH_LOADOUT1 = "/loadout"
+SLASH_LOADOUT2 = "/lo"
+SlashCmdList["LOADOUT"] = command

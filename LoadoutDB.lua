@@ -1,11 +1,11 @@
--- PanoplyDB — the SavedVariables schema, its defaults, and its migrations.
+-- LoadoutDB — the SavedVariables schema, its defaults, and its migrations.
 --
 -- Saved data outlives the code that wrote it. Every stored table therefore carries a `schema`
 -- number, and every change to the shape adds a migration step rather than silently reinterpreting
 -- old data — a set list that quietly empties itself after an update is the worst bug a gear manager
 -- can have, because the data is gone before anyone notices.
 
-Panoply = Panoply or {}
+Loadout = Loadout or {}
 
 local DB = {}
 
@@ -15,7 +15,7 @@ local function defaults()
     return {
         schema = DB.SCHEMA,
         sets = {},          -- [name] = { name =, icon =, slots = { [slotId] = key | false } }
-        rules = {},         -- ordered list; see PanoplyRules
+        rules = {},         -- ordered list; see LoadoutRules
         options = {
             autoSwap = true,        -- obey the rules at all
             deferInCombat = false,  -- queue swaps until combat ends instead of attempting them
@@ -61,5 +61,5 @@ end
 
 DB.Defaults = defaults
 
-Panoply.DB = DB
+Loadout.DB = DB
 return DB

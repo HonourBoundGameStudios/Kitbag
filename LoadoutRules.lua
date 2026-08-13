@@ -1,19 +1,19 @@
--- PanoplyRules — PURE: which set should be worn, given a snapshot of the world.
+-- LoadoutRules — PURE: which set should be worn, given a snapshot of the world.
 --
 -- ItemRack's event system was its best idea and its worst-behaved code: two rules that both matched
 -- fought each other, the winner depended on registration order, and there was no way to ask why a
--- set had been chosen. Panoply's answer is one total function of (rules, state) — no frames, no
+-- set had been chosen. Loadout's answer is one total function of (rules, state) — no frames, no
 -- events, no client — plus Explain(), so "why am I wearing this" has an answer you can read.
 --
 -- Tested by Tests/rules_test.lua, which runs under plain Lua 5.1 outside the game.
 
-Panoply = Panoply or {}
+Loadout = Loadout or {}
 
 local Rules = {}
 
 -- A rule:
 --   { set = "Tank", priority = 50, enabled = true, when = { form = 1, combat = true } }
--- The state is a flat snapshot built by PanoplyEvents:
+-- The state is a flat snapshot built by LoadoutEvents:
 --   { form = 1, combat = false, stealth = false, mounted = false, resting = true, zone = "…" }
 --
 -- Conditions are AND, always. "Cat form AND stealthed" is a different outfit from "Cat form", and
@@ -95,5 +95,5 @@ function Rules.Explain(rules, state)
     return { chosen = winner and winner.set or nil, considered = considered }
 end
 
-Panoply.Rules = Rules
+Loadout.Rules = Rules
 return Rules

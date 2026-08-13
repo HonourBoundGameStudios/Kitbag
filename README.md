@@ -1,8 +1,6 @@
-# Panoply
+# Loadout
 
 **Gear sets that actually apply.** A gear-set manager for World of Warcraft Classic.
-
-*panoply* — a complete suit of armour.
 
 Save what you're wearing as a named set. Put it back on in one click. Let rules put it back on for
 you when you shift into bear form, or enter combat, or start fishing.
@@ -14,7 +12,7 @@ almost always the same shape of problem: **the set half-applied.** A ring went t
 The shield stayed on under the two-hander. Two rules both matched and the one that won changed
 between sessions. The set looked applied and wasn't.
 
-Every one of those is a bug in *deciding what to move*, not in moving it. So in Panoply the deciding
+Every one of those is a bug in *deciding what to move*, not in moving it. So in Loadout the deciding
 is a pure function — no frames, no events, no client — and it is covered by a test suite that runs
 under plain Lua outside the game. `Tests/run-all.ps1` is the gate.
 
@@ -29,12 +27,12 @@ That buys three concrete behaviours:
   targeted, and a step that won't take is retried and then *reported* — never left silently
   half-done. If an item is in the bank, it says so, by slot name, before it starts.
 
-And when a rule fires, `/pan why` tells you which rule won, and which condition every other rule
+And when a rule fires, `/lo why` tells you which rule won, and which condition every other rule
 failed on.
 
 ## Install
 
-Copy the `Panoply` folder into `World of Warcraft\_classic_era_\Interface\AddOns\`, or run:
+Copy the `Loadout` folder into `World of Warcraft\_classic_era_\Interface\AddOns\`, or run:
 
 ```powershell
 .\deploy.ps1                                        # default Classic Era install path
@@ -47,13 +45,13 @@ Supports **Classic Era** and **Mists Classic** from the same folder.
 
 | Command | What it does |
 |---|---|
-| `/pan` | Open the window |
-| `/pan save <name>` | Save what you're wearing |
-| `/pan equip <name>` | Wear a set |
-| `/pan delete <name>` | Remove a set |
-| `/pan list` | What's saved |
-| `/pan why` | Which rule is choosing your set, and why |
-| `/pan minimap` | Toggle the minimap button |
+| `/lo` | Open the window |
+| `/lo save <name>` | Save what you're wearing |
+| `/lo equip <name>` | Wear a set |
+| `/lo delete <name>` | Remove a set |
+| `/lo list` | What's saved |
+| `/lo why` | Which rule is choosing your set, and why |
+| `/lo minimap` | Toggle the minimap button |
 
 ## Status
 

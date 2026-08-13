@@ -1,6 +1,6 @@
--- PanoplyEquip — carry out a plan against the client, one action at a time.
+-- LoadoutEquip — carry out a plan against the client, one action at a time.
 --
--- The plan is already decided by the time it gets here (PanoplyCore.Plan); this file's only job is
+-- The plan is already decided by the time it gets here (LoadoutCore.Plan); this file's only job is
 -- to perform it and to tell the truth about what happened. Two rules it exists to hold:
 --
 --   * ONE ACTION PER FRAME. The client processes an equip asynchronously, so firing a whole plan in
@@ -10,10 +10,10 @@
 --     what was asked for, the action is retried a bounded number of times and then reported as a
 --     failure — not left silently half-applied.
 
-Panoply = Panoply or {}
+Loadout = Loadout or {}
 
-local Core = Panoply.Core
-local Compat = Panoply.Compat
+local Core = Loadout.Core
+local Compat = Loadout.Compat
 
 local Equip = {}
 
@@ -96,5 +96,5 @@ function Equip.Cancel()
     if queue then finish(false, queue.actions[queue.index]) end
 end
 
-Panoply.Equip = Equip
+Loadout.Equip = Equip
 return Equip

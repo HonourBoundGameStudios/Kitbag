@@ -1,12 +1,12 @@
--- PanoplyInventory — read the world into the plain tables PanoplyCore.Plan expects.
+-- LoadoutInventory — read the world into the plain tables LoadoutCore.Plan expects.
 --
 -- This file is all client API and no decisions. Everything it produces is inert data, which is what
--- lets the planner be tested without a game: Snapshot() here, Plan() there, Apply() in PanoplyEquip.
+-- lets the planner be tested without a game: Snapshot() here, Plan() there, Apply() in LoadoutEquip.
 
-Panoply = Panoply or {}
+Loadout = Loadout or {}
 
-local Core = Panoply.Core
-local Compat = Panoply.Compat
+local Core = Loadout.Core
+local Compat = Loadout.Compat
 
 local Inventory = {}
 
@@ -63,5 +63,5 @@ function Inventory.Snapshot(set)
     return Inventory.Equipped(), Inventory.Bagged(), Inventory.Meta(set)
 end
 
-Panoply.Inventory = Inventory
+Loadout.Inventory = Inventory
 return Inventory

@@ -1,4 +1,4 @@
--- PanoplyCompat — the ONLY file allowed to branch on the game flavour.
+-- LoadoutCompat — the ONLY file allowed to branch on the game flavour.
 --
 -- Every other file gets one shape of API and never asks which client it is running on. Keeping the
 -- branch in one place is what lets the pure core stay pure and what makes a later Retail port a
@@ -8,7 +8,7 @@
 -- C_Container namespace, backporting it to Classic Era along the way, but the loose globals still
 -- exist on older clients. Prefer the namespace, fall back to the global, expose one name.
 
-Panoply = Panoply or {}
+Loadout = Loadout or {}
 
 local Compat = {}
 
@@ -43,5 +43,5 @@ function Compat.IsBusy()
     return false
 end
 
-Panoply.Compat = Compat
+Loadout.Compat = Compat
 return Compat
