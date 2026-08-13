@@ -1,8 +1,8 @@
 # Run the pure-logic gate on every push and pull request (SHIP-3).
 #
 # The whole premise of this addon is that the parts which decide anything are pure and testable
-# outside the game (CLAUDE.md -> The Process). A gate that only runs when someone remembers to type
-# it is not a gate, so it runs here too.
+# outside the game. A gate that only runs when someone remembers to type it is not a gate, so it
+# runs here too.
 #
 # Ubuntu with a real Lua 5.1, not Windows with PowerShell: the tests are plain Lua and 5.1 is the
 # version the WoW client actually embeds, so this is closer to the target runtime than a newer Lua

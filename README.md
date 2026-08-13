@@ -64,8 +64,11 @@ Supports **Classic Era** and **Mists Classic** from the same folder.
 its editor, sets and set inheritance, the window with per-row readiness and move-by-move tooltips,
 paperdoll flyouts, set icons, the trinket bar, the options panel and the ItemRack importer all work.
 
-Verified in the client on Classic Era only. Mists, Cataclysm and Retail have `.toc` files and have
-never been launched — `Process/Bugs.md` lists exactly what that leaves unproven.
+**Verified in the client on Classic Era only.** Everything is covered by the offline suite and every
+shipped file compiles, but most of the UI — the rule editor, the flyouts, the icon picker, the
+trinket bar, the options panel — has not yet been exercised in a running game. Mists, Cataclysm and
+Retail have `.toc` files and have never been launched; their `## Interface` numbers are educated
+guesses, not readings off a client. Treat this as a preview and report what breaks.
 
 ## Licence
 

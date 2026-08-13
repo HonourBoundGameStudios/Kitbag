@@ -47,8 +47,8 @@ $zip = Join-Path $out "Kitbag-$version.zip"
 if (Test-Path $staging) { Remove-Item $staging -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $staging | Out-Null
 
-# Only what the client loads. Tests/, Process/, Research/, Design/ and the scripts are the workshop,
-# not the product — and Process/ in particular is internal notes nobody downloading this wants.
+# Only what the client loads. The test suite, the working notes and the scripts are the workshop,
+# not the product; nobody installing an addon wants them in their AddOns folder.
 Copy-Item (Join-Path $root "*.lua") $staging
 Copy-Item (Join-Path $root "*.toc") $staging
 foreach ($doc in @("README.md", "LICENSE")) {

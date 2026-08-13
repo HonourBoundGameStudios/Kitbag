@@ -1,6 +1,7 @@
 -- Minimal standalone test harness for Kitbag's pure-Lua core.
 -- Runs outside the WoW client (plain `lua`) so the equip planner and the rule engine are observable
--- without the game. See CLAUDE.md -> The Process (the testable seam).
+-- without the game. That seam is the point of the whole design: a planner that only exists inside
+-- the client can only be tested by wearing the bug.
 --
 -- Usage: lua Tests/<name>_test.lua   (run from the project root)
 

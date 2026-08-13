@@ -5,8 +5,8 @@
 -- one, LibStub already has it registered by the time Kitbag loads, and this file hands it a data
 -- object. If they have none, there is nothing to display it and this file does nothing at all.
 --
--- That is the whole reason this can exist under the fleet's offline-first, zero-dependency policy:
--- Kitbag never needs LDB, it only cooperates with it when something else has already paid for it.
+-- That is the whole reason this can exist under a no-dependency policy: Kitbag never needs LDB, it
+-- only cooperates with it when something else has already paid for it.
 -- The minimap button (KitbagMinimap) stays hand-rolled and remains the default surface.
 
 Kitbag = Kitbag or {}

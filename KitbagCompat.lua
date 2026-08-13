@@ -1,8 +1,8 @@
 -- KitbagCompat — the ONLY file allowed to branch on the game flavour.
 --
 -- Every other file gets one shape of API and never asks which client it is running on. Keeping the
--- branch in one place is what lets the pure core stay pure and what makes a later Retail port a
--- change to this file rather than a change to all of them (see the fleet's `wow-retail-port` skill).
+-- branch in one place is what lets the pure core stay pure and what makes a Retail port a change to
+-- this file rather than a change to all of them.
 --
 -- The container API is the live example: Blizzard moved GetContainerNumSlots and friends into the
 -- C_Container namespace, backporting it to Classic Era along the way, but the loose globals still

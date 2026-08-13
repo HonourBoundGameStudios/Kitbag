@@ -5,8 +5,8 @@
 -- carries its own readiness, computed from the same planner that would do the equipping — so what
 -- the window says and what the button does can never disagree.
 --
--- This is a scaffold: the window is real and usable, but the rule editor, the per-slot flyouts and
--- the set icon picker are backlog items (Process/Backlog.md, EPIC-UI).
+-- The window is the set list and the save box. Its neighbours own the rest: KitbagRulesUI the rule
+-- editor, KitbagFlyout the per-slot menus on the paperdoll, KitbagIcons the icon picker.
 
 Kitbag = Kitbag or {}
 

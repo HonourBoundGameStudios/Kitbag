@@ -6,7 +6,7 @@
 -- Compiling is not testing, but it is the difference between finding a typo now and finding it after
 -- a /reload.
 --
--- Two documented gotchas are checked at the same time (CLAUDE.md -> Gotchas):
+-- Two gotchas are checked at the same time, both of which fail silently and only at runtime:
 --   * both .toc files must list the same files, or one flavour breaks and only at runtime;
 --   * a new module must be *in* the .toc, or it silently never loads.
 --

@@ -1,9 +1,9 @@
 -- KitbagMinimap — the minimap button.
 --
--- Hand-rolled rather than pulled from LibDBIcon, deliberately: the fleet's dependency policy is
--- offline-first and zero-cost, and a 60-line button is cheaper to own than a vendored library.
--- If Kitbag later wants a full LibDataBroker surface (so Titan/Bazooka/Sigil can host it), that is
--- a backlog item, not a reason to take the dependency now.
+-- Hand-rolled rather than pulled from LibDBIcon, deliberately: Kitbag ships no vendored libraries,
+-- and a 60-line button is cheaper to own than a dependency. Displays that host a LibDataBroker
+-- launcher are served by KitbagBroker instead, which registers only if something else already
+-- provided the library.
 
 Kitbag = Kitbag or {}
 

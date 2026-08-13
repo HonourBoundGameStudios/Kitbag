@@ -2,7 +2,7 @@
 --
 -- Bootstrap only: load order, SavedVariables handoff, and the slash commands. Everything that makes
 -- a decision lives in a module beside this one, and the ones that decide anything interesting
--- (KitbagCore, KitbagRules) are pure and tested under plain Lua — see Tests/ and CLAUDE.md.
+-- (KitbagCore, KitbagRules) are pure and tested under plain Lua — see Tests/.
 
 local ADDON = ...
 
