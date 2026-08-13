@@ -95,5 +95,115 @@ function Rules.Explain(rules, state)
     return { chosen = winner and winner.set or nil, considered = considered }
 end
 
+-- ---------------------------------------------------------------------------
+-- Authoring (RULE-2)
+-- ---------------------------------------------------------------------------
+--
+-- Everything the rule editor *decides* lives here rather than in the frame: what a condition is,
+-- what a rule reads as in English, what reordering does to the list. The editor is then wiring, and
+-- the part that can be got wrong is testable outside the game.
+
+--- The conditions a rule can be built from.
+--
+-- `kind` tells the editor which widget to draw: a tick box, a dropdown the client fills, or a text
+-- field. Adding a condition later is a line here plus a key in the KitbagEvents snapshot — every key
+-- below MUST exist in that snapshot, or the editor cheerfully offers a rule that can never fire.
+-- `yes`/`no` are the phrases Describe uses, because "not in combat" is worse English than "out of
+-- combat" and this text is the whole of what a rule list row says.
+Rules.CONDITIONS = {
+    { key = "form",    label = "Form",       kind = "choice",  prefix = "in " },
+    { key = "combat",  label = "In combat",  kind = "boolean", yes = "in combat", no = "out of combat" },
+    { key = "stealth", label = "Stealthed",  kind = "boolean", yes = "stealthed", no = "not stealthed" },
+    { key = "mounted", label = "Mounted",    kind = "boolean", yes = "mounted",   no = "not mounted" },
+    { key = "resting", label = "Resting",    kind = "boolean", yes = "resting",   no = "not resting" },
+    { key = "zone",    label = "Zone",       kind = "text",    prefix = "in " },
+}
+
+local conditionByKey = {}
+for _, c in ipairs(Rules.CONDITIONS) do conditionByKey[c.key] = c end
+
+Rules.Condition = function(key) return conditionByKey[key] end
+
+--- A rule's conditions as a sentence: "in combat and stealthed".
+--
+-- The catalogue order is used, not pairs() order, so the same rule reads identically every time —
+-- a list whose rows reshuffle their own wording between two openings is unreadable.
+--
+-- `labels` supplies display names for `choice` values ({ form = { [1] = "Bear Form" } }); they come
+-- from the client and are per class, so they cannot live in a pure file. A value with no label falls
+-- back to the raw one rather than showing nothing, because "in form 1" is at least true.
+function Rules.Describe(rule, labels)
+    local when = (type(rule) == "table" and rule.when) or {}
+    labels = labels or {}
+
+    local parts = {}
+    for _, c in ipairs(Rules.CONDITIONS) do
+        local value = when[c.key]
+        if value ~= nil then
+            if c.kind == "boolean" then
+                parts[#parts + 1] = value and c.yes or c.no
+            else
+                local label = labels[c.key] and labels[c.key][value]
+                -- An unlabelled choice names its condition too: "in 1" is meaningless, "in form 1"
+                -- at least says what the 1 refers to. Text conditions are already self-describing.
+                if not label and c.kind == "choice" then label = c.key .. " " .. tostring(value) end
+                parts[#parts + 1] = (c.prefix or "") .. tostring(label or value)
+            end
+        end
+    end
+
+    if #parts == 0 then return "always" end
+    return table.concat(parts, " and ")
+end
+
+--- Move a rule within the list, returning its new index (nil if there was nothing to move).
+--
+-- The list order is the documented tiebreak between equal priorities, so this is a real edit. Moving
+-- off either end is a no-op rather than an error: the buttons on the first and last rows would
+-- otherwise have to be disabled to stay safe, and a disabled button explains nothing.
+function Rules.Move(rules, index, delta)
+    if type(rules) ~= "table" then return nil end
+    local rule = rules[index]
+    if not rule then return nil end
+
+    local target = index + (delta or 0)
+    if target < 1 or target > #rules then return index end
+
+    table.remove(rules, index)
+    table.insert(rules, target, rule)
+    return target
+end
+
+--- Turn what the editor's widgets hand back into a condition table the engine can match.
+--
+-- This is where a rule silently becomes unmatchable: an edit box gives "1" and the client reports
+-- the number 1, so `form = "1"` never matches and the rule simply never fires with nothing to
+-- explain why. Unparseable input is dropped for the same reason — a stored condition nobody can
+-- satisfy is worse than a condition that was not added.
+--
+-- An absent key and `false` are deliberately different: `false` is a real condition ("out of
+-- combat"), so an unticked box must be absent rather than false, or every unused condition would
+-- start constraining the rule.
+function Rules.Coerce(input)
+    local when = {}
+    if type(input) ~= "table" then return when end
+
+    for _, c in ipairs(Rules.CONDITIONS) do
+        local value = input[c.key]
+        if value ~= nil then
+            if c.kind == "boolean" then
+                when[c.key] = value and true or false
+            elseif c.kind == "choice" then
+                when[c.key] = tonumber(value)
+            else
+                local text = tostring(value):match("^%s*(.-)%s*$")
+                if text ~= "" then when[c.key] = text end
+            end
+        end
+    end
+
+    return when
+end
+
 Kitbag.Rules = Rules
 return Rules

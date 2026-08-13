@@ -83,4 +83,74 @@ H.eq(why.considered[3].reason, "disabled", "a disabled rule says so rather than 
 -- 9. Guards.
 H.errors(function() R.Match({ { priority = 1, when = {} } }, {}) end, "a rule without a set is rejected")
 
+-- ---------------------------------------------------------------------------
+-- Authoring (RULE-2)
+-- ---------------------------------------------------------------------------
+--
+-- The engine has been evaluable since RULE-1 and unusable, because there was no way to write a rule
+-- in the game. The editor is a frame, but everything it *decides* — what a condition is, what a rule
+-- reads as in English, what reordering does to the list — is plain data and belongs here, where it
+-- can be tested. What is left in the frame is wiring.
+
+-- The catalogue. The UI renders whatever is in it, so adding a condition later is a line here plus a
+-- key in the state snapshot, not a new widget.
+H.ok(#R.CONDITIONS > 0, "there is a catalogue of conditions the editor can offer")
+local byKey = {}
+for _, c in ipairs(R.CONDITIONS) do byKey[c.key] = c end
+H.eq(byKey.combat.kind, "boolean", "combat is a yes/no condition")
+H.eq(byKey.form.kind, "choice", "form is chosen from a list the client supplies")
+H.eq(byKey.zone.kind, "text", "zone is typed in")
+H.ok(byKey.combat.label ~= nil, "every condition carries a human label for the editor")
+
+-- Every condition in the catalogue must exist in the state snapshot, or it can never match and the
+-- editor cheerfully offers a rule that will never fire.
+local STATE_KEYS = { form = true, combat = true, stealth = true, mounted = true, resting = true,
+    zone = true }
+for _, c in ipairs(R.CONDITIONS) do
+    H.ok(STATE_KEYS[c.key] == true, c.key .. " is a key KitbagEvents actually reports")
+end
+
+-- Describe — the rule as a sentence. This is what a list row shows, and the reason the editor does
+-- not need to be read as a form to be understood.
+H.eq(R.Describe({ set = "Bear", when = {} }), "always",
+    "a rule with no conditions describes itself as always")
+H.eq(R.Describe({ set = "Bear", when = { combat = true } }), "in combat",
+    "a boolean condition reads as a phrase, not as combat=true")
+H.eq(R.Describe({ set = "Bear", when = { combat = false } }), "out of combat",
+    "…and its negative reads as the opposite phrase, not as 'not in combat'")
+H.eq(R.Describe({ set = "X", when = { combat = true, stealth = true } }), "in combat and stealthed",
+    "conditions join with 'and', because they are ANDed")
+H.eq(R.Describe({ set = "X", when = { stealth = true, combat = true } }), "in combat and stealthed",
+    "…in a fixed order, so the same rule reads the same way every time")
+H.eq(R.Describe({ set = "X", when = { zone = "Orgrimmar" } }), "in Orgrimmar",
+    "a zone reads as a place")
+H.eq(R.Describe({ set = "X", when = { form = 1 } }, { form = { [1] = "Bear Form" } }), "in Bear Form",
+    "a form uses the label the client gave it")
+H.eq(R.Describe({ set = "X", when = { form = 1 } }), "in form 1",
+    "…and falls back to the raw value rather than showing nothing")
+
+-- Reordering. The list order IS the tiebreak (see Match above), so moving a rule is a real edit and
+-- not a cosmetic one.
+local list = { rule("A", 1, {}), rule("B", 1, {}), rule("C", 1, {}) }
+H.eq(R.Move(list, 3, -1), 2, "moving a rule up returns its new index")
+H.eq(list[2].set, "C", "…and it is where it was moved to")
+H.eq(list[3].set, "B", "…having swapped with the one it passed")
+H.eq(R.Move(list, 1, -1), 1, "moving the first rule up is a no-op, not an error")
+H.eq(R.Move(list, 3, 1), 3, "…and so is moving the last one down")
+H.eq(R.Move(list, 9, 1), nil, "an out-of-range index moves nothing")
+H.eq(#list, 3, "…and does not disturb the list")
+
+-- Coerce — the editor hands back strings from edit boxes and nils from unticked boxes. Turning that
+-- into a typed condition table is where a rule silently becomes unmatchable: `form = "1"` never
+-- equals the number the client reports, and the rule just never fires with no error to explain it.
+local when = R.Coerce({ form = "1", combat = true, stealth = nil, zone = "  Orgrimmar  " })
+H.eq(when.form, 1, "a numeric condition is stored as a number, not the string the box gave")
+H.eq(when.combat, true, "a ticked box is stored as true")
+H.eq(when.stealth, nil, "an unticked box is absent, not false — false is a real condition")
+H.eq(when.zone, "Orgrimmar", "typed text is trimmed, so a stray space does not make it unmatchable")
+H.eq(R.Coerce({ zone = "" }).zone, nil, "an empty box is no condition at all")
+H.eq(R.Coerce({ form = "abc" }).form, nil, "unparseable input is dropped rather than stored as junk")
+H.eq(R.Coerce({ nonsense = true }).nonsense, nil, "a key that is not a condition is not stored")
+H.eq(next(R.Coerce(nil)), nil, "coercing nothing is an empty condition set, not an error")
+
 H.done()

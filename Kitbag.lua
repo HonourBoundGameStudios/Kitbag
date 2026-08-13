@@ -10,6 +10,7 @@ Kitbag = Kitbag or {}
 
 local Sets = Kitbag.Sets
 local UI = Kitbag.UI
+local RulesUI = Kitbag.RulesUI
 local Events = Kitbag.Events
 local Minimap_ = Kitbag.Minimap
 local DB = Kitbag.DB
@@ -19,6 +20,7 @@ local Compat = Kitbag.Compat
 --- rule editor, a broker plugin) gets kept in step by existing code rather than by remembering to.
 function Kitbag.Refresh()
     UI.Refresh()
+    RulesUI.Refresh()
 end
 
 local function help()
@@ -31,6 +33,7 @@ local function help()
     say("  |cffffd100/kit list|r — what's saved")
     say("  |cffffd100/kit inherit <set> from <parent>|r — make a set a delta on another")
     say("  |cffffd100/kit inherit <set> none|r — stop inheriting, keeping the pieces")
+    say("  |cffffd100/kit rules|r — the auto-swap rule editor")
     say("  |cffffd100/kit why|r — which rule is choosing your set, and why")
     say("  |cffffd100/kit import|r — bring this character's ItemRack sets across")
     say("  |cffffd100/kit minimap|r — toggle the minimap button")
@@ -48,7 +51,7 @@ local function why()
         end
     end
     if #report.considered == 0 then
-        Sets.Say("  no rules yet. The rule editor is on the backlog (RULE-1); rules load from saved data.")
+        Sets.Say("  no rules yet — |cffffd100/kit rules|r to write one.")
     end
 end
 
@@ -82,6 +85,7 @@ local function command(input)
                     "|cffffd100/kit inherit Raid Fire none|r.")
             end
         end
+    elseif cmd == "rules" then RulesUI.Toggle()
     elseif cmd == "why" then why()
     elseif cmd == "import" then Sets.ImportItemRack()
     elseif cmd == "minimap" then Minimap_.SetHidden(not Kitbag.db.options.minimap.hide)

@@ -79,6 +79,24 @@ function Compat.SlotDurability(slotId)
     return current / maximum
 end
 
+--- The shapeshift forms this character has, as { [formIndex] = "Bear Form" }.
+--
+-- Index 0 is "no form" and always exists; GetShapeshiftForm() returns it for everyone, including
+-- classes that have no forms at all. The signature of GetShapeshiftFormInfo differs between
+-- flavours — Classic returns the name second, later clients return a spell id fourth — so both are
+-- handled rather than assuming, since guessing wrong here silently labels every form "form 3".
+function Compat.FormLabels()
+    local labels = { [0] = "no form" }
+    local count = _G.GetNumShapeshiftForms and _G.GetNumShapeshiftForms() or 0
+    for i = 1, count do
+        local _, second, _, fourth = _G.GetShapeshiftFormInfo(i)
+        local name = type(second) == "string" and second or nil
+        if not name and fourth and _G.GetSpellInfo then name = _G.GetSpellInfo(fourth) end
+        labels[i] = name or ("form " .. i)
+    end
+    return labels
+end
+
 --- The key this character's sets are stored under: "Name - Realm".
 --
 -- The realm has to be in it. Two characters can share a name across realms on one account, and a
