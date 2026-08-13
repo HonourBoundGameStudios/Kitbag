@@ -4,6 +4,7 @@
 
 # Locally built upload packages
 *.zip
+dist/
 
 # OS / editor
 .DS_Store
