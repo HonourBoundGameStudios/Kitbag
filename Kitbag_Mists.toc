@@ -1,0 +1,26 @@
+## Interface: 50500
+## Title: |cff8fd3ffKitbag|r
+## Notes: Gear sets that actually apply. Save what you're wearing, swap it back in one click, and let rules do it for you.
+## Author: Honour Bound Game Studios Inc.
+## Version: 0.1.0
+## IconTexture: Interface\Icons\INV_Chest_Plate06
+## SavedVariables: KitbagDB
+## X-Website: https://github.com/HonourBoundGameStudios/Kitbag
+## X-License: MIT
+
+# Mists of Pandaria Classic. Same file list as Kitbag.toc — the flavour difference is confined to
+# KitbagCompat.lua, and a second .toc is how one repo and one CurseForge project serve both.
+# VERIFY THE ## Interface NUMBER against the live client each patch; a stale one shows the addon as
+# out of date and, on some flavours, refuses to load it at all.
+KitbagCompat.lua
+KitbagCore.lua
+KitbagRules.lua
+KitbagDB.lua
+KitbagInventory.lua
+KitbagEquip.lua
+KitbagSets.lua
+KitbagEvents.lua
+KitbagUI.lua
+KitbagMinimap.lua
+
+Kitbag.lua

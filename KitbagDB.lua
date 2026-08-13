@@ -1,11 +1,11 @@
--- LoadoutDB — the SavedVariables schema, its defaults, and its migrations.
+-- KitbagDB — the SavedVariables schema, its defaults, and its migrations.
 --
 -- Saved data outlives the code that wrote it. Every stored table therefore carries a `schema`
 -- number, and every change to the shape adds a migration step rather than silently reinterpreting
 -- old data — a set list that quietly empties itself after an update is the worst bug a gear manager
 -- can have, because the data is gone before anyone notices.
 
-Loadout = Loadout or {}
+Kitbag = Kitbag or {}
 
 local DB = {}
 
@@ -15,7 +15,7 @@ local function defaults()
     return {
         schema = DB.SCHEMA,
         sets = {},          -- [name] = { name =, icon =, slots = { [slotId] = key | false } }
-        rules = {},         -- ordered list; see LoadoutRules
+        rules = {},         -- ordered list; see KitbagRules
         options = {
             autoSwap = true,        -- obey the rules at all
             deferInCombat = false,  -- queue swaps until combat ends instead of attempting them
@@ -61,5 +61,5 @@ end
 
 DB.Defaults = defaults
 
-Loadout.DB = DB
+Kitbag.DB = DB
 return DB

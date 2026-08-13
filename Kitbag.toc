@@ -1,0 +1,26 @@
+## Interface: 11509
+## Title: |cff8fd3ffKitbag|r
+## Notes: Gear sets that actually apply. Save what you're wearing, swap it back in one click, and let rules do it for you.
+## Author: Honour Bound Game Studios Inc.
+## Version: 0.1.0
+## IconTexture: Interface\Icons\INV_Chest_Plate06
+## SavedVariables: KitbagDB
+## X-Website: https://github.com/HonourBoundGameStudios/Kitbag
+## X-License: MIT
+
+# Load order matters: each module reads the ones above it out of the Kitbag namespace at load time.
+# KitbagCompat is the only file allowed to branch on the game flavour; KitbagCore and KitbagRules
+# are pure and are covered by Tests/ under plain Lua.
+KitbagCompat.lua
+KitbagCore.lua
+KitbagRules.lua
+KitbagDB.lua
+KitbagInventory.lua
+KitbagEquip.lua
+KitbagSets.lua
+KitbagEvents.lua
+KitbagUI.lua
+KitbagMinimap.lua
+
+# The bootstrap binds the modules together, so it loads last.
+Kitbag.lua

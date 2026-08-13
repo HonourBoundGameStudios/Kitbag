@@ -1,4 +1,4 @@
--- Minimal standalone test harness for Loadout's pure-Lua core.
+-- Minimal standalone test harness for Kitbag's pure-Lua core.
 -- Runs outside the WoW client (plain `lua`) so the equip planner and the rule engine are observable
 -- without the game. See CLAUDE.md -> The Process (the testable seam).
 --

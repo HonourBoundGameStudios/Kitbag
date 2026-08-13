@@ -1,16 +1,16 @@
--- LoadoutRules — pure auto-swap rule matching.
+-- KitbagRules — pure auto-swap rule matching.
 --
 -- ItemRack's event system was its best idea and its worst-behaved code: rules fired in an order
 -- nobody could predict, two rules that both matched fought each other, and there was no way to see
--- why a set had been chosen. Loadout's answer is a pure function — given the rules and a snapshot of
+-- why a set had been chosen. Kitbag's answer is a pure function — given the rules and a snapshot of
 -- the world, which set wins, and why. No frames, no events, no client.
 --
 -- Usage: lua Tests/rules_test.lua   (run from the project root)
 
 local H = dofile("Tests/harness.lua")
-local R = dofile("LoadoutRules.lua")
+local R = dofile("KitbagRules.lua")
 
-H.start("LoadoutRules")
+H.start("KitbagRules")
 
 -- rule = { set = "<name>", priority = n, enabled = bool, when = { <condition> = <value>, … } }
 -- state = a flat snapshot of the world: { form = 1, combat = false, stealth = false, … }

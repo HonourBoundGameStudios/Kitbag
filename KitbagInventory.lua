@@ -1,12 +1,12 @@
--- LoadoutInventory — read the world into the plain tables LoadoutCore.Plan expects.
+-- KitbagInventory — read the world into the plain tables KitbagCore.Plan expects.
 --
 -- This file is all client API and no decisions. Everything it produces is inert data, which is what
--- lets the planner be tested without a game: Snapshot() here, Plan() there, Apply() in LoadoutEquip.
+-- lets the planner be tested without a game: Snapshot() here, Plan() there, Apply() in KitbagEquip.
 
-Loadout = Loadout or {}
+Kitbag = Kitbag or {}
 
-local Core = Loadout.Core
-local Compat = Loadout.Compat
+local Core = Kitbag.Core
+local Compat = Kitbag.Compat
 
 local Inventory = {}
 
@@ -63,5 +63,5 @@ function Inventory.Snapshot(set)
     return Inventory.Equipped(), Inventory.Bagged(), Inventory.Meta(set)
 end
 
-Loadout.Inventory = Inventory
+Kitbag.Inventory = Inventory
 return Inventory

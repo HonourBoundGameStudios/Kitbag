@@ -1,21 +1,21 @@
--- LoadoutSets — the service the UI, the slash commands and the rule engine all go through.
+-- KitbagSets — the service the UI, the slash commands and the rule engine all go through.
 --
 -- Thin by design: it reads the world (Inventory), decides (Core), and performs (Equip). It owns no
 -- logic of its own beyond storage and the user-facing report, so there is exactly one code path
 -- that equips a set and exactly one place a bug in that path can live.
 
-Loadout = Loadout or {}
+Kitbag = Kitbag or {}
 
-local Core = Loadout.Core
-local Inventory = Loadout.Inventory
-local Equip = Loadout.Equip
+local Core = Kitbag.Core
+local Inventory = Kitbag.Inventory
+local Equip = Kitbag.Equip
 
 local Sets = {}
 
-local function db() return Loadout.db end
+local function db() return Kitbag.db end
 
 local function say(fmt, ...)
-    DEFAULT_CHAT_FRAME:AddMessage("|cff8fd3ffLoadout|r: " .. string.format(fmt, ...))
+    DEFAULT_CHAT_FRAME:AddMessage("|cff8fd3ffKitbag|r: " .. string.format(fmt, ...))
 end
 
 Sets.Say = say
@@ -23,7 +23,7 @@ Sets.Say = say
 --- Save what is currently worn under `name`, overwriting any set of that name.
 function Sets.Save(name)
     if type(name) ~= "string" or name:match("^%s*$") then
-        say("give the set a name — |cffffd100/lo save Tank|r")
+        say("give the set a name — |cffffd100/kit save Tank|r")
         return nil
     end
     name = name:match("^%s*(.-)%s*$")
@@ -32,7 +32,7 @@ function Sets.Save(name)
     set.icon = db().sets[name] and db().sets[name].icon or nil
     db().sets[name] = set
     say("saved |cffffd100%s|r.", name)
-    Loadout.Refresh()
+    Kitbag.Refresh()
     return set
 end
 
@@ -44,11 +44,11 @@ function Sets.Delete(name)
     db().sets[name] = nil
     if db().lastSet == name then db().lastSet = nil end
     say("deleted |cffffd100%s|r.", name)
-    Loadout.Refresh()
+    Kitbag.Refresh()
     return true
 end
 
---- Names, sorted, so the UI and /lo list agree and neither reshuffles between openings.
+--- Names, sorted, so the UI and /kit list agree and neither reshuffles between openings.
 function Sets.Names()
     local names = {}
     for name in pairs(db().sets) do names[#names + 1] = name end
@@ -118,9 +118,9 @@ function Sets.Equip(name, silent)
             say("|cffff8080could not finish|r |cffffd100%s|r — stuck on %s.",
                 tostring(label), s and s.label or "an unknown slot")
         end
-        Loadout.Refresh()
+        Kitbag.Refresh()
     end)
 end
 
-Loadout.Sets = Sets
+Kitbag.Sets = Sets
 return Sets

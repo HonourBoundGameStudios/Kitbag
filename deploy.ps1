@@ -13,7 +13,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
-$dest = Join-Path $WowPath "Interface\AddOns\Loadout"
+$dest = Join-Path $WowPath "Interface\AddOns\Kitbag"
 
 if (-not (Test-Path $WowPath)) {
     Write-Error "No WoW install at '$WowPath'. Pass -WowPath with the flavour folder (e.g. _classic_era_)."
@@ -30,4 +30,4 @@ Copy-Item (Join-Path $root "*.toc") $dest
 
 $count = (Get-ChildItem $dest -File).Count
 Write-Host "Deployed $count file(s) to $dest" -ForegroundColor Green
-Write-Host "In-game: /reload  then  /lo" -ForegroundColor Cyan
+Write-Host "In-game: /reload  then  /kit" -ForegroundColor Cyan

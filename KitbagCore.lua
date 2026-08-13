@@ -1,7 +1,7 @@
--- LoadoutCore — PURE: item identity, set capture, and the equip planner.
+-- KitbagCore — PURE: item identity, set capture, and the equip planner.
 --
 -- Nothing in here touches the WoW API. It takes plain tables describing the world and returns a
--- plain, ordered plan; LoadoutEquip is the only file allowed to carry that plan out against the
+-- plain, ordered plan; KitbagEquip is the only file allowed to carry that plan out against the
 -- client. That split is the whole point: an equip planner that lives inside the client can only be
 -- tested by wearing the bug, and "it half-applied my set" is the single most common thing people
 -- report about gear managers.
@@ -10,7 +10,7 @@
 
 -- One namespace global (Code Style: prefix any unavoidable global with the addon name). The
 -- addon-private `...` table can't be shared with Tests/, which loads each module with dofile().
-Loadout = Loadout or {}
+Kitbag = Kitbag or {}
 
 local Core = {}
 
@@ -212,5 +212,5 @@ function Core.Plan(equipped, set, where, meta)
     }
 end
 
-Loadout.Core = Core
+Kitbag.Core = Core
 return Core

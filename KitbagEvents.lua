@@ -1,14 +1,14 @@
--- LoadoutEvents — turn game events into a state snapshot and hand it to the rule engine.
+-- KitbagEvents — turn game events into a state snapshot and hand it to the rule engine.
 --
 -- The division of labour that ItemRack never had: this file knows about events and nothing about
--- which set should win; LoadoutRules knows which set should win and nothing about events. So the
+-- which set should win; KitbagRules knows which set should win and nothing about events. So the
 -- part that used to be untestable is now a table, and the part left here is a dozen lines of
 -- wiring.
 
-Loadout = Loadout or {}
+Kitbag = Kitbag or {}
 
-local Rules = Loadout.Rules
-local Sets = Loadout.Sets
+local Rules = Kitbag.Rules
+local Sets = Kitbag.Sets
 
 local Events = {}
 
@@ -40,7 +40,7 @@ function Events.State()
 end
 
 local function apply()
-    local db = Loadout.db
+    local db = Kitbag.db
     if not db.options.autoSwap then return end
 
     local winner = Rules.Match(db.rules, Events.State())
@@ -72,10 +72,10 @@ function Events.Enable()
     frame:SetScript("OnEvent", frame.OnEvent)
 end
 
---- Why is the current state producing the set it is? Backs `/lo why`.
+--- Why is the current state producing the set it is? Backs `/kit why`.
 function Events.Explain()
-    return Rules.Explain(Loadout.db.rules, Events.State())
+    return Rules.Explain(Kitbag.db.rules, Events.State())
 end
 
-Loadout.Events = Events
+Kitbag.Events = Events
 return Events
