@@ -23,7 +23,14 @@ local frame, rows, status
 local function rowReadiness(plan)
     if not plan then return "|cff808080—|r" end
     if plan.empty then return "|cff40ff40worn|r" end
-    if #plan.missing > 0 then return string.format("|cffff8080%d missing|r", #plan.missing) end
+    if #plan.missing > 0 then
+        -- Say "at bank" only when the bank explains ALL of it. A set that is part banked and part
+        -- genuinely lost would otherwise send the player on a trip that cannot finish the set.
+        if plan.atBank == #plan.missing then
+            return string.format("|cffffd100%d at bank|r", plan.atBank)
+        end
+        return string.format("|cffff8080%d missing|r", #plan.missing)
+    end
     return string.format("|cffffd100%d swap%s|r", #plan.actions, #plan.actions == 1 and "" or "s")
 end
 

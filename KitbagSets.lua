@@ -141,13 +141,24 @@ function Sets.Equip(name, silent)
     -- Report what can't be done BEFORE doing the rest. Half a set is a legitimate outcome — the
     -- other half may be in the bank — but it must never be a silent one.
     if #plan.missing > 0 then
-        local slots = {}
+        -- "In your bank" and "nowhere to be found" are separate lines because they ask for separate
+        -- things from the player: one is a walk, the other is a lost item.
+        local lost, atBank = {}, {}
         for _, m in ipairs(plan.missing) do
             local s = Core.SlotById(m.slot)
-            slots[#slots + 1] = s and s.label or ("slot " .. m.slot)
+            local label = s and s.label or ("slot " .. m.slot)
+            local into = m.where == "bank" and atBank or lost
+            into[#into + 1] = label
         end
-        say("|cffff8080%d item(s) not found|r for |cffffd100%s|r: %s.",
-            #plan.missing, name, table.concat(slots, ", "))
+        if #lost > 0 then
+            say("|cffff8080%d item(s) not found|r for |cffffd100%s|r: %s.",
+                #lost, name, table.concat(lost, ", "))
+        end
+        if #atBank > 0 then
+            say("|cffffd100%d item(s) are in your bank|r for |cffffd100%s|r: %s. " ..
+                "|cff808080Open the bank and equip again to finish the set.|r",
+                #atBank, name, table.concat(atBank, ", "))
+        end
     end
 
     if plan.empty then

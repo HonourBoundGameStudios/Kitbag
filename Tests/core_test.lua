@@ -152,6 +152,44 @@ H.errors(function() C.Plan({}, nil, {}) end, "Plan requires a set")
 H.errors(function() C.Plan({}, { slots = { [42] = SWORD } }, {}) end, "Plan rejects an unknown slot id")
 
 -- ---------------------------------------------------------------------------
+-- The bank (CORE-2)
+-- ---------------------------------------------------------------------------
+--
+-- "Missing" and "in your bank, twenty yards away" are different answers and only one of them is
+-- actionable. A location entry flagged `bank = true` is a real sighting of the item, so the planner
+-- must name it as such — and must still refuse to use it while the bank window is shut, because
+-- PickupContainerItem on a bank bag does nothing when the bank is closed.
+
+local function banked(key, bag, slot) return { [key] = { bag = bag, slot = slot, bank = true } } end
+
+plan = C.Plan({}, { slots = { [16] = SWORD } }, banked(SWORD, -1, 3))
+H.eq(#plan.actions, 0, "an item in the bank cannot be equipped with the bank closed")
+H.eq(#plan.missing, 1, "…so it is reported rather than silently skipped")
+H.eq(plan.missing[1].where, "bank", "…and the report says WHERE it is, not just that it is absent")
+H.eq(plan.atBank, 1, "the plan counts how much of the set is waiting at the bank")
+
+-- With the bank open the very same location is usable, which is what makes "complete this set at the
+-- bank" a real offer rather than a suggestion to go and shuffle bags by hand.
+plan = C.Plan({}, { slots = { [16] = SWORD } }, banked(SWORD, -1, 3), { bankOpen = true })
+H.eq(#plan.actions, 1, "with the bank open the bank copy is a legitimate source")
+H.eq(#plan.missing, 0, "…and nothing is missing any more")
+H.eq(plan.actions[1].from.bag, -1, "the action sources it from the bank container")
+H.eq(plan.atBank, 0, "nothing is left at the bank once the bank copies are usable")
+
+-- An item nobody can find at all still reports no location. "where = nil" is the honest answer and
+-- must not be conflated with "bank", or the UI sends the player to the bank for nothing.
+plan = C.Plan({}, { slots = { [16] = SWORD } }, {})
+H.eq(plan.missing[1].where, nil, "an item found nowhere reports no location")
+H.eq(plan.atBank, 0, "…and does not count towards the bank total")
+
+-- The off-hand guard has to hold for the bank too. A two-hander sitting in the bank must not cost
+-- you your shield: the same "check availability before moving anything" rule, one source further out.
+plan = C.Plan({ [16] = SWORD, [17] = SHIELD }, { slots = { [16] = TWOHAND } },
+    banked(TWOHAND, -1, 3), { twoHand = { [TWOHAND] = true } })
+H.eq(#plan.actions, 0, "a two-hander in the bank does not strip the off hand")
+H.eq(plan.missing[1].where, "bank", "…and is reported as a bank item")
+
+-- ---------------------------------------------------------------------------
 -- CaptureSet — "save what I'm wearing"
 -- ---------------------------------------------------------------------------
 

@@ -122,10 +122,10 @@ end
 --
 --   equipped : { [slotId] = itemKey }                   what is worn right now
 --   set      : { slots = { [slotId] = key | false } }   false = empty it; absent = don't touch it
---   where    : { [itemKey] = { bag = b, slot = s } }    where an unworn copy can be found
---   meta     : { twoHand = { [itemKey] = true } }       facts only the client knows
+--   where    : { [itemKey] = { bag = b, slot = s, bank = bool } }  where an unworn copy can be found
+--   meta     : { twoHand = { … }, bankOpen = bool }     facts only the client knows
 --
--- Returns { actions = {…}, missing = {…}, empty = bool }, where each action is one of
+-- Returns { actions = {…}, missing = {…}, atBank = n, empty = bool }, where each action is one of
 --   { kind = "equip",   from = { bag = b, slot = s } | { equipped = slotId }, to = slotId, key = k }
 --   { kind = "unequip", to = slotId, key = k }
 --
@@ -141,6 +141,17 @@ function Core.Plan(equipped, set, where, meta)
     meta = meta or {}
     local twoHand = meta.twoHand or {}
 
+    -- A bank sighting is a real answer to "where is it" but not a usable source while the bank
+    -- window is shut: PickupContainerItem on a bank bag simply does nothing then, and a plan built
+    -- on one would fail every retry and report as stuck. So the location is remembered and the item
+    -- is treated as out of reach until the player is standing at the bank.
+    local bankOpen = meta.bankOpen and true or false
+    local function reachable(at)
+        if not at then return nil end
+        if at.bank and not bankOpen then return nil end
+        return at
+    end
+
     for slotId in pairs(set.slots) do
         assert(byId[slotId], "Plan: set names unknown inventory slot " .. tostring(slotId))
     end
@@ -150,6 +161,7 @@ function Core.Plan(equipped, set, where, meta)
     for slotId, key in pairs(equipped) do cur[slotId] = key end
 
     local actions, missing = {}, {}
+    local atBank = 0
 
     local function unequip(slotId)
         actions[#actions + 1] = { kind = "unequip", to = slotId, key = cur[slotId] }
@@ -178,10 +190,13 @@ function Core.Plan(equipped, set, where, meta)
             -- out to be in the bank strips the shield and puts nothing in its place, leaving the
             -- player worse off than if they had never clicked.
             local src = wornIn(want, slotId)
-            local at = not src and where[want] or nil
+            local seen = not src and where[want] or nil
+            local at = reachable(seen)
 
             if not src and not at then
-                missing[#missing + 1] = { slot = slotId, key = want }
+                local place = seen and seen.bank and "bank" or nil
+                if place == "bank" then atBank = atBank + 1 end
+                missing[#missing + 1] = { slot = slotId, key = want, where = place }
             else
                 -- A two-hander needs the off hand free before the client will accept it. Reversed,
                 -- the swap is silently refused and the set half-applies — the classic report.
@@ -209,6 +224,9 @@ function Core.Plan(equipped, set, where, meta)
     return {
         actions = actions,
         missing = missing,
+        -- How much of what's missing is merely out of reach. The UI turns this into "3 pieces are in
+        -- your bank" instead of "3 missing", which is the difference between a bug report and a walk.
+        atBank = atBank,
         -- Only a plan with nothing to do AND nothing it couldn't do is a no-op. A plan that is empty
         -- because half the set is in the bank is not "already worn", and must not be skipped
         -- silently — that difference is a bug report waiting to happen.

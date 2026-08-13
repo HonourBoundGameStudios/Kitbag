@@ -20,21 +20,55 @@ function Inventory.Equipped()
     return worn
 end
 
---- Where every bagged item can be found: { [itemKey] = { bag = b, slot = s } }.
+-- The bank window's open/closed state is not readable on demand — there is no IsBankOpen() — so it
+-- has to be tracked from the events. Getting this wrong in the optimistic direction is the costly
+-- one: the planner would build actions against bank bags it cannot touch, spend the whole retry
+-- budget, and report the set as stuck.
+local bankOpen = false
+local bankWatcher = CreateFrame("Frame")
+bankWatcher:RegisterEvent("BANKFRAME_OPENED")
+bankWatcher:RegisterEvent("BANKFRAME_CLOSED")
+bankWatcher:RegisterEvent("PLAYER_ENTERING_WORLD")
+bankWatcher:SetScript("OnEvent", function(_, event)
+    bankOpen = event == "BANKFRAME_OPENED"
+    -- A set's readiness changes the moment the bank opens, so the window must be told.
+    if Kitbag.Refresh then Kitbag.Refresh() end
+end)
+
+--- Is the player standing at an open bank? Bank items are only equippable while this is true.
+function Inventory.IsBankOpen()
+    return bankOpen
+end
+
+local function scan(where, bag, bank)
+    local size = Compat.GetContainerNumSlots(bag) or 0
+    for slot = 1, size do
+        local key = Core.ItemKey(Compat.GetContainerItemLink(bag, slot))
+        if key and not where[key] then
+            where[key] = { bag = bag, slot = slot, bank = bank }
+        end
+    end
+end
+
+--- Where every unworn item can be found: { [itemKey] = { bag = b, slot = s, bank = bool } }.
 --
--- First copy wins. Two identical copies are interchangeable by definition — the key carries the
--- enchant and the gems, so anything sharing a key really is the same item — and picking the first
--- deterministically beats picking whichever pairs() happened to reach last.
+-- First copy wins, and the carried bags are scanned before the bank so that "first" means the copy
+-- you can actually reach. Two identical copies are interchangeable by definition — the key carries
+-- the enchant and the gems, so anything sharing a key really is the same item — and picking the
+-- first deterministically beats picking whichever pairs() happened to reach last.
+--
+-- The bank is scanned even when it is shut: the client keeps the contents cached after the first
+-- visit of the session, and a remembered "it's in your bank" is a far more useful answer than a
+-- fresh "not found". Before that first visit the bank simply reads as empty, which is the same
+-- answer Kitbag gave before this existed. The planner will not act on a bank location anyway unless
+-- meta.bankOpen says it can.
 function Inventory.Bagged()
     local where = {}
     for bag = 0, Compat.LAST_BAG do
-        local size = Compat.GetContainerNumSlots(bag) or 0
-        for slot = 1, size do
-            local key = Core.ItemKey(Compat.GetContainerItemLink(bag, slot))
-            if key and not where[key] then
-                where[key] = { bag = bag, slot = slot }
-            end
-        end
+        scan(where, bag, nil)
+    end
+    for _, bag in ipairs(Compat.BANK_BAGS) do
+        scan(where, bag, true)
     end
     return where
 end
@@ -55,7 +89,7 @@ function Inventory.Meta(set)
             end
         end
     end
-    return { twoHand = twoHand }
+    return { twoHand = twoHand, bankOpen = bankOpen }
 end
 
 --- Everything Plan() needs, read once so the three views agree with each other.

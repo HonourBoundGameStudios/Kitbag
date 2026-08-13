@@ -27,6 +27,25 @@ Compat.PickupContainerItem = (container and container.PickupContainerItem) or _G
 --- The highest bag index to scan. Retail added the reagent bag at index 5.
 Compat.LAST_BAG = Compat.IS_MAINLINE and 5 or 4
 
+--- The bank containers, in the order a player would think of them (CORE-2).
+--
+-- Read from Blizzard's own constants rather than hard-coded, because the count of purchasable bank
+-- bag slots differs by flavour and has changed within a flavour. A wrong upper bound here is
+-- invisible: the extra bags simply never get scanned and their contents report as "missing".
+local BANK_CONTAINER = _G.BANK_CONTAINER or -1
+local firstBankBag = (_G.NUM_BAG_SLOTS or 4) + 1
+local lastBankBag = firstBankBag + (_G.NUM_BANKBAGSLOTS or 7) - 1
+
+Compat.BANK_BAGS = { BANK_CONTAINER }
+for bag = firstBankBag, lastBankBag do
+    Compat.BANK_BAGS[#Compat.BANK_BAGS + 1] = bag
+end
+-- The reagent bank is a Warlords-and-later container, so it exists on Retail and not on any Classic
+-- flavour Kitbag currently ships for. Detected, never assumed.
+if _G.REAGENTBANK_CONTAINER then
+    Compat.BANK_BAGS[#Compat.BANK_BAGS + 1] = _G.REAGENTBANK_CONTAINER
+end
+
 --- Item family/equip-location facts the pure planner can't know. Returns the equip location token
 -- (e.g. "INVTYPE_2HWEAPON") for an item id, or nil if the client hasn't cached the item yet.
 function Compat.EquipLocation(itemId)
