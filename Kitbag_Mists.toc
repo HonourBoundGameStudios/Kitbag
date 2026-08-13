@@ -15,6 +15,7 @@
 KitbagCompat.lua
 KitbagCore.lua
 KitbagRules.lua
+KitbagImport.lua
 KitbagDB.lua
 KitbagInventory.lua
 KitbagEquip.lua
