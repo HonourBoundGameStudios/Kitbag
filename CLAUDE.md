@@ -1,0 +1,150 @@
+# CLAUDE.md
+
+Guidance for Claude Code (claude.ai/code) working in this repository.
+**Only always-on rules live here.** Evidence, measurements and decision reasoning go in `Research/`
+and are referenced by path, never `@import`ed.
+
+## Project Overview
+
+**Panoply** is a gear-set manager for **World of Warcraft Classic** — the job ItemRack used to do,
+rebuilt. Save what you're wearing as a named set, swap it back in one click, and let rules swap it
+for you on form/combat/stealth/zone.
+
+- **Stack:** Lua 5.1 (the WoW runtime), Blizzard FrameXML. No XML files, no libraries, no build step
+  — the client compiles the Lua at load and you iterate with `/reload`.
+- **Flavours:** Classic Era (`Panoply.toc`) and Mists Classic (`Panoply_Mists.toc`) from one file
+  list. Retail is a backlog item, not a second repo.
+- **SavedVariables:** `PanoplyDB`, schema-versioned — see `PanoplyDB.lua`.
+
+**The design premise, and the reason this rewrite exists:** the parts that decide anything are
+**pure** and are tested outside the game. Every "it half-applied my set / equipped the wrong ring /
+dropped my offhand" report is a *planning* bug, and a planner that only exists inside the client can
+only be tested by wearing the bug.
+
+| File | Role |
+|---|---|
+| `PanoplyCore.lua` | **PURE.** Item identity, set capture, the equip planner. No WoW API. |
+| `PanoplyRules.lua` | **PURE.** Which set wins for a given world state, and `Explain()` for why. |
+| `PanoplyCompat.lua` | **The only file allowed to branch on the game flavour.** |
+| `PanoplyDB.lua` | SavedVariables schema, defaults, migrations. |
+| `PanoplyInventory.lua` | Reads the client into the plain tables the planner takes. No decisions. |
+| `PanoplyEquip.lua` | Performs a plan: one action per frame, verify each, bounded retries. |
+| `PanoplySets.lua` | The one code path that equips a set. UI, slash and rules all go through it. |
+| `PanoplyEvents.lua` | Events in, state snapshot out, hands it to `PanoplyRules`. |
+| `PanoplyUI.lua` / `PanoplyMinimap.lua` | The window and its launcher. |
+| `Panoply.lua` | Bootstrap: load order, SavedVariables handoff, slash commands. Loads last. |
+
+## The Process — NON-NEGOTIABLE
+
+**RED → GREEN → REVIEW (repeat until clean) → COMMIT → propose next → repeat.** One item, one commit.
+
+1. **RED** — write the failing test *first*, and confirm it fails.
+   - Pure logic (planner, rules, parsing, migrations) → a `Tests/*_test.lua` case. **This is the
+     default, and the seam is worth extracting for.**
+   - Client behaviour with no pure seam → state the expected in-game behaviour and confirm it does
+     **not** happen yet (`/reload` and observe the absence).
+2. **GREEN** — the minimum code to pass. `Tests\run-all.ps1` must be green.
+3. **REVIEW** — read the diff for correctness, style, and simplification. Fix, re-verify, repeat
+   until the review is clean.
+4. **COMMIT** — immediately, one behaviour per commit.
+5. **Propose the next item and wait** for a go-ahead.
+
+**Hard rules:** never implement before the failure is confirmed; never skip the review; never batch
+two items into one commit; never commit with `run-all.ps1` red.
+
+**Extract the testable seam.** Pull decisions out of the frame/event code into plain functions that
+take tables and return tables, and test *those* exhaustively. The wiring left behind is thin enough
+to eye-verify. This is the single highest-leverage habit in this codebase.
+
+## Common Commands
+
+```bash
+pwsh -File Tests/run-all.ps1                    # the gate — every pure test
+lua Tests/core_test.lua                         # one file (run from the project root)
+pwsh -File deploy.ps1                           # copy into the WoW AddOns folder
+pwsh -File deploy.ps1 -WowPath "D:\WoW\_classic_era_"
+```
+
+In-game: `/reload` to pick up changes, `/pan` to open, `/pan why` to see which rule is choosing.
+Enable Lua errors while developing: `/console scriptErrors 1` (or run BugSack).
+
+`Tests/` is **not** shipped — `deploy.ps1` copies only `*.lua` at the root and `*.toc`.
+
+## Code Style
+
+- **Locals over globals.** The single sanctioned global is the `Panoply` namespace table (plus the
+  `PanoplyDB` SavedVariables and the `SLASH_*` pairs the client requires by name).
+- Each module ends `Panoply.X = X; return X` — the `return` is what lets `Tests/` load it with
+  `dofile()` outside the game, where the addon-private `...` table does not exist.
+- **4 spaces**, no tabs. Functions small. `PascalCase` for module functions, `localCamelCase` for
+  file-locals.
+- **English** for all strings, comments and docs. **UTF-8**, **LF** line endings.
+- Comments explain **why**, not what.
+
+## Gotchas
+
+- **Load order is load-bearing.** Every module reads its dependencies out of `Panoply` at load time,
+  so a module must appear in the `.toc` *after* everything it uses. `Panoply.lua` is last.
+- **Both `.toc` files must list the same files.** Adding a module and forgetting `Panoply_Mists.toc`
+  breaks that flavour only, and only at runtime.
+- **`## Interface` numbers go stale every patch** and a stale one can refuse to load. Verify against
+  the live client.
+- **`GetItemInfo` returns nil for an uncached item.** Never treat nil as "not a two-hander" — that is
+  the path that silently reintroduces the half-applied swap. `PanoplyInventory.Meta` only asks about
+  keys a set actually names, to keep the window for this small.
+- **Equipping is asynchronous.** Firing a whole plan in one frame means later actions read a world
+  that hasn't caught up. `PanoplyEquip` does one action per frame and verifies each; don't "optimise"
+  that away.
+- **PowerShell writes CRLF.** Use the editor (or the agent's write tool) for tracked files; if
+  PowerShell wrote one, `git add --renormalize <file>`.
+
+## Project Document Layout
+
+`Process/` (Backlog.md, Bugs.md, Archive.md, Tasks.md) · `Research/` · `Design/` · `Tests/`.
+The addon's `.lua` and `.toc` live at the root so the game can load the folder directly.
+
+**Read `Process/Backlog.md` and `Process/Bugs.md` at the start of a session; update them in the same
+commit as the work.**
+
+## Commit Format
+
+```
+type(scope): short imperative summary
+
+Body explaining WHY, not what. Wrap ~72 cols.
+
+Co-Authored-By: <Agent name> <noreply@anthropic.com>
+```
+
+`type` ∈ `feat | fix | chore | docs | refactor | test | style`.
+
+**The Admiral always pushes.** The agent commits, never pushes. Never `--no-verify`.
+
+## Standing orders
+
+- **Re-read this `CLAUDE.md` periodically.** Don't rely on the session-start read alone — in a long
+  session (or after a context compaction), re-read this file at regular intervals so the Process, the
+  gotchas, and the standing rules don't drift out of context.
+
+## Fleet Comms 📡 — you are part of a fleet
+
+**Panoply** is one ship in a fleet of projects coordinated by the **Orchestrai** flagship. Ships
+talk to each other through **Subspace**: file-based messages (Markdown + YAML frontmatter) dropped
+into a recipient's `Process/subspace/inbox/`. All repos share the local filesystem, so this needs no
+network — the flagship's `tools/fleet-comms.ps1` resolves each ship's path from its registry.
+
+- **At session start, read `Process/subspace/inbox/`** and report any unread messages before starting
+  work. Act on each, then move it to `inbox/archive/`.
+- **Update `Process/ship-log.json`** when you ship something notable (a feature, a release, a fixed
+  bug) — it's how the fleet sees this ship's status and how `Muster` reads a sitrep.
+- **`Hail <ship>: <msg>`** sends a message to another ship; **`Muster`** reads every ship's log for a
+  fleet sitrep. These are flagship-orchestrated — the Admiral runs them from Orchestrai.
+- **Fleetcast 📡** — when the Admiral broadcasts a process/guidance change to the whole fleet,
+  apply it here too (this `CLAUDE.md` first, then any affected docs) in the same commit.
+- **Crew stays central.** The fleet's shared skills/agents live in the private flagship + user-level
+  `~/.claude`, and an agent running here inherits them from there. **Never vendor shared crew into
+  this repo.** This ship's own **domain** skills/agents may live here — and, **in a private repo
+  only**, be committed via the explicit `.gitignore` whitelist; in a public repo they stay
+  uncommitted.
+
+> Security: keep the fleet roster need-to-know. Don't broadcast every ship's presence or location.

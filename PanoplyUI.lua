@@ -1,0 +1,169 @@
+-- PanoplyUI — the main window.
+--
+-- The brief is "better UI", and the specific thing being fixed is legibility of *state*. ItemRack
+-- told you a set existed; it did not tell you whether you could actually wear it. Every row here
+-- carries its own readiness, computed from the same planner that would do the equipping — so what
+-- the window says and what the button does can never disagree.
+--
+-- This is a scaffold: the window is real and usable, but the rule editor, the per-slot flyouts and
+-- the set icon picker are backlog items (Process/Backlog.md, EPIC-UI).
+
+Panoply = Panoply or {}
+
+local Sets = Panoply.Sets
+local Equip = Panoply.Equip
+
+local UI = {}
+
+local ROW_HEIGHT = 26
+local MAX_ROWS = 10
+
+local frame, rows, status
+
+local function rowReadiness(plan)
+    if not plan then return "|cff808080—|r" end
+    if plan.empty then return "|cff40ff40worn|r" end
+    if #plan.missing > 0 then return string.format("|cffff8080%d missing|r", #plan.missing) end
+    return string.format("|cffffd100%d swap%s|r", #plan.actions, #plan.actions == 1 and "" or "s")
+end
+
+local function onEquipClick(self)
+    Sets.Equip(self.setName)
+end
+
+local function onDeleteClick(self)
+    if IsShiftKeyDown() then
+        Sets.Delete(self.setName)
+    else
+        Sets.Say("shift-click to delete |cffffd100%s|r.", self.setName)
+    end
+end
+
+local function createRow(parent, index)
+    local row = CreateFrame("Frame", nil, parent)
+    row:SetHeight(ROW_HEIGHT)
+    row:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -(index - 1) * ROW_HEIGHT)
+    row:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, -(index - 1) * ROW_HEIGHT)
+
+    row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    row.name:SetPoint("LEFT", row, "LEFT", 4, 0)
+    row.name:SetJustifyH("LEFT")
+    row.name:SetWidth(150)
+
+    row.state = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.state:SetPoint("LEFT", row.name, "RIGHT", 6, 0)
+    row.state:SetJustifyH("LEFT")
+    row.state:SetWidth(90)
+
+    row.equip = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+    row.equip:SetSize(64, 20)
+    row.equip:SetPoint("RIGHT", row, "RIGHT", -70, 0)
+    row.equip:SetText("Equip")
+    row.equip:SetScript("OnClick", onEquipClick)
+
+    row.delete = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+    row.delete:SetSize(60, 20)
+    row.delete:SetPoint("RIGHT", row, "RIGHT", -4, 0)
+    row.delete:SetText("Delete")
+    row.delete:SetScript("OnClick", onDeleteClick)
+
+    return row
+end
+
+local function build()
+    frame = CreateFrame("Frame", "PanoplyFrame", UIParent, "BasicFrameTemplateWithInset")
+    frame:SetSize(400, 340)
+    frame:SetPoint("CENTER")
+    frame:SetMovable(true)
+    frame:EnableMouse(true)
+    frame:RegisterForDrag("LeftButton")
+    frame:SetScript("OnDragStart", frame.StartMoving)
+    frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
+    frame:SetClampedToScreen(true)
+    frame:Hide()
+
+    -- Esc closes it, like every other panel in the game.
+    tinsert(UISpecialFrames, "PanoplyFrame")
+
+    frame.title = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    frame.title:SetPoint("TOP", frame, "TOP", 0, -5)
+    frame.title:SetText("Panoply")
+
+    local list = CreateFrame("Frame", nil, frame)
+    list:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -32)
+    list:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -12, 66)
+
+    rows = {}
+    for i = 1, MAX_ROWS do rows[i] = createRow(list, i) end
+
+    status = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    status:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 14, 40)
+    status:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -14, 40)
+    status:SetJustifyH("LEFT")
+
+    local nameBox = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
+    nameBox:SetSize(200, 20)
+    nameBox:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 20, 14)
+    nameBox:SetAutoFocus(false)
+
+    local save = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    save:SetSize(140, 22)
+    save:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -14, 13)
+    save:SetText("Save what I'm wearing")
+    save:SetScript("OnClick", function()
+        local name = nameBox:GetText()
+        if name == "" then
+            Sets.Say("type a name in the box first.")
+            return
+        end
+        Sets.Save(name)
+        nameBox:SetText("")
+        nameBox:ClearFocus()
+    end)
+
+    return frame
+end
+
+--- Redraw. Called after anything that could change what a row should say — which is why every
+--- mutating path in PanoplySets ends in Panoply.Refresh().
+function UI.Refresh()
+    if not frame or not frame:IsShown() then return end
+
+    local names = Sets.Names()
+    local plans = Sets.PreviewAll()   -- one reading of the world for every row
+    for i, row in ipairs(rows) do
+        local name = names[i]
+        if name then
+            row.name:SetText(name)
+            row.state:SetText(rowReadiness(plans[name]))
+            row.equip.setName, row.delete.setName = name, name
+            row.equip:SetEnabled(not Equip.IsRunning())
+            row:Show()
+        else
+            row:Hide()
+        end
+    end
+
+    if #names == 0 then
+        status:SetText("No sets yet. Put on what you want to save, name it below, and press Save.")
+    elseif #names > MAX_ROWS then
+        status:SetText(string.format("Showing %d of %d sets — scrolling is on the backlog (UI-3).",
+            MAX_ROWS, #names))
+    else
+        status:SetText(string.format("%d set%s. Shift-click Delete to remove one.",
+            #names, #names == 1 and "" or "s"))
+    end
+end
+
+function UI.Toggle()
+    if not frame then build() end
+    if frame:IsShown() then
+        frame:Hide()
+    else
+        frame:Show()
+        UI.Refresh()
+    end
+end
+
+Panoply.UI = UI
+return UI

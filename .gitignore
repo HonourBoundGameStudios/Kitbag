@@ -1,0 +1,21 @@
+# WoW / Lua
+*.bak
+*.tmp
+
+# Locally built upload packages
+*.zip
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Claude crew (fleet central-crew model)
+# The SHARED crew is proprietary and lives ONLY in the private flagship + user-level
+# ~/.claude — never vendor it here.
+# This ship's OWN domain skills/agents may be committed via the whitelist below, but ONLY in a
+# PRIVATE repo. In a PUBLIC repo, never commit any skill or agent: leave the line commented out
+# so the blanket ignore stands.
+.claude/skills/*
+.claude/agents/
+# !.claude/skills/<this-ship-domain-skill>/

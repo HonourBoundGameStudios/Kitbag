@@ -1,0 +1,14 @@
+# Line-ending policy: this ship is LF everywhere. Declaring it explicitly overrides each
+# contributor's core.autocrlf, so git stops warning "LF will be replaced by CRLF" on every commit.
+* text=auto eol=lf
+
+# Binary assets must never be line-ending converted.
+*.ttf  binary
+*.otf  binary
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.ico  binary
+*.gif  binary
+*.tga  binary
+*.blp  binary
