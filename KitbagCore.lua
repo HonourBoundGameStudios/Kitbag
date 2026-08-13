@@ -214,6 +214,27 @@ function Core.Totals(set, info)
     }
 end
 
+-- Which item best identifies a set, for the icon a set without one borrows (UI-4).
+--
+-- The weapon first: "Fishing" is the pole, "Tank" is the mace, and the hands are what a player
+-- pictures when they name a set. Then the big obvious armour, then whatever the set happens to name,
+-- in slot order — a stable answer matters more than a clever one, because an icon that changes
+-- between two openings of the window makes the list unreadable.
+local ICON_PREFERENCE = { 16, 18, 17, 1, 5, 3, 7 }
+
+--- The item key whose icon should stand in for this set, or nil if the set equips nothing.
+function Core.IconItem(set)
+    if type(set) ~= "table" or type(set.slots) ~= "table" then return nil end
+
+    for _, slotId in ipairs(ICON_PREFERENCE) do
+        if type(set.slots[slotId]) == "string" then return set.slots[slotId] end
+    end
+    for _, s in ipairs(Core.SLOTS) do
+        if type(set.slots[s.id]) == "string" then return set.slots[s.id] end
+    end
+    return nil
+end
+
 -- ---------------------------------------------------------------------------
 -- The planner
 -- ---------------------------------------------------------------------------

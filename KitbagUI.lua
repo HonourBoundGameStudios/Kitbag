@@ -73,10 +73,20 @@ local function createRow(parent, index)
     row:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -(index - 1) * ROW_HEIGHT)
     row:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, -(index - 1) * ROW_HEIGHT)
 
+    -- The icon doubles as the picker button. A separate "change icon" control would need a column
+    -- of its own on a row that has none to spare, and clicking the icon is where anyone would try.
+    row.icon = CreateFrame("Button", nil, row)
+    row.icon:SetSize(20, 20)
+    row.icon:SetPoint("LEFT", row, "LEFT", 2, 0)
+    row.icon.texture = row.icon:CreateTexture(nil, "ARTWORK")
+    row.icon.texture:SetAllPoints()
+    row.icon:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square")
+    row.icon:SetScript("OnClick", function(self) Kitbag.Icons.Open(self:GetParent().setName) end)
+
     row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    row.name:SetPoint("LEFT", row, "LEFT", 4, 0)
+    row.name:SetPoint("LEFT", row.icon, "RIGHT", 4, 0)
     row.name:SetJustifyH("LEFT")
-    row.name:SetWidth(140)
+    row.name:SetWidth(126)
 
     row.state = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     row.state:SetPoint("LEFT", row.name, "RIGHT", 6, 0)
@@ -191,6 +201,8 @@ function UI.Refresh()
         local name = names[i + offset]
         if name then
             local entry = overview[name] or {}
+            row.setName = name
+            row.icon.texture:SetTexture(Sets.Icon(name))
             row.name:SetText(name)
             row.state:SetText(rowReadiness(entry.plan))
             row.totals:SetText(rowTotals(entry.totals))

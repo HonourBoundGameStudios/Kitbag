@@ -10,6 +10,7 @@ local Core = Kitbag.Core
 local Inventory = Kitbag.Inventory
 local Equip = Kitbag.Equip
 local Import = Kitbag.Import
+local Compat = Kitbag.Compat
 
 local Sets = {}
 
@@ -200,6 +201,34 @@ function Sets.ImportItemRack()
 
     Kitbag.Refresh()
     return result
+end
+
+--- The texture to show for a set (UI-4).
+--
+-- A chosen icon wins. Otherwise the set borrows one from the item that best identifies it, because
+-- a list of identical question marks is no better than a list of names. The question mark is the
+-- last resort, and is also what shows while the client has not cached the item yet — briefly, on a
+-- fresh login, and then it resolves.
+local QUESTION_MARK = "Interface\\Icons\\INV_Misc_QuestionMark"
+
+function Sets.Icon(name)
+    local stored = char().sets[name]
+    if stored and stored.icon then return stored.icon end
+
+    local set = resolved(name)
+    local key = set and Core.IconItem(set)
+    return (key and Compat.ItemIcon(Core.ItemId(key))) or QUESTION_MARK
+end
+
+Sets.QUESTION_MARK = QUESTION_MARK
+
+--- Give a set an icon, or clear it back to the borrowed one with nil.
+function Sets.SetIcon(name, texture)
+    local set = char().sets[name]
+    if not set then return false end
+    set.icon = texture
+    Kitbag.Refresh()
+    return true
 end
 
 --- Build the plan for a set without performing it — what the UI previews on hover.

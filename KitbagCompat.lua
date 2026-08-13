@@ -148,6 +148,35 @@ function Compat.InstanceType()
     return kind or "none"
 end
 
+--- An item's icon texture, or nil if the client hasn't cached the item yet.
+function Compat.ItemIcon(itemId)
+    if not itemId then return nil end
+    local _, _, _, _, _, _, _, _, _, texture = _G.GetItemInfo(itemId)
+    return texture
+end
+
+--- Every icon the game will let a macro use, as an array of textures — the icon picker's source.
+--
+-- Built once and kept: it is a few thousand entries and the list cannot change during a session.
+-- Two APIs to cover, and neither exists everywhere: the older clients count and index, the newer
+-- ones fill a table you hand them.
+local macroIcons = nil
+function Compat.MacroIcons()
+    if macroIcons then return macroIcons end
+    macroIcons = {}
+
+    if _G.GetNumMacroIcons and _G.GetMacroIconInfo then
+        for i = 1, _G.GetNumMacroIcons() do
+            macroIcons[#macroIcons + 1] = _G.GetMacroIconInfo(i)
+        end
+    elseif _G.GetMacroIcons then
+        _G.GetMacroIcons(macroIcons)
+        if _G.GetMacroItemIcons then _G.GetMacroItemIcons(macroIcons) end
+    end
+
+    return macroIcons
+end
+
 --- The key this character's sets are stored under: "Name - Realm".
 --
 -- The realm has to be in it. Two characters can share a name across realms on one account, and a

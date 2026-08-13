@@ -21,6 +21,7 @@ KitbagInventory.lua
 KitbagEquip.lua
 KitbagSets.lua
 KitbagEvents.lua
+KitbagIcons.lua
 KitbagUI.lua
 KitbagRulesUI.lua
 KitbagMinimap.lua

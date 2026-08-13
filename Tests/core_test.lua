@@ -251,6 +251,32 @@ H.eq(delta.name, "Raid Fire", "the delta keeps its name")
 H.eq(C.Diff(full, nil).slots[1], HELM, "with no parent, a diff is the set unchanged")
 
 -- ---------------------------------------------------------------------------
+-- The stand-in icon (UI-4)
+-- ---------------------------------------------------------------------------
+--
+-- A set can be given an icon, but most never will be, and a list of identical question marks is no
+-- better than a list of names. So a set without one borrows the icon of the item that best
+-- identifies it. Which item that is is a judgement, and judgements belong here rather than in the
+-- frame: the weapon first, because "Fishing" is the pole and "Tank" is the shield-and-mace, then the
+-- big obvious armour pieces, and only then whatever the set happens to name.
+
+H.eq(C.IconItem({ slots = { [1] = HELM, [16] = SWORD } }), SWORD,
+    "the main hand stands in for the set before anything else does")
+H.eq(C.IconItem({ slots = { [1] = HELM, [5] = SHIELD } }), HELM,
+    "with no weapon, the head is the next most recognisable piece")
+H.eq(C.IconItem({ slots = { [19] = SHIELD } }), SHIELD,
+    "a set of nothing but a tabard still gets the tabard's icon rather than nothing")
+H.eq(C.IconItem({ slots = { [1] = false, [16] = false } }), nil,
+    "a set that equips nothing has no item to borrow from")
+H.eq(C.IconItem({ slots = {} }), nil, "…and neither does an empty one")
+
+-- Deterministic: the same set must not pick a different icon between two openings of the window.
+local wide = { slots = { [11] = RING_A, [12] = RING_B, [13] = SHIELD, [15] = HELM } }
+H.eq(C.IconItem(wide), C.IconItem(wide), "the choice is stable for the same set")
+H.eq(C.IconItem(wide), RING_A,
+    "…and falls back to plain slot order once none of the preferred slots are named")
+
+-- ---------------------------------------------------------------------------
 -- The full-bag guard (CORE-5)
 -- ---------------------------------------------------------------------------
 --
