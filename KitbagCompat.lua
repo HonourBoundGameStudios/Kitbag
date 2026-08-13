@@ -54,6 +54,26 @@ function Compat.EquipLocation(itemId)
     return equipSlot
 end
 
+--- An item's level, or nil if the client hasn't cached the item yet.
+--
+-- nil is a real answer and callers must keep it as one: on a fresh login GetItemInfo returns nil for
+-- most of a set, and a 0 substituted here would read as "this raid gear is worthless".
+function Compat.ItemLevel(itemId)
+    if not itemId then return nil end
+    local _, _, _, level = _G.GetItemInfo(itemId)
+    return level
+end
+
+--- How worn an equipped slot is, as 0..1, or nil where the client has no answer. Items with no
+-- durability at all (rings, trinkets) report max 0 and are correctly nil rather than "broken".
+function Compat.SlotDurability(slotId)
+    local getter = _G.GetInventoryItemDurability
+    if not getter then return nil end
+    local current, maximum = getter(slotId)
+    if not current or not maximum or maximum <= 0 then return nil end
+    return current / maximum
+end
+
 --- The key this character's sets are stored under: "Name - Realm".
 --
 -- The realm has to be in it. Two characters can share a name across realms on one account, and a

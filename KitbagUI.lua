@@ -34,6 +34,25 @@ local function rowReadiness(plan)
     return string.format("|cffffd100%d swap%s|r", #plan.actions, #plan.actions == 1 and "" or "s")
 end
 
+-- Item level and the weakest piece, in the little space a row has (CORE-4).
+--
+-- "≈" when the client has not cached every item yet: the number is real but computed over part of
+-- the set, and quietly showing a partial average as a firm one is how a raid set reads as green
+-- trash for the first ten seconds after a login. Durability is only shown once it is worth acting
+-- on — a bar at 96% is noise, one at 15% is a trip to the vendor.
+local function rowTotals(totals)
+    if not totals or not totals.level then return "" end
+
+    local text = string.format("%silvl %d",
+        totals.complete and "" or "≈", math.floor(totals.level + 0.5))
+    if totals.broken > 0 then
+        text = text .. " |cffff4040broken|r"
+    elseif totals.durability and totals.durability < 0.25 then
+        text = text .. string.format(" |cffff8080%d%%|r", math.floor(totals.durability * 100))
+    end
+    return text
+end
+
 local function onEquipClick(self)
     Sets.Equip(self.setName)
 end
@@ -55,12 +74,17 @@ local function createRow(parent, index)
     row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     row.name:SetPoint("LEFT", row, "LEFT", 4, 0)
     row.name:SetJustifyH("LEFT")
-    row.name:SetWidth(150)
+    row.name:SetWidth(140)
 
     row.state = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     row.state:SetPoint("LEFT", row.name, "RIGHT", 6, 0)
     row.state:SetJustifyH("LEFT")
-    row.state:SetWidth(90)
+    row.state:SetWidth(80)
+
+    row.totals = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    row.totals:SetPoint("LEFT", row.state, "RIGHT", 6, 0)
+    row.totals:SetJustifyH("LEFT")
+    row.totals:SetWidth(62)
 
     row.equip = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
     row.equip:SetSize(64, 20)
@@ -79,7 +103,7 @@ end
 
 local function build()
     frame = CreateFrame("Frame", "KitbagFrame", UIParent, "BasicFrameTemplateWithInset")
-    frame:SetSize(400, 340)
+    frame:SetSize(460, 340)
     frame:SetPoint("CENTER")
     frame:SetMovable(true)
     frame:EnableMouse(true)
@@ -137,12 +161,14 @@ function UI.Refresh()
     if not frame or not frame:IsShown() then return end
 
     local names = Sets.Names()
-    local plans = Sets.PreviewAll()   -- one reading of the world for every row
+    local overview = Sets.Overview()   -- one reading of the world for every row
     for i, row in ipairs(rows) do
         local name = names[i]
         if name then
+            local entry = overview[name] or {}
             row.name:SetText(name)
-            row.state:SetText(rowReadiness(plans[name]))
+            row.state:SetText(rowReadiness(entry.plan))
+            row.totals:SetText(rowTotals(entry.totals))
             row.equip.setName, row.delete.setName = name, name
             row.equip:SetEnabled(not Equip.IsRunning())
             row:Show()

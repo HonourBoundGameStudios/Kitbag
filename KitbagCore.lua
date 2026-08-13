@@ -167,6 +167,53 @@ function Core.Diff(set, parent)
     return { name = set.name, icon = set.icon, parent = set.parent, slots = slots }
 end
 
+--- How good a set is and how close it is to breaking (CORE-4).
+--
+--   set  : { slots = { [slotId] = key | false } }
+--   info : { [itemKey] = { level = n, durability = 0..1 | nil } }
+--
+-- Returns { items, known, complete, level, durability, broken }.
+--
+-- Two deliberate choices. The average item level is taken over the items the client could actually
+-- answer for, and `complete` says whether that was all of them — GetItemInfo returns nil constantly
+-- on a fresh login, and averaging an unknown in as zero would show a raid set as green trash.
+-- Durability is the WEAKEST piece rather than the average, because a set is only as wearable as the
+-- item that is about to break, and an average happily hides one dead piece behind seventeen fresh ones.
+function Core.Totals(set, info)
+    assert(type(set) == "table" and type(set.slots) == "table", "Totals: set must be a table with .slots")
+    info = info or {}
+
+    local items, known, sum = 0, 0, 0
+    local weakest, broken = nil, 0
+
+    for _, s in ipairs(Core.SLOTS) do
+        local key = set.slots[s.id]
+        -- `false` is a slot the set deliberately empties. It is not an item and must not be averaged
+        -- in as item level 0.
+        if type(key) == "string" then
+            items = items + 1
+            local fact = info[key]
+            if fact and fact.level then
+                known = known + 1
+                sum = sum + fact.level
+            end
+            if fact and fact.durability then
+                if not weakest or fact.durability < weakest then weakest = fact.durability end
+                if fact.durability <= 0 then broken = broken + 1 end
+            end
+        end
+    end
+
+    return {
+        items = items,
+        known = known,
+        complete = known == items,
+        level = known > 0 and (sum / known) or nil,
+        durability = weakest,
+        broken = broken,
+    }
+end
+
 -- ---------------------------------------------------------------------------
 -- The planner
 -- ---------------------------------------------------------------------------

@@ -251,6 +251,60 @@ H.eq(delta.name, "Raid Fire", "the delta keeps its name")
 H.eq(C.Diff(full, nil).slots[1], HELM, "with no parent, a diff is the set unchanged")
 
 -- ---------------------------------------------------------------------------
+-- Totals (CORE-4)
+-- ---------------------------------------------------------------------------
+--
+-- Two questions a set list should answer without being clicked: how good is this set, and is any of
+-- it about to break. Both are arithmetic over facts only the client has, so the client hands them in
+-- and the arithmetic lives here where it can be cornered.
+--
+--   info : { [itemKey] = { level = n, durability = 0..1 | nil } }
+
+local info = {
+    [HELM]  = { level = 66, durability = 1.0 },
+    [SWORD] = { level = 70, durability = 0.5 },
+    [SHIELD]= { level = 62, durability = 0.1 },
+}
+
+local totals = C.Totals({ slots = { [1] = HELM, [16] = SWORD } }, info)
+H.eq(totals.items, 2, "the totals count the items the set names")
+H.eq(totals.known, 2, "…and how many of them the client could actually answer for")
+H.eq(totals.level, 68, "the item level is the average over the set")
+H.eq(totals.durability, 0.5, "durability is the WEAKEST piece, not the average — that is what breaks")
+
+-- An empty slot is a deliberate choice, not an item, and must not drag the average down to zero.
+totals = C.Totals({ slots = { [1] = HELM, [17] = false } }, info)
+H.eq(totals.items, 1, "a slot the set deliberately empties is not an item")
+H.eq(totals.level, 66, "…and does not count as item level 0")
+
+-- GetItemInfo returns nil for anything the client has not cached, which happens constantly on a
+-- fresh login. An unknown item must reduce confidence, never fabricate a number: averaging it in as
+-- zero is the same class of bug as treating nil as "not a two-hander".
+totals = C.Totals({ slots = { [1] = HELM, [16] = SWORD, [15] = "999:0:0:0:0:0:0" } }, info)
+H.eq(totals.items, 3, "an uncached item is still part of the set")
+H.eq(totals.known, 2, "…but it is not something we know about")
+H.eq(totals.level, 68, "…and it is left out of the average rather than counted as zero")
+H.eq(totals.complete, false, "the totals say plainly that they are partial")
+
+totals = C.Totals({ slots = { [1] = HELM } }, info)
+H.eq(totals.complete, true, "…and say so when they are not")
+
+-- Durability is unknown for anything not currently worn — there is no API for a bagged item's
+-- durability — so an unknown must not read as a full bar and hide a piece at 5%.
+totals = C.Totals({ slots = { [1] = HELM, [16] = SWORD } },
+    { [HELM] = { level = 66 }, [SWORD] = { level = 70, durability = 0.5 } })
+H.eq(totals.durability, 0.5, "unknown durability neither counts as full nor as broken")
+
+totals = C.Totals({ slots = { [1] = HELM } }, { [HELM] = { level = 66 } })
+H.eq(totals.durability, nil, "with nothing known, durability is nil rather than a made-up number")
+
+-- Nothing at all: a set of empty slots has no level, and reporting 0 would sort it below every real
+-- set as though it were terrible rather than empty.
+totals = C.Totals({ slots = { [1] = false } }, info)
+H.eq(totals.items, 0, "a set that equips nothing has no items")
+H.eq(totals.level, nil, "…and no item level, rather than a level of zero")
+
+-- ---------------------------------------------------------------------------
 -- CaptureSet — "save what I'm wearing"
 -- ---------------------------------------------------------------------------
 

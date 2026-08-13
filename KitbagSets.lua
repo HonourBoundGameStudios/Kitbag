@@ -210,19 +210,24 @@ function Sets.Preview(name)
     return Core.Plan(equipped, set, where, meta), set
 end
 
---- Plan every set against ONE reading of the world: { [name] = plan }.
+--- Everything the window needs about every set, from ONE reading of the world:
+--- { [name] = { plan = …, totals = … } }.
 --
--- The window shows per-row readiness, and asking Preview() per row would rescan all five bags once
--- per row. Worse than slow: the rows would be answering slightly different questions, since the
--- bags can change between two scans. One snapshot means every row agrees.
-function Sets.PreviewAll()
+-- Per row, this would rescan all five bags, the bank and the durability of every worn slot. Worse
+-- than slow: the rows would be answering slightly different questions, since the bags can change
+-- between two scans. One snapshot means every row agrees with every other row and with the button.
+function Sets.Overview()
     local equipped, where = Inventory.Equipped(), Inventory.Bagged()
-    local plans = {}
+    local dur = Inventory.WornDurability()
+    local out = {}
     for name in pairs(char().sets) do
         local set = resolved(name)
-        plans[name] = Core.Plan(equipped, set, where, Inventory.Meta(set))
+        out[name] = {
+            plan = Core.Plan(equipped, set, where, Inventory.Meta(set)),
+            totals = Core.Totals(set, Inventory.ItemInfo(set, dur)),
+        }
     end
-    return plans
+    return out
 end
 
 --- Equip a set. `silent` suppresses the chat report for rule-driven swaps, which would otherwise

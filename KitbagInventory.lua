@@ -92,6 +92,38 @@ function Inventory.Meta(set)
     return { twoHand = twoHand, bankOpen = bankOpen }
 end
 
+--- Durability of everything currently worn: { [itemKey] = 0..1 }.
+--
+-- Only the worn items, because that is the whole of what the client will answer for — there is no
+-- durability API for an item sitting in a bag. A set you are not wearing therefore reports unknown
+-- durability, which is the honest answer and the one Core.Totals is built to take.
+function Inventory.WornDurability()
+    local dur = {}
+    for _, s in ipairs(Core.SLOTS) do
+        local key = Core.ItemKey(GetInventoryItemLink("player", s.id))
+        if key then
+            local fraction = Compat.SlotDurability(s.id)
+            if fraction then dur[key] = fraction end
+        end
+    end
+    return dur
+end
+
+--- The per-item facts Core.Totals needs: { [itemKey] = { level =, durability = } }.
+-- `dur` is passed in so a whole list of sets can share one durability scan.
+function Inventory.ItemInfo(set, dur)
+    dur = dur or Inventory.WornDurability()
+    local info = {}
+    if set and set.slots then
+        for _, key in pairs(set.slots) do
+            if type(key) == "string" and not info[key] then
+                info[key] = { level = Compat.ItemLevel(Core.ItemId(key)), durability = dur[key] }
+            end
+        end
+    end
+    return info
+end
+
 --- Everything Plan() needs, read once so the three views agree with each other.
 function Inventory.Snapshot(set)
     return Inventory.Equipped(), Inventory.Bagged(), Inventory.Meta(set)
