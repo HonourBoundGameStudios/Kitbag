@@ -153,4 +153,48 @@ H.eq(R.Coerce({ form = "abc" }).form, nil, "unparseable input is dropped rather 
 H.eq(R.Coerce({ nonsense = true }).nonsense, nil, "a key that is not a condition is not stored")
 H.eq(next(R.Coerce(nil)), nil, "coercing nothing is an empty condition set, not an error")
 
+-- ---------------------------------------------------------------------------
+-- Restore-previous (RULE-4)
+-- ---------------------------------------------------------------------------
+--
+-- A conditional swap that never swaps back is half a feature: go into Bear Form and you get the
+-- tank set, leave it and you are still wearing the tank set. Restoring to a *named* set is not the
+-- answer either — you were wearing whatever you were wearing, which may not be any set at all.
+--
+-- Rules.Next is the whole state machine, and it is pure so the awkward transitions can be cornered:
+--   Next(activeSet, winner, hasSaved) -> { action = "none" | "equip" | "restore", set =, remember = }
+
+local temporary = { set = "Bear", priority = 10, when = { form = 1 }, restore = true }
+local permanent = { set = "Tank", priority = 10, when = { combat = true } }
+
+local step = R.Next(nil, temporary, false)
+H.eq(step.action, "equip", "a rule that starts matching equips its set")
+H.eq(step.set, "Bear", "…that set")
+H.eq(step.remember, true, "…and a restoring rule remembers what was worn first")
+
+H.eq(R.Next(nil, permanent, false).remember, false,
+    "a rule that does not restore remembers nothing — most swaps are meant to stick")
+
+H.eq(R.Next("Bear", temporary, true).action, "none",
+    "a rule that goes on matching does nothing — the swap already happened")
+
+-- The one that is easy to get wrong: a second temporary rule taking over. Remembering again would
+-- overwrite the outfit you actually started in with the one the first rule put on, and you would
+-- never get back to your own gear.
+step = R.Next("Bear", { set = "Cat", restore = true }, true)
+H.eq(step.action, "equip", "a different winner takes over")
+H.eq(step.set, "Cat", "…with its own set")
+H.eq(step.remember, false, "…without overwriting what was originally worn")
+
+-- …but if nothing was saved yet, the new restoring rule is the first one, and it must save.
+H.eq(R.Next("Tank", { set = "Cat", restore = true }, false).remember, true,
+    "taking over from a non-restoring rule still saves, since nothing was saved before")
+
+step = R.Next("Bear", nil, true)
+H.eq(step.action, "restore", "when the rule stops matching, what was worn before comes back")
+
+H.eq(R.Next("Tank", nil, false).action, "none",
+    "a rule with nothing saved leaves you in its set rather than guessing")
+H.eq(R.Next(nil, nil, false).action, "none", "no rule and nothing saved is the quiet case")
+
 H.done()

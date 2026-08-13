@@ -234,11 +234,22 @@ end
 --- Equip a set. `silent` suppresses the chat report for rule-driven swaps, which would otherwise
 --- narrate every shapeshift.
 function Sets.Equip(name, silent)
-    local plan, set = Sets.Preview(name)
+    local set = resolved(name)
     if not set then
         say("no set called |cffffd100%s|r.", tostring(name))
         return false
     end
+    return Sets.Apply(set, name, silent)
+end
+
+--- Equip an outfit that is not necessarily a saved set.
+--
+-- The restore points RULE-4 remembers are exactly this: a snapshot of what you happened to be
+-- wearing, which may match no saved set at all. Everything below used to live in Sets.Equip; it is
+-- split out rather than duplicated so there stays exactly one code path that equips anything.
+function Sets.Apply(set, label, silent)
+    local equipped, where, meta = Inventory.Snapshot(set)
+    local plan = Core.Plan(equipped, set, where, meta)
 
     -- Report what can't be done BEFORE doing the rest. Half a set is a legitimate outcome — the
     -- other half may be in the bank — but it must never be a silent one.
@@ -248,23 +259,23 @@ function Sets.Equip(name, silent)
         local lost, atBank = {}, {}
         for _, m in ipairs(plan.missing) do
             local s = Core.SlotById(m.slot)
-            local label = s and s.label or ("slot " .. m.slot)
+            local slotLabel = s and s.label or ("slot " .. m.slot)
             local into = m.where == "bank" and atBank or lost
-            into[#into + 1] = label
+            into[#into + 1] = slotLabel
         end
         if #lost > 0 then
             say("|cffff8080%d item(s) not found|r for |cffffd100%s|r: %s.",
-                #lost, name, table.concat(lost, ", "))
+                #lost, label, table.concat(lost, ", "))
         end
         if #atBank > 0 then
             say("|cffffd100%d item(s) are in your bank|r for |cffffd100%s|r: %s. " ..
                 "|cff808080Open the bank and equip again to finish the set.|r",
-                #atBank, name, table.concat(atBank, ", "))
+                #atBank, label, table.concat(atBank, ", "))
         end
     end
 
     if plan.empty then
-        if not silent then say("already wearing |cffffd100%s|r.", name) end
+        if not silent then say("already wearing |cffffd100%s|r.", label) end
         return true
     end
 
@@ -273,7 +284,7 @@ function Sets.Equip(name, silent)
     -- a Kitbag bug rather than as a full bag.
     if plan.blocked == "bags" then
         say("|cffff8080your bags are full|r — |cffffd100%s|r needs %d free slot(s) to put what " ..
-            "it takes off.", name, plan.needsBagSlots)
+            "it takes off.", label, plan.needsBagSlots)
         return false
     end
 
@@ -282,14 +293,16 @@ function Sets.Equip(name, silent)
         return false
     end
 
-    return Equip.Run(plan, name, function(ok, failed, label)
-        char().lastSet = ok and label or char().lastSet
+    return Equip.Run(plan, label, function(ok, failed, applied)
+        -- Only a real set becomes `lastSet`. A restore point is an outfit, not a set, and recording
+        -- it would leave the rule engine comparing against a name no set list contains.
+        if ok and char().sets[applied] then char().lastSet = applied end
         if ok then
-            if not silent and db().options.announce then say("equipped |cffffd100%s|r.", label) end
+            if not silent and db().options.announce then say("equipped |cffffd100%s|r.", applied) end
         else
             local s = failed and Core.SlotById(failed.to)
             say("|cffff8080could not finish|r |cffffd100%s|r — stuck on %s.",
-                tostring(label), s and s.label or "an unknown slot")
+                tostring(applied), s and s.label or "an unknown slot")
         end
         Kitbag.Refresh()
     end)

@@ -205,5 +205,40 @@ function Rules.Coerce(input)
     return when
 end
 
+-- ---------------------------------------------------------------------------
+-- Restore-previous (RULE-4)
+-- ---------------------------------------------------------------------------
+
+--- What the engine should do, given what it last applied and what wins now.
+--
+--   activeSet : the set the engine put on and has not undone, or nil
+--   winner    : the rule that matches now (Rules.Match), or nil
+--   hasSaved  : is there a remembered outfit to go back to?
+--
+-- Returns { action = "none" | "equip" | "restore", set = <name>, remember = bool }.
+--
+-- A rule marked `restore` is a temporary swap: it puts a set on while it matches and puts back what
+-- you were wearing when it stops. Restoring to a *named* set would be the easy implementation and
+-- the wrong one — you were wearing whatever you were wearing, quite possibly no saved set at all.
+--
+-- `remember` is only true when nothing has been saved yet. The trap is a second temporary rule
+-- taking over from the first: remembering again would overwrite the outfit you actually started in
+-- with the one the first rule put on, and you would never get your own gear back.
+function Rules.Next(activeSet, winner, hasSaved)
+    if winner then
+        if winner.set == activeSet then return { action = "none" } end
+        return {
+            action = "equip",
+            set = winner.set,
+            remember = (winner.restore == true) and not hasSaved,
+        }
+    end
+
+    -- Nothing matches. Go back only if there is somewhere to go back to: with nothing saved,
+    -- leaving the player in the last set is honest, and guessing a set to "return" to is not.
+    if hasSaved then return { action = "restore" } end
+    return { action = "none" }
+end
+
 Kitbag.Rules = Rules
 return Rules

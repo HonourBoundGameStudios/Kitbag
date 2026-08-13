@@ -20,6 +20,10 @@ local function characterDefaults()
         sets = {},          -- [name] = { name =, icon =, slots = { [slotId] = key | false } }
         rules = {},         -- ordered list; see KitbagRules
         lastSet = nil,
+        -- What was worn before a `restore` rule took over (RULE-4). Saved rather than kept in
+        -- memory: a reload mid-shapeshift would otherwise strand the player in the rule's set with
+        -- no way back to their own gear.
+        restorePoint = nil,
     }
 end
 
