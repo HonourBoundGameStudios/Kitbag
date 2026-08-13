@@ -24,7 +24,19 @@ end
 
 Sets.Say = say
 
+--- The stored delta flattened against its ancestors — what every caller actually wants to wear.
+--- Stored sets are only ever read through this, so a delta and a full outfit behave identically.
+local function resolved(name)
+    return Core.Resolve(char().sets, name)
+end
+
+Sets.Resolve = resolved
+
 --- Save what is currently worn under `name`, overwriting any set of that name.
+--
+-- A set that declares a parent is re-saved as a delta: capture reads all nineteen slots, and
+-- everything the parent already gets right is dropped. Keeping it would defeat the point — the
+-- shared piece would be duplicated again the first time the child was re-saved.
 function Sets.Save(name)
     if type(name) ~= "string" or name:match("^%s*$") then
         say("give the set a name — |cffffd100/kit save Tank|r")
@@ -32,12 +44,82 @@ function Sets.Save(name)
     end
     name = name:match("^%s*(.-)%s*$")
 
+    local existing = char().sets[name]
     local set = Core.CaptureSet(Inventory.Equipped(), name)
-    set.icon = char().sets[name] and char().sets[name].icon or nil
+    set.icon = existing and existing.icon or nil
+    set.parent = existing and existing.parent or nil
+
+    if set.parent then
+        set = Core.Diff(set, resolved(set.parent))
+        say("saved |cffffd100%s|r as a delta on |cffffd100%s|r.", name, set.parent)
+    else
+        say("saved |cffffd100%s|r.", name)
+    end
+
     char().sets[name] = set
-    say("saved |cffffd100%s|r.", name)
     Kitbag.Refresh()
     return set
+end
+
+--- Declare (or clear, with a nil parent) which set this one is a delta on.
+--
+-- Re-diffs immediately, so the shared pieces disappear from the child the moment the relationship is
+-- declared rather than at the next save — otherwise the child keeps overriding the parent with
+-- identical values and changing the parent appears to do nothing.
+function Sets.Inherit(name, parentName)
+    local set = char().sets[name]
+    if not set then
+        say("no set called |cffffd100%s|r.", tostring(name))
+        return false
+    end
+
+    if not parentName then
+        if not set.parent then
+            say("|cffffd100%s|r does not inherit from anything.", name)
+            return false
+        end
+        -- Flatten what it was inheriting back into itself. Dropping the parent must not silently
+        -- drop the pieces that were coming from it.
+        local flat = resolved(name)
+        flat.parent = nil
+        char().sets[name] = flat
+        say("|cffffd100%s|r no longer inherits — its inherited pieces are now its own.", name)
+        Kitbag.Refresh()
+        return true
+    end
+
+    if not char().sets[parentName] then
+        say("no set called |cffffd100%s|r to inherit from.", parentName)
+        return false
+    end
+    if parentName == name then
+        say("a set cannot inherit from itself.")
+        return false
+    end
+
+    -- Walk the prospective ancestry before committing. A cycle would be resolvable (Core.Resolve
+    -- terminates on one) but the outfit it produced would depend on where you started reading, which
+    -- is exactly the unpredictability inheritance is meant to remove.
+    -- Keyed by the table's own key, not by set.name: the two can drift apart (an import, a hand-
+    -- edited SavedVariables) and the key is what `parent` actually points at.
+    local cursor, hops = parentName, 0
+    while cursor and hops <= 64 do
+        if cursor == name then
+            say("|cffff8080that would make a loop|r — |cffffd100%s|r already inherits from " ..
+                "|cffffd100%s|r.", parentName, name)
+            return false
+        end
+        local set_ = char().sets[cursor]
+        cursor = set_ and set_.parent or nil
+        hops = hops + 1
+    end
+
+    set.parent = parentName
+    char().sets[name] = Core.Diff(set, resolved(parentName))
+    say("|cffffd100%s|r now inherits from |cffffd100%s|r — shared pieces live in the parent.",
+        name, parentName)
+    Kitbag.Refresh()
+    return true
 end
 
 function Sets.Delete(name)
@@ -45,9 +127,22 @@ function Sets.Delete(name)
         say("no set called |cffffd100%s|r.", tostring(name))
         return false
     end
+    -- Children keep working — Core.Resolve treats a vanished parent as contributing nothing — but
+    -- they quietly become smaller sets than they were, so say so rather than let it be discovered
+    -- by equipping one.
+    local orphans = {}
+    for other, set in pairs(char().sets) do
+        if set.parent == name then orphans[#orphans + 1] = other end
+    end
+    table.sort(orphans)
+
     char().sets[name] = nil
     if char().lastSet == name then char().lastSet = nil end
     say("deleted |cffffd100%s|r.", name)
+    if #orphans > 0 then
+        say("|cffff8080%s inherited from it|r and now covers only its own slots.",
+            table.concat(orphans, ", "))
+    end
     Kitbag.Refresh()
     return true
 end
@@ -109,7 +204,7 @@ end
 
 --- Build the plan for a set without performing it — what the UI previews on hover.
 function Sets.Preview(name)
-    local set = char().sets[name]
+    local set = resolved(name)
     if not set then return nil end
     local equipped, where, meta = Inventory.Snapshot(set)
     return Core.Plan(equipped, set, where, meta), set
@@ -123,7 +218,8 @@ end
 function Sets.PreviewAll()
     local equipped, where = Inventory.Equipped(), Inventory.Bagged()
     local plans = {}
-    for name, set in pairs(char().sets) do
+    for name in pairs(char().sets) do
+        local set = resolved(name)
         plans[name] = Core.Plan(equipped, set, where, Inventory.Meta(set))
     end
     return plans

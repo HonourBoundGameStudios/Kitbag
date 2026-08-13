@@ -114,6 +114,59 @@ function Core.CaptureSet(equipped, name)
     return { name = name, slots = slots }
 end
 
+--- Flatten a set and its ancestors into one outfit the planner can take (CORE-3).
+--
+-- A set may name a `parent`, in which case it stores only what differs: "Raid Fire" is "Raid" with
+-- two pieces changed. The nearest declaration of a slot wins, so a child overrides its parent and a
+-- parent overrides a grandparent. `false` is a value like any other here — "Raid, but no shield"
+-- must be sayable, or the only way to express it is to duplicate the whole outfit, which is the
+-- thing inheritance exists to stop.
+--
+-- Returns a NEW table; the stored delta is never mutated. Returns nil if `name` names no set.
+function Core.Resolve(sets, name)
+    if type(sets) ~= "table" then return nil end
+    local set = sets[name]
+    if type(set) ~= "table" then return nil end
+
+    -- Walk up first, then apply back down, so the nearest ancestor is written last and wins.
+    -- `seen` both terminates a hand-edited cycle and stops a diamond being applied twice: an addon
+    -- that hangs the client on login is worse than any wrong outfit.
+    local chain, seen, cursor = {}, {}, set
+    while type(cursor) == "table" and not seen[cursor] do
+        seen[cursor] = true
+        chain[#chain + 1] = cursor
+        -- A parent that no longer exists contributes nothing. Deleting a set someone forgot was a
+        -- parent should cost the inherited pieces, never the whole child.
+        cursor = cursor.parent and sets[cursor.parent] or nil
+    end
+
+    local slots = {}
+    for i = #chain, 1, -1 do
+        for slotId, key in pairs(chain[i].slots or {}) do
+            slots[slotId] = key
+        end
+    end
+
+    return { name = set.name or name, icon = set.icon, slots = slots }
+end
+
+--- Reduce a full capture to only what its parent does not already say.
+--
+-- This is what turns "save what I'm wearing" into a delta: capture records all nineteen slots, and
+-- everything the parent already gets right is redundant duplication that will drift out of step the
+-- first time the parent is re-enchanted.
+function Core.Diff(set, parent)
+    assert(type(set) == "table" and type(set.slots) == "table", "Diff: set must be a table with .slots")
+
+    local slots = {}
+    local base = parent and parent.slots or {}
+    for slotId, key in pairs(set.slots) do
+        if base[slotId] ~= key then slots[slotId] = key end
+    end
+
+    return { name = set.name, icon = set.icon, parent = set.parent, slots = slots }
+end
+
 -- ---------------------------------------------------------------------------
 -- The planner
 -- ---------------------------------------------------------------------------

@@ -29,6 +29,8 @@ local function help()
     say("  |cffffd100/kit equip <name>|r — wear a set")
     say("  |cffffd100/kit delete <name>|r — remove a set")
     say("  |cffffd100/kit list|r — what's saved")
+    say("  |cffffd100/kit inherit <set> from <parent>|r — make a set a delta on another")
+    say("  |cffffd100/kit inherit <set> none|r — stop inheriting, keeping the pieces")
     say("  |cffffd100/kit why|r — which rule is choosing your set, and why")
     say("  |cffffd100/kit import|r — bring this character's ItemRack sets across")
     say("  |cffffd100/kit minimap|r — toggle the minimap button")
@@ -64,6 +66,21 @@ local function command(input)
             Sets.Say("no sets yet — |cffffd100/kit save <name>|r saves what you're wearing.")
         else
             Sets.Say("%d set(s): %s", #names, table.concat(names, ", "))
+        end
+    elseif cmd == "inherit" then
+        -- "from" is the separator because set names contain spaces and a positional split would
+        -- make "Raid Fire" unaddressable.
+        local child, parent = string.match(rest, "^(.-)%s+from%s+(.+)$")
+        if child then
+            Sets.Inherit(child, parent)
+        else
+            local lone = string.match(rest, "^(.-)%s+none$")
+            if lone then
+                Sets.Inherit(lone, nil)
+            else
+                Sets.Say("|cffffd100/kit inherit Raid Fire from Raid|r, or " ..
+                    "|cffffd100/kit inherit Raid Fire none|r.")
+            end
         end
     elseif cmd == "why" then why()
     elseif cmd == "import" then Sets.ImportItemRack()

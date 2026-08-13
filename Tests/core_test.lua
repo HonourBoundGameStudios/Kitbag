@@ -190,6 +190,67 @@ H.eq(#plan.actions, 0, "a two-hander in the bank does not strip the off hand")
 H.eq(plan.missing[1].where, "bank", "…and is reported as a bank item")
 
 -- ---------------------------------------------------------------------------
+-- Inheritance (CORE-3)
+-- ---------------------------------------------------------------------------
+--
+-- "Raid Fire" is "Raid" with two pieces changed. Stored as a full outfit it duplicates seventeen
+-- slots, and re-enchanting one shared item means editing five sets and forgetting the sixth. Stored
+-- as a delta on a parent, the shared piece lives in exactly one place.
+
+local sets = {
+    Raid      = { name = "Raid", slots = { [1] = HELM, [11] = RING_A, [16] = SWORD } },
+    ["Raid Fire"] = { name = "Raid Fire", parent = "Raid", slots = { [11] = RING_B } },
+}
+
+local flat = C.Resolve(sets, "Raid Fire")
+H.eq(flat.slots[1], HELM, "an inherited slot comes through from the parent")
+H.eq(flat.slots[16], SWORD, "…every one of them")
+H.eq(flat.slots[11], RING_B, "a slot the child names overrides the parent's")
+H.eq(flat.name, "Raid Fire", "the resolved set keeps the child's name, not the parent's")
+H.eq(flat.parent, nil, "…and is flat: a resolved set has no parent left to chase")
+H.eq(sets["Raid Fire"].slots[1], nil, "resolving does not mutate the stored delta")
+
+-- A child that empties a slot the parent fills. `false` has to survive inheritance or "Raid, but no
+-- shield" is unsayable — and unsayable is how you end up storing the whole outfit again.
+sets["Raid Bare"] = { name = "Raid Bare", parent = "Raid", slots = { [1] = false } }
+H.eq(C.Resolve(sets, "Raid Bare").slots[1], false,
+    "a child can empty a slot its parent fills, and false is not mistaken for 'unset'")
+
+-- Chains resolve all the way up. Grandparent -> parent -> child, nearest wins.
+sets["Raid Fire Solo"] = { name = "Raid Fire Solo", parent = "Raid Fire", slots = { [16] = TWOHAND } }
+flat = C.Resolve(sets, "Raid Fire Solo")
+H.eq(flat.slots[1], HELM, "a grandparent's slot reaches the grandchild")
+H.eq(flat.slots[11], RING_B, "the nearer ancestor wins over the further one")
+H.eq(flat.slots[16], TWOHAND, "the child still wins over both")
+
+-- A parent that no longer exists must degrade to "just the delta", not to nil. Deleting a set the
+-- player forgot was a parent should cost them the inherited pieces, never the whole child set.
+sets.Orphan = { name = "Orphan", parent = "Gone", slots = { [16] = SWORD } }
+flat = C.Resolve(sets, "Orphan")
+H.eq(flat.slots[16], SWORD, "a missing parent leaves the child's own slots intact")
+H.eq(flat.slots[1], nil, "…and simply contributes nothing")
+
+-- A cycle is authorable by hand-editing SavedVariables and must terminate. An addon that hangs the
+-- client on login is worse than any wrong outfit.
+sets.Loop = { name = "Loop", parent = "Loop2", slots = { [1] = HELM } }
+sets.Loop2 = { name = "Loop2", parent = "Loop", slots = { [16] = SWORD } }
+flat = C.Resolve(sets, "Loop")
+H.eq(flat.slots[1], HELM, "a parent cycle resolves rather than hanging")
+H.eq(flat.slots[16], SWORD, "…visiting each set in the cycle exactly once")
+
+H.eq(C.Resolve(sets, "Nope"), nil, "resolving a set that does not exist is nil, not an error")
+
+-- Diff — what makes a full capture into a delta. Saving "Raid Fire" while wearing it captures all
+-- nineteen slots; dropping everything the parent already says is what leaves a delta behind.
+local full = { name = "Raid Fire", slots = { [1] = HELM, [11] = RING_B, [16] = SWORD } }
+local delta = C.Diff(full, sets.Raid)
+H.eq(delta.slots[1], nil, "a slot identical to the parent's drops out of the delta")
+H.eq(delta.slots[16], nil, "…all of them")
+H.eq(delta.slots[11], RING_B, "a slot that differs is kept")
+H.eq(delta.name, "Raid Fire", "the delta keeps its name")
+H.eq(C.Diff(full, nil).slots[1], HELM, "with no parent, a diff is the set unchanged")
+
+-- ---------------------------------------------------------------------------
 -- CaptureSet — "save what I'm wearing"
 -- ---------------------------------------------------------------------------
 
