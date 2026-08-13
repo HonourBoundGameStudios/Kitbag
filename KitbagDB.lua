@@ -9,20 +9,30 @@ Kitbag = Kitbag or {}
 
 local DB = {}
 
-DB.SCHEMA = 1
+DB.SCHEMA = 2
+
+-- Sets and rules are per-character (CORE-6): gear is, so a set naming items this character does not
+-- own is noise, and a rule naming a set it does not have is dead. They live in one account-wide file
+-- rather than `## SavedVariablesPerCharacter` so that options stay shared, the schema-1 data can be
+-- migrated instead of stranded, and copying a set to an alt stays possible later.
+local function characterDefaults()
+    return {
+        sets = {},          -- [name] = { name =, icon =, slots = { [slotId] = key | false } }
+        rules = {},         -- ordered list; see KitbagRules
+        lastSet = nil,
+    }
+end
 
 local function defaults()
     return {
         schema = DB.SCHEMA,
-        sets = {},          -- [name] = { name =, icon =, slots = { [slotId] = key | false } }
-        rules = {},         -- ordered list; see KitbagRules
+        chars = {},         -- ["Name - Realm"] = characterDefaults()
         options = {
             autoSwap = true,        -- obey the rules at all
             deferInCombat = false,  -- queue swaps until combat ends instead of attempting them
             announce = true,        -- print the set name on a successful swap
             minimap = { hide = false, angle = 200 },
         },
-        lastSet = nil,
     }
 end
 
@@ -42,7 +52,14 @@ end
 -- and moves it forward exactly one version. Add, never rewrite: an old client's data has to be able
 -- to walk the whole chain.
 local migrations = {
-    -- [1] = function(db) … end,   -- 1 -> 2, when there is a 2
+    -- 1 -> 2: the account-wide set list becomes per-character. The old list is set aside rather
+    -- than assigned here, because a migration does not know who is logging in — and copying one
+    -- character's gear onto every alt would be worse than losing it. DB.Character hands it to the
+    -- first character that asks for a bucket.
+    [1] = function(db)
+        db.legacy = { sets = db.sets, rules = db.rules, lastSet = db.lastSet }
+        db.sets, db.rules, db.lastSet = nil, nil, nil
+    end,
 }
 
 --- Normalise the loaded SavedVariables table in place and return it.
@@ -57,6 +74,26 @@ function DB.Load(saved)
     end
 
     return applyDefaults(db, defaults())
+end
+
+--- The sets, rules and lastSet belonging to one character, created on first use.
+--
+-- `key` must identify the character uniquely ("Name - Realm"); an empty one would quietly merge two
+-- characters' gear into one bucket, and there is no undoing that once they have both saved a set.
+function DB.Character(db, key)
+    if type(key) ~= "string" or key:match("^%s*$") then
+        error("KitbagDB.Character: a character key is required, got " .. tostring(key), 2)
+    end
+
+    db.chars = db.chars or {}
+    local char = db.chars[key]
+    if not char then
+        -- Whoever logs in first after the schema-1 upgrade keeps the old account-wide sets.
+        char = db.legacy or {}
+        db.legacy = nil
+        db.chars[key] = applyDefaults(char, characterDefaults())
+    end
+    return char
 end
 
 DB.Defaults = defaults

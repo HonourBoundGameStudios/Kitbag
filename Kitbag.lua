@@ -13,6 +13,7 @@ local UI = Kitbag.UI
 local Events = Kitbag.Events
 local Minimap_ = Kitbag.Minimap
 local DB = Kitbag.DB
+local Compat = Kitbag.Compat
 
 --- Anything that changes stored state calls this. One redraw entry point means a new surface (the
 --- rule editor, a broker plugin) gets kept in step by existing code rather than by remembering to.
@@ -80,6 +81,10 @@ loader:SetScript("OnEvent", function(_, event, name)
         KitbagDB = DB.Load(KitbagDB)
         Kitbag.db = KitbagDB
     elseif event == "PLAYER_LOGIN" then
+        -- Sets and rules are this character's; options are the account's. The name and realm are
+        -- only guaranteed to be readable from PLAYER_LOGIN on, so the bucket is bound here rather
+        -- than at ADDON_LOADED — nothing can ask for a set before then.
+        Kitbag.char = DB.Character(KitbagDB, Compat.CharacterKey())
         Minimap_.Create()
         Events.Enable()
         Sets.Say("loaded. |cffffd100/kit|r to open, |cffffd100/kit help|r for commands.")

@@ -35,6 +35,17 @@ function Compat.EquipLocation(itemId)
     return equipSlot
 end
 
+--- The key this character's sets are stored under: "Name - Realm".
+--
+-- The realm has to be in it. Two characters can share a name across realms on one account, and a
+-- collision here would merge their gear sets into one list.
+function Compat.CharacterKey()
+    local name = _G.UnitName("player")
+    if not name or name == "" then return nil end
+    local realm = (_G.GetRealmName and _G.GetRealmName()) or ""
+    return name .. " - " .. realm
+end
+
 --- Is the player currently in a state where swapping gear will be refused or wasted?
 -- Casting is the one people notice: a swap mid-cast cancels it.
 function Compat.IsBusy()

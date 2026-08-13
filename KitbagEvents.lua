@@ -40,12 +40,12 @@ function Events.State()
 end
 
 local function apply()
-    local db = Kitbag.db
+    local db, char = Kitbag.db, Kitbag.char
     if not db.options.autoSwap then return end
 
-    local winner = Rules.Match(db.rules, Events.State())
+    local winner = Rules.Match(char.rules, Events.State())
     if not winner then return end
-    if winner.set == db.lastSet then return end   -- already there; don't churn
+    if winner.set == char.lastSet then return end   -- already there; don't churn
 
     if db.options.deferInCombat and InCombatLockdown() then
         pending = winner.set
@@ -74,7 +74,7 @@ end
 
 --- Why is the current state producing the set it is? Backs `/kit why`.
 function Events.Explain()
-    return Rules.Explain(Kitbag.db.rules, Events.State())
+    return Rules.Explain(Kitbag.char.rules, Events.State())
 end
 
 Kitbag.Events = Events
