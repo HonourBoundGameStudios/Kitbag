@@ -214,6 +214,90 @@ function Core.Totals(set, info)
     }
 end
 
+-- ---------------------------------------------------------------------------
+-- Where an item can go (UI-5)
+-- ---------------------------------------------------------------------------
+--
+-- The client hands out an equip-location token and leaves you to know what it means. This is that
+-- knowledge, in one table, so the paperdoll flyouts and anything else that asks "what fits here"
+-- agree — and so it can be checked without a game.
+local FITS = {
+    INVTYPE_HEAD            = { 1 },
+    INVTYPE_NECK            = { 2 },
+    INVTYPE_SHOULDER        = { 3 },
+    INVTYPE_BODY            = { 4 },        -- the shirt
+    INVTYPE_CHEST           = { 5 },
+    INVTYPE_ROBE            = { 5 },        -- a chest piece under a second token
+    INVTYPE_WAIST           = { 6 },
+    INVTYPE_LEGS            = { 7 },
+    INVTYPE_FEET            = { 8 },
+    INVTYPE_WRIST           = { 9 },
+    INVTYPE_HAND            = { 10 },
+    INVTYPE_FINGER          = { 11, 12 },
+    INVTYPE_TRINKET         = { 13, 14 },
+    INVTYPE_CLOAK           = { 15 },
+    INVTYPE_WEAPON          = { 16, 17 },   -- a one-hander goes in either hand
+    INVTYPE_2HWEAPON        = { 16 },
+    INVTYPE_WEAPONMAINHAND  = { 16 },
+    INVTYPE_WEAPONOFFHAND   = { 17 },
+    INVTYPE_SHIELD          = { 17 },
+    INVTYPE_HOLDABLE        = { 17 },
+    INVTYPE_RANGED          = { 18 },
+    INVTYPE_RANGEDRIGHT     = { 18 },
+    INVTYPE_THROWN          = { 18 },
+    INVTYPE_RELIC           = { 18 },
+    INVTYPE_TABARD          = { 19 },
+}
+
+local NO_SLOTS = {}
+
+--- The inventory slots an item with this equip location can occupy. Empty for anything that is not
+-- equippable gear — including nil, which is what an uncached item reads as.
+function Core.SlotsFor(equipLocation)
+    return FITS[equipLocation] or NO_SLOTS
+end
+
+--- Everything you own that could go in this slot, other than what is in it already.
+--
+--   equipped  : { [slotId] = itemKey }
+--   where     : { [itemKey] = { bag =, slot = } }        unworn copies
+--   locations : { [itemKey] = "INVTYPE_…" }              what the client says each one is
+--
+-- Returns an ordered list of { key, bag, slot, worn }, sorted by key so the menu does not reshuffle
+-- itself between two hovers. `worn` is the slot an alternative is currently worn in, if any — a ring
+-- on the other finger is a genuine alternative for this one, and the planner already handles the
+-- two-way swap that moving it produces.
+function Core.Alternatives(slotId, equipped, where, locations)
+    equipped, where, locations = equipped or {}, where or {}, locations or {}
+
+    local function fits(key)
+        for _, id in ipairs(Core.SlotsFor(locations[key])) do
+            if id == slotId then return true end
+        end
+        return false
+    end
+
+    -- What is in the slot already is not an alternative to itself, and neither is a second copy of
+    -- it sitting in a bag: identical keys are the same item by definition, so either would be a
+    -- menu entry that does nothing.
+    local here = equipped[slotId]
+
+    local byKey = {}
+    for key, at in pairs(where) do
+        if key ~= here and fits(key) then byKey[key] = { key = key, bag = at.bag, slot = at.slot } end
+    end
+    for id, key in pairs(equipped) do
+        -- A worn copy beats a bagged one: moving it is a single slot-to-slot swap, where fetching
+        -- from the bag would take the worn one off first.
+        if id ~= slotId and key ~= here and fits(key) then byKey[key] = { key = key, worn = id } end
+    end
+
+    local found = {}
+    for _, entry in pairs(byKey) do found[#found + 1] = entry end
+    table.sort(found, function(a, b) return a.key < b.key end)
+    return found
+end
+
 -- Which item best identifies a set, for the icon a set without one borrows (UI-4).
 --
 -- The weapon first: "Fishing" is the pole, "Tank" is the mace, and the hands are what a player

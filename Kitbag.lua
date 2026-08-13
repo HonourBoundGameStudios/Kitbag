@@ -108,6 +108,7 @@ loader:SetScript("OnEvent", function(_, event, name)
         Kitbag.char = DB.Character(KitbagDB, Compat.CharacterKey())
         Minimap_.Create()
         Events.Enable()
+        Kitbag.Flyout.Enable()
         Sets.Say("loaded. |cffffd100/kit|r to open, |cffffd100/kit help|r for commands.")
     end
 end)

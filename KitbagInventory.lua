@@ -146,6 +146,38 @@ function Inventory.ItemInfo(set, dur)
     return info
 end
 
+--- What the client says each item is, for the keys given: { [itemKey] = "INVTYPE_…" }.
+--
+-- Asked only about the keys actually being considered, for the same reason Meta is: GetItemInfo
+-- returns nil for anything uncached and there is no reason to provoke that across the whole bank.
+function Inventory.EquipLocations(keys)
+    local locations = {}
+    for _, key in ipairs(keys) do
+        locations[key] = Compat.EquipLocation(Core.ItemId(key))
+    end
+    return locations
+end
+
+--- Everything you own that could go in one inventory slot (UI-5).
+--
+-- The bank is deliberately included and then filtered out: a bank item cannot be equipped from a
+-- flyout while the bank is shut, and an entry that does nothing when clicked is worse than an
+-- absent one.
+function Inventory.AlternativesFor(slotId)
+    local equipped, where = Inventory.Equipped(), Inventory.Bagged()
+
+    local keys, reachable = {}, {}
+    for key, at in pairs(where) do
+        if not at.bank or bankOpen then
+            keys[#keys + 1] = key
+            reachable[key] = at
+        end
+    end
+    for _, key in pairs(equipped) do keys[#keys + 1] = key end
+
+    return Core.Alternatives(slotId, equipped, reachable, Inventory.EquipLocations(keys))
+end
+
 --- Everything Plan() needs, read once so the three views agree with each other.
 function Inventory.Snapshot(set)
     return Inventory.Equipped(), Inventory.Bagged(), Inventory.Meta(set)

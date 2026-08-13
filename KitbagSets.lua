@@ -203,6 +203,17 @@ function Sets.ImportItemRack()
     return result
 end
 
+--- Put one item in one slot, through the same planner and driver everything else uses (UI-5).
+--
+-- Deliberately not a shortcut straight to PickupInventoryItem: the flyout's click has to free the
+-- off hand for a two-hander and refuse when the bags are full exactly like equipping a set does, and
+-- the only way to be sure of that is for it to be the same code.
+function Sets.EquipItem(key, slotId)
+    local slot = Core.SlotById(slotId)
+    if not slot then return false end
+    return Sets.Apply({ slots = { [slotId] = key } }, slot.label, true)
+end
+
 --- The texture to show for a set (UI-4).
 --
 -- A chosen icon wins. Otherwise the set borrows one from the item that best identifies it, because

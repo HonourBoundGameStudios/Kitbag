@@ -251,6 +251,65 @@ H.eq(delta.name, "Raid Fire", "the delta keeps its name")
 H.eq(C.Diff(full, nil).slots[1], HELM, "with no parent, a diff is the set unchanged")
 
 -- ---------------------------------------------------------------------------
+-- Per-slot alternatives (UI-5)
+-- ---------------------------------------------------------------------------
+--
+-- "Hover a slot, see everything you own that fits it, click to wear it." Which items fit which slot
+-- is a fixed table the client will not tell you — GetItemInfo gives an equip location token and you
+-- have to know that a ring goes in either finger slot and a shield only in the off hand.
+
+H.eq(C.SlotsFor("INVTYPE_HEAD")[1], 1, "a helm goes on your head")
+H.eq(#C.SlotsFor("INVTYPE_HEAD"), 1, "…and nowhere else")
+H.eq(#C.SlotsFor("INVTYPE_FINGER"), 2, "a ring fits either finger")
+H.eq(C.SlotsFor("INVTYPE_FINGER")[2], 12, "…including the second one")
+H.eq(#C.SlotsFor("INVTYPE_TRINKET"), 2, "and a trinket either trinket slot")
+H.eq(#C.SlotsFor("INVTYPE_WEAPON"), 2, "a one-hander can go in either hand")
+H.eq(C.SlotsFor("INVTYPE_2HWEAPON")[1], 16, "a two-hander only in the main hand")
+H.eq(#C.SlotsFor("INVTYPE_2HWEAPON"), 1, "…and only there")
+H.eq(C.SlotsFor("INVTYPE_SHIELD")[1], 17, "a shield only in the off hand")
+H.eq(C.SlotsFor("INVTYPE_ROBE")[1], 5, "a robe is a chest piece under a different token")
+H.eq(#C.SlotsFor("INVTYPE_BAG"), 0, "something that is not equippable gear fits no slot")
+H.eq(#C.SlotsFor(nil), 0, "…and an uncached item, which reads as nil, fits none either")
+
+-- Alternatives — the flyout's contents. Everything you own that fits, minus what is already there,
+-- because offering to equip the item you are wearing is a menu entry that does nothing.
+local where = {
+    [RING_A] = { bag = 0, slot = 1 },
+    [RING_B] = { bag = 0, slot = 2 },
+    [SHIELD] = { bag = 0, slot = 3 },
+    [HELM]   = { bag = 0, slot = 4 },
+}
+local locations = {
+    [RING_A] = "INVTYPE_FINGER",
+    [RING_B] = "INVTYPE_FINGER",
+    [SHIELD] = "INVTYPE_SHIELD",
+    [HELM]   = "INVTYPE_HEAD",
+}
+
+local alts = C.Alternatives(11, { [11] = RING_A }, where, locations)
+H.eq(#alts, 1, "the ring already on that finger is not offered again")
+H.eq(alts[1].key, RING_B, "…and the other one is")
+H.eq(alts[1].bag, 0, "an alternative carries where to get it from")
+
+-- A ring worn on the OTHER finger is still an alternative for this one: swapping which finger they
+-- sit on is a real thing people do, and the planner already handles the two-way swap.
+alts = C.Alternatives(11, { [11] = RING_A, [12] = RING_B }, where, locations)
+H.eq(#alts, 1, "a ring worn on the other finger is still offered for this one")
+H.eq(alts[1].key, RING_B, "…as itself")
+H.eq(alts[1].worn, 12, "…marked with the slot it is currently worn in")
+
+H.eq(#C.Alternatives(17, {}, where, locations), 1, "the off hand offers the shield")
+H.eq(#C.Alternatives(2, {}, where, locations), 0, "a slot you own nothing for offers nothing")
+
+-- Order has to be stable — a menu whose entries move between two hovers is unusable — and pairs()
+-- over the bag contents is not.
+local first = C.Alternatives(11, {}, where, locations)
+local second = C.Alternatives(11, {}, where, locations)
+H.eq(#first, 2, "both rings are offered when neither is worn")
+H.eq(first[1].key, second[1].key, "the order is the same every time")
+H.eq(first[1].key < first[2].key, true, "…and is sorted, rather than whatever pairs() produced")
+
+-- ---------------------------------------------------------------------------
 -- The stand-in icon (UI-4)
 -- ---------------------------------------------------------------------------
 --

@@ -35,6 +35,7 @@ local function defaults()
             autoSwap = true,        -- obey the rules at all
             deferInCombat = false,  -- queue swaps until combat ends instead of attempting them
             announce = true,        -- print the set name on a successful swap
+            flyouts = true,         -- per-slot alternatives on the character sheet (UI-5)
             minimap = { hide = false, angle = 200 },
         },
     }
