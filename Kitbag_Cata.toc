@@ -35,5 +35,6 @@ KitbagTrinkets.lua
 KitbagMinimap.lua
 KitbagOptions.lua
 KitbagBindings.lua
+KitbagBroker.lua
 
 Kitbag.lua

@@ -22,6 +22,7 @@ function Kitbag.Refresh()
     UI.Refresh()
     RulesUI.Refresh()
     Kitbag.Options.Refresh()
+    Kitbag.Broker.Refresh()
 end
 
 local function help()
@@ -116,6 +117,8 @@ loader:SetScript("OnEvent", function(_, event, name)
         Kitbag.Flyout.Enable()
         Kitbag.Trinkets.Create()
         Kitbag.Bindings.Apply()
+        -- No-op unless the player has a broker display that already provides LibDataBroker.
+        Kitbag.Broker.Enable()
         Sets.Say("loaded. |cffffd100/kit|r to open, |cffffd100/kit help|r for commands.")
     end
 end)
