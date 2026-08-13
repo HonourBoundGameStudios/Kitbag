@@ -8,7 +8,7 @@
 ## X-Website: https://github.com/HonourBoundGameStudios/Kitbag
 ## X-License: MIT
 
-# Retail (COMPAT-2). Same file list as Kitbag.toc — the flavour difference is confined to
+# Retail, "Mainline" in Blizzard's own flavour vocabulary (COMPAT-2). Same file list as Kitbag.toc — the flavour difference is confined to
 # KitbagCompat.lua, which resolves the 11.0 C_Item / C_Spell moves and the container namespace.
 #
 # THE ## Interface NUMBER ABOVE IS UNVERIFIED. It was not checked against a live Retail client,
