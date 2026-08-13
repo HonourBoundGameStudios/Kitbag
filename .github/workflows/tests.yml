@@ -1,0 +1,38 @@
+# Run the pure-logic gate on every push and pull request (SHIP-3).
+#
+# The whole premise of this addon is that the parts which decide anything are pure and testable
+# outside the game (CLAUDE.md -> The Process). A gate that only runs when someone remembers to type
+# it is not a gate, so it runs here too.
+#
+# Ubuntu with a real Lua 5.1, not Windows with PowerShell: the tests are plain Lua and 5.1 is the
+# version the WoW client actually embeds, so this is closer to the target runtime than a newer Lua
+# on the developer's machine would be. Tests/run-all.ps1 stays the local entry point; this reproduces
+# what it does, and toc_test.lua's directory listing already handles both platforms.
+
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lua:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Lua 5.1
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.1
+
+      - name: Run every test file
+        # Run from the repository root: the tests load Tests/harness.lua and each module by a
+        # root-relative path, exactly as run-all.ps1 does.
+        run: |
+          failed=0
+          for f in Tests/*_test.lua; do
+            echo "== $f"
+            lua5.1 "$f" || failed=1
+          done
+          exit $failed
