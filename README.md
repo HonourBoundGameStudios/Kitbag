@@ -50,16 +50,24 @@ Supports **Classic Era** and **Mists Classic** from the same folder.
 | `/kit equip <name>` | Wear a set |
 | `/kit delete <name>` | Remove a set |
 | `/kit list` | What's saved |
+| `/kit rules` | The auto-swap rule editor |
 | `/kit why` | Which rule is choosing your set, and why |
+| `/kit options` | Auto-swap, announcements, minimap, trinket bar |
+| `/kit inherit <set> from <parent>` | Make a set a delta on another |
+| `/kit import` | Bring this character's ItemRack sets across |
 | `/kit minimap` | Toggle the minimap button |
+| `/kit trinkets` | Toggle the trinket quick-use bar |
 
 ## Status
 
-**0.1.0 — early.** The planner, the rule engine, sets, the window, slash commands and the minimap
-button work. The rule *editor*, per-slot flyout menus, trinket quick-use and set icons are next —
-see `Process/Backlog.md`.
+**0.1.0 — early, but feature-complete against the first backlog.** The planner, the rule engine and
+its editor, sets and set inheritance, the window with per-row readiness and move-by-move tooltips,
+paperdoll flyouts, set icons, the trinket bar, the options panel and the ItemRack importer all work.
+
+Verified in the client on Classic Era only. Mists, Cataclysm and Retail have `.toc` files and have
+never been launched — `Process/Bugs.md` lists exactly what that leaves unproven.
 
 ## Licence
 
-MIT. Not affiliated with Blizzard Entertainment. World of Warcraft is a trademark of Blizzard
-Entertainment, Inc.
+[MIT](LICENSE). Not affiliated with Blizzard Entertainment. World of Warcraft is a trademark of
+Blizzard Entertainment, Inc.
