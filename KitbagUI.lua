@@ -64,7 +64,7 @@ local function onRowEnter(self)
     local name = self.setName
     if not name then return end
 
-    local plan, totals = self.plan, self.totals
+    local plan, totals = self.data.plan, self.data.totals
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     GameTooltip:AddLine(name, 1, 0.82, 0)
 
@@ -134,6 +134,11 @@ end
 local function createRow(parent, index)
     local row = CreateFrame("Frame", nil, parent)
     row:SetHeight(ROW_HEIGHT)
+    -- Per-row DATA lives in its own table, never as loose fields on the frame. A frame is a live
+    -- namespace of widgets and Blizzard methods, and `row.totals = <the totals table>` silently
+    -- replaced the FontString of the same name — the crash reads as "SetText is nil", ten lines
+    -- from the assignment that caused it. One subtable makes that collision impossible.
+    row.data = {}
     row:EnableMouse(true)
     row:SetScript("OnEnter", onRowEnter)
     row:SetScript("OnLeave", onRowLeave)
@@ -280,7 +285,8 @@ function UI.Refresh()
         local name = names[i + offset]
         if name then
             local entry = overview[name] or {}
-            row.setName, row.plan, row.totals = name, entry.plan, entry.totals
+            row.setName = name
+            row.data.plan, row.data.totals = entry.plan, entry.totals
             row.icon.texture:SetTexture(Sets.Icon(name))
             row.name:SetText(name)
             row.state:SetText(rowReadiness(entry.plan))
