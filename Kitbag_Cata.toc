@@ -1,0 +1,39 @@
+## Interface: 40402
+## Title: |cff8fd3ffKitbag|r
+## Notes: Gear sets that actually apply. Save what you're wearing, swap it back in one click, and let rules do it for you.
+## Author: Honour Bound Game Studios Inc.
+## Version: 0.1.0
+## IconTexture: Interface\Icons\INV_Chest_Plate06
+## SavedVariables: KitbagDB
+## X-Website: https://github.com/HonourBoundGameStudios/Kitbag
+## X-License: MIT
+
+# Cataclysm Classic (COMPAT-3). Same file list as Kitbag.toc; the flavour difference lives in
+# KitbagCompat.lua and there is very little of it — Cataclysm sits between Era and Mists and shares
+# the older shape of every API Kitbag touches.
+#
+# VERIFY THE ## Interface NUMBER against the live client. It is not installed here, so this is the
+# last published Cataclysm Classic build and not an observation. A stale one shows the addon as out
+# of date and on some flavours refuses to load it.
+#
+# One genuine difference from Era, already handled generically: the relic slot and the ranged slot
+# are both inventory slot 18, and Core.SlotsFor maps INVTYPE_RELIC and INVTYPE_RANGED alike.
+KitbagCompat.lua
+KitbagCore.lua
+KitbagRules.lua
+KitbagImport.lua
+KitbagDB.lua
+KitbagInventory.lua
+KitbagEquip.lua
+KitbagSets.lua
+KitbagEvents.lua
+KitbagIcons.lua
+KitbagFlyout.lua
+KitbagUI.lua
+KitbagRulesUI.lua
+KitbagTrinkets.lua
+KitbagMinimap.lua
+KitbagOptions.lua
+KitbagBindings.lua
+
+Kitbag.lua

@@ -35,7 +35,7 @@ local function readToc(path)
 end
 
 -- Kitbag.toc is the reference; every other flavour must match it exactly.
-local OTHER_FLAVOURS = { "Kitbag_Mists.toc", "Kitbag_Retail.toc" }
+local OTHER_FLAVOURS = { "Kitbag_Mists.toc", "Kitbag_Retail.toc", "Kitbag_Cata.toc" }
 
 local ERA, eraOrder = readToc("Kitbag.toc")
 
