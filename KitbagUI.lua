@@ -12,6 +12,7 @@ Kitbag = Kitbag or {}
 
 local Sets = Kitbag.Sets
 local Equip = Kitbag.Equip
+local Core = Kitbag.Core
 
 local UI = {}
 
@@ -55,6 +56,66 @@ local function rowTotals(totals)
     return text
 end
 
+-- The exact moves the Equip button would make, on hover (UI-6).
+--
+-- Read out of the plan itself rather than re-derived from the set, so the tooltip cannot promise
+-- something different from what the driver does — it is the same list the driver is about to walk.
+local function onRowEnter(self)
+    local name = self.setName
+    if not name then return end
+
+    local plan, totals = self.plan, self.totals
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:AddLine(name, 1, 0.82, 0)
+
+    local stored = Kitbag.char.sets[name]
+    if stored and stored.parent then
+        GameTooltip:AddLine("inherits from " .. stored.parent, 0.6, 0.6, 0.6)
+    end
+    if totals and totals.level then
+        GameTooltip:AddLine(string.format("%d items, average item level %s%d",
+            totals.items, totals.complete and "" or "about ", math.floor(totals.level + 0.5)),
+            0.6, 0.6, 0.6)
+    end
+
+    local lines = Core.Explain(plan)
+    if #lines == 0 then
+        GameTooltip:AddLine(plan and plan.empty and "Already worn." or "Nothing to do.", 0.4, 1, 0.4)
+    else
+        GameTooltip:AddLine(" ")
+        for _, line in ipairs(lines) do
+            -- The item name comes from the client and is nil until it is cached, which happens
+            -- routinely for the first seconds after a login. The slot and the verb are always
+            -- known, so a line degrades rather than collapsing to nothing.
+            local what = (line.key and GetItemInfo(Core.ItemId(line.key))) or "an item"
+            local text
+            if line.missing then
+                text = string.format("%s: %s — %s", line.slot, what, line.verb)
+            elseif line.from then
+                text = string.format("%s: move %s from %s", line.slot, what, line.from)
+            else
+                text = string.format("%s: %s %s", line.slot, line.verb, what)
+            end
+            if line.missing then
+                GameTooltip:AddLine(text, 1, 0.5, 0.5)
+            else
+                GameTooltip:AddLine(text, 0.9, 0.9, 0.9)
+            end
+        end
+    end
+
+    if plan and plan.blocked == "bags" then
+        GameTooltip:AddLine(string.format("Bags full — needs %d free slot(s).", plan.needsBagSlots),
+            1, 0.3, 0.3)
+    end
+
+    GameTooltip:Show()
+end
+
+local function onRowLeave()
+    GameTooltip:Hide()
+end
+
 local function onEquipClick(self)
     Sets.Equip(self.setName)
 end
@@ -70,6 +131,9 @@ end
 local function createRow(parent, index)
     local row = CreateFrame("Frame", nil, parent)
     row:SetHeight(ROW_HEIGHT)
+    row:EnableMouse(true)
+    row:SetScript("OnEnter", onRowEnter)
+    row:SetScript("OnLeave", onRowLeave)
     row:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -(index - 1) * ROW_HEIGHT)
     row:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, -(index - 1) * ROW_HEIGHT)
 
@@ -201,7 +265,7 @@ function UI.Refresh()
         local name = names[i + offset]
         if name then
             local entry = overview[name] or {}
-            row.setName = name
+            row.setName, row.plan, row.totals = name, entry.plan, entry.totals
             row.icon.texture:SetTexture(Sets.Icon(name))
             row.name:SetText(name)
             row.state:SetText(rowReadiness(entry.plan))

@@ -251,6 +251,48 @@ H.eq(delta.name, "Raid Fire", "the delta keeps its name")
 H.eq(C.Diff(full, nil).slots[1], HELM, "with no parent, a diff is the set unchanged")
 
 -- ---------------------------------------------------------------------------
+-- Explaining a plan (UI-6)
+-- ---------------------------------------------------------------------------
+--
+-- The row says "3 swaps". Hovering it should say which three. This is the same information the
+-- driver is about to act on, turned into slot-by-slot lines — so what the tooltip promises and what
+-- the driver does cannot drift apart, because they are the same list.
+
+plan = C.Plan({ [16] = SWORD, [17] = SHIELD }, { slots = { [16] = TWOHAND, [1] = HELM } },
+    bagged(TWOHAND, 1, 5), { twoHand = { [TWOHAND] = true } })
+local lines = C.Explain(plan)
+H.eq(#lines, 3, "every action in the plan gets a line, including the ones nobody asked for")
+H.eq(lines[1].slot, "Off hand", "…named by the slot a player sees, not by its id")
+H.eq(lines[1].verb, "take off", "freeing the off hand reads as taking something off")
+H.eq(lines[1].key, SHIELD, "…and carries the item, so the caller can name it")
+H.eq(lines[2].verb, "put on", "an equip from the bags reads as putting something on")
+H.eq(lines[2].slot, "Main hand", "the lines follow the plan's own order")
+-- The helm was never supplied, so it is not an action at all — and it still gets a line, at the end
+-- with the rest of what could not be done.
+H.eq(lines[3].slot, "Head", "what could not be done comes after what can")
+H.eq(lines[3].verb, "not found", "…and says so")
+
+-- A slot-to-slot move is a different sentence: nothing new comes out of a bag and the other slot
+-- changes too, which is exactly the behaviour that surprises people about ring swaps.
+plan = C.Plan({ [11] = RING_A, [12] = RING_B }, { slots = { [11] = RING_B, [12] = RING_A } }, {})
+lines = C.Explain(plan)
+H.eq(#lines, 1, "the ring swap is one line, because it is one move")
+H.eq(lines[1].verb, "move from", "…and reads as a move")
+H.eq(lines[1].from, "Ring 2", "…naming where it comes from")
+
+-- What can't be done belongs in the same list. A tooltip that lists three moves and stays silent
+-- about the fourth item being in the bank is the tooltip that gets Kitbag blamed.
+plan = C.Plan({}, { slots = { [16] = SWORD, [1] = HELM } }, banked(HELM, -1, 2))
+lines = C.Explain(plan)
+H.eq(#lines, 2, "missing items are lines too")
+H.eq(lines[1].verb, "in your bank", "…saying where it is when that is known")
+H.eq(lines[1].slot, "Head", "…for the slot that wanted it")
+H.eq(lines[2].verb, "not found", "…and saying so plainly when it is not")
+
+H.eq(#C.Explain({ actions = {}, missing = {} }), 0, "a plan with nothing in it explains nothing")
+H.eq(#C.Explain(nil), 0, "…and neither does no plan at all")
+
+-- ---------------------------------------------------------------------------
 -- Per-slot alternatives (UI-5)
 -- ---------------------------------------------------------------------------
 --

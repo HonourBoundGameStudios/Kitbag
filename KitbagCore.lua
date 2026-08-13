@@ -214,6 +214,48 @@ function Core.Totals(set, info)
     }
 end
 
+--- A plan as slot-by-slot lines, for the tooltip that previews it (UI-6).
+--
+-- Returns { { slot = "Off hand", verb = "take off", key = …, from = "Ring 2" }, … } in the plan's
+-- own order, with the things it could not do on the end.
+--
+-- Built from the plan rather than re-derived from the set, so what the tooltip promises and what the
+-- driver does cannot drift apart — they are the same list. The item names are left to the caller,
+-- because only the client knows them.
+function Core.Explain(plan)
+    local lines = {}
+    if type(plan) ~= "table" then return lines end
+
+    local function label(slotId)
+        local s = Core.SlotById(slotId)
+        return s and s.label or ("slot " .. tostring(slotId))
+    end
+
+    for _, action in ipairs(plan.actions or {}) do
+        if action.kind == "unequip" then
+            lines[#lines + 1] = { slot = label(action.to), verb = "take off", key = action.key }
+        elseif action.from and action.from.equipped then
+            lines[#lines + 1] = {
+                slot = label(action.to), verb = "move from", key = action.key,
+                from = label(action.from.equipped),
+            }
+        else
+            lines[#lines + 1] = { slot = label(action.to), verb = "put on", key = action.key }
+        end
+    end
+
+    for _, miss in ipairs(plan.missing or {}) do
+        lines[#lines + 1] = {
+            slot = label(miss.slot),
+            verb = miss.where == "bank" and "in your bank" or "not found",
+            key = miss.key,
+            missing = true,
+        }
+    end
+
+    return lines
+end
+
 -- ---------------------------------------------------------------------------
 -- Where an item can go (UI-5)
 -- ---------------------------------------------------------------------------
