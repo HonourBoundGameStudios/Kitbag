@@ -37,10 +37,25 @@ local function finish(ok, failedAction)
     if done then done(ok, failedAction, label) end
 end
 
+-- Put whatever is on the cursor down in the first bag that will take it.
+--
+-- PutItemInBackpack() alone only ever tries bag 0, so a full backpack failed the unequip even with
+-- three empty bags hanging off it — and the failure looked identical to genuinely having nowhere to
+-- put the item. The planner refuses the plan up front when there is truly no room (CORE-5); this is
+-- the other half of the same bug.
+local function stow()
+    PutItemInBackpack()
+    if not CursorHasItem() then return end
+    for bag = 1, Compat.LAST_BAG do
+        PutItemInBag(Compat.ContainerToInventory(bag))
+        if not CursorHasItem() then return end
+    end
+end
+
 local function perform(action)
     if action.kind == "unequip" then
         PickupInventoryItem(action.to)
-        PutItemInBackpack()
+        stow()
         ClearCursor()
     elseif action.from.equipped then
         PickupInventoryItem(action.from.equipped)

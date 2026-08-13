@@ -219,11 +219,12 @@ end
 function Sets.Overview()
     local equipped, where = Inventory.Equipped(), Inventory.Bagged()
     local dur = Inventory.WornDurability()
+    local free = Inventory.FreeBagSlots()
     local out = {}
     for name in pairs(char().sets) do
         local set = resolved(name)
         out[name] = {
-            plan = Core.Plan(equipped, set, where, Inventory.Meta(set)),
+            plan = Core.Plan(equipped, set, where, Inventory.Meta(set, free)),
             totals = Core.Totals(set, Inventory.ItemInfo(set, dur)),
         }
     end
@@ -265,6 +266,15 @@ function Sets.Equip(name, silent)
     if plan.empty then
         if not silent then say("already wearing |cffffd100%s|r.", name) end
         return true
+    end
+
+    -- Refuse before moving anything. The alternative is the driver spending its full retry budget on
+    -- an unequip the client will never accept and then reporting "stuck on Off hand", which reads as
+    -- a Kitbag bug rather than as a full bag.
+    if plan.blocked == "bags" then
+        say("|cffff8080your bags are full|r — |cffffd100%s|r needs %d free slot(s) to put what " ..
+            "it takes off.", name, plan.needsBagSlots)
+        return false
     end
 
     if Equip.IsRunning() then

@@ -263,9 +263,15 @@ function Core.Plan(equipped, set, where, meta)
     local actions, missing = {}, {}
     local atBank = 0
 
+    -- Taking something off needs somewhere to put it (CORE-5). Only an unequip does: equipping from
+    -- a bag is a swap, and the worn item lands in the slot the new one came from. Counting those
+    -- would refuse perfectly possible swaps on a nearly full bag.
+    local needsBagSlots = 0
+
     local function unequip(slotId)
         actions[#actions + 1] = { kind = "unequip", to = slotId, key = cur[slotId] }
         cur[slotId] = nil
+        needsBagSlots = needsBagSlots + 1
     end
 
     -- Which equipped slot currently holds this item, ignoring `except`.
@@ -321,9 +327,19 @@ function Core.Plan(equipped, set, where, meta)
         end
     end
 
+    -- A known-too-small bag is a refusal with a reason; an UNKNOWN bag count is not. Kitbag must
+    -- never decline a swap because it failed to read the bags — the whole point of catching this is
+    -- to replace a confusing failure with a clear one, not to add a new way to fail.
+    local blocked = nil
+    if meta.freeBagSlots and needsBagSlots > meta.freeBagSlots then blocked = "bags" end
+
     return {
         actions = actions,
         missing = missing,
+        -- How many free bag slots performing this plan will consume, and why it will not be
+        -- attempted if that is more than there are.
+        needsBagSlots = needsBagSlots,
+        blocked = blocked,
         -- How much of what's missing is merely out of reach. The UI turns this into "3 pieces are in
         -- your bank" instead of "3 missing", which is the difference between a bug report and a walk.
         atBank = atBank,

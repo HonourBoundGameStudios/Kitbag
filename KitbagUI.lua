@@ -23,6 +23,8 @@ local frame, rows, status
 local function rowReadiness(plan)
     if not plan then return "|cff808080—|r" end
     if plan.empty then return "|cff40ff40worn|r" end
+    -- Ahead of "missing": a full bag stops the whole swap, so it is the thing to fix first.
+    if plan.blocked == "bags" then return "|cffff8080bags full|r" end
     if #plan.missing > 0 then
         -- Say "at bank" only when the bank explains ALL of it. A set that is part banked and part
         -- genuinely lost would otherwise send the player on a trip that cannot finish the set.

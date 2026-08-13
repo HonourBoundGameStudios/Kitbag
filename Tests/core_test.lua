@@ -251,6 +251,48 @@ H.eq(delta.name, "Raid Fire", "the delta keeps its name")
 H.eq(C.Diff(full, nil).slots[1], HELM, "with no parent, a diff is the set unchanged")
 
 -- ---------------------------------------------------------------------------
+-- The full-bag guard (CORE-5)
+-- ---------------------------------------------------------------------------
+--
+-- Taking something off needs somewhere to put it. With no free bag slot the client simply refuses,
+-- and the driver spends its whole retry budget discovering that before reporting a set as "stuck on
+-- Off hand" — which reads as a Kitbag bug rather than as a full bag. Counted up front instead.
+
+plan = C.Plan({ [17] = SHIELD }, { slots = { [17] = false } }, {}, { freeBagSlots = 0 })
+H.eq(plan.needsBagSlots, 1, "an unequip needs one free bag slot to put the item into")
+H.eq(plan.blocked, "bags", "…and with none free the plan says why before anything is attempted")
+
+plan = C.Plan({ [17] = SHIELD }, { slots = { [17] = false } }, {}, { freeBagSlots = 1 })
+H.eq(plan.blocked, nil, "one free slot is enough for one unequip")
+
+-- Equipping from a bag is a swap: the worn item lands in the bag slot the new one came from, so it
+-- costs nothing. Counting it would refuse perfectly possible swaps on a nearly full bag, which is
+-- the more annoying failure of the two.
+plan = C.Plan({ [16] = SWORD }, { slots = { [16] = TWOHAND } }, bagged(TWOHAND, 1, 5),
+    { freeBagSlots = 0 })
+H.eq(plan.needsBagSlots, 0, "a bag-to-body swap needs no free slot — the old item takes the new one's place")
+H.eq(plan.blocked, nil, "…so a full bag does not block it")
+
+-- Two unequips need two slots. The count is cumulative: the first one's item is still in the bag
+-- when the second is attempted.
+plan = C.Plan({ [16] = SWORD, [17] = SHIELD }, { slots = { [16] = false, [17] = false } }, {},
+    { freeBagSlots = 1 })
+H.eq(plan.needsBagSlots, 2, "two unequips need two free slots, not one reused twice")
+H.eq(plan.blocked, "bags", "…and one free slot is not enough")
+
+-- The two-hander case is where this actually bites: the plan quietly adds an unequip of the off hand
+-- that the player never asked for, so a set that looks like a single swap needs a free slot anyway.
+plan = C.Plan({ [16] = SWORD, [17] = SHIELD }, { slots = { [16] = TWOHAND } },
+    bagged(TWOHAND, 1, 5), { twoHand = { [TWOHAND] = true }, freeBagSlots = 0 })
+H.eq(plan.needsBagSlots, 1, "freeing the off hand for a two-hander needs a bag slot of its own")
+H.eq(plan.blocked, "bags", "…and that is caught before the shield comes off")
+
+-- Unknown is not zero. Kitbag must never refuse a swap because it failed to read the bags.
+plan = C.Plan({ [17] = SHIELD }, { slots = { [17] = false } }, {})
+H.eq(plan.blocked, nil, "with no bag count supplied, the plan proceeds rather than refusing")
+H.eq(plan.needsBagSlots, 1, "…but still says what it would need")
+
+-- ---------------------------------------------------------------------------
 -- Totals (CORE-4)
 -- ---------------------------------------------------------------------------
 --

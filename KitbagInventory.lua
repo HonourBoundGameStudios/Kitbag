@@ -73,11 +73,29 @@ function Inventory.Bagged()
     return where
 end
 
+--- How many bag slots an unequipped item could actually go into (CORE-5).
+--
+-- Only the carried bags, and only the general-purpose ones: a herb bag has free slots that will
+-- never take a helmet, and counting them is how you promise a swap that then fails. The bank is not
+-- counted either — the driver puts removed gear in the bags, not the bank.
+function Inventory.FreeBagSlots()
+    local free = 0
+    for bag = 0, Compat.LAST_BAG do
+        local slots, bagType = Compat.GetContainerNumFreeSlots(bag)
+        -- bagType 0 is "anything goes". A nil bagType means the client didn't say, and the backpack
+        -- is always general-purpose, so treat unknown as usable rather than losing real capacity.
+        if slots and (not bagType or bagType == 0) then free = free + slots end
+    end
+    return free
+end
+
 --- The facts the pure planner can't derive: which of these items are two-handers.
 --
 -- Only asked about the keys a set actually names, because GetItemInfo returns nil for anything the
 -- client hasn't cached yet and there is no reason to provoke that for the whole bank.
-function Inventory.Meta(set)
+-- `freeBagSlots` is passed in when a whole list of sets is being planned at once, so the bags are
+-- counted once for the list rather than once per row.
+function Inventory.Meta(set, freeBagSlots)
     local twoHand = {}
     if set and set.slots then
         for _, key in pairs(set.slots) do
@@ -89,7 +107,11 @@ function Inventory.Meta(set)
             end
         end
     end
-    return { twoHand = twoHand, bankOpen = bankOpen }
+    return {
+        twoHand = twoHand,
+        bankOpen = bankOpen,
+        freeBagSlots = freeBagSlots or Inventory.FreeBagSlots(),
+    }
 end
 
 --- Durability of everything currently worn: { [itemKey] = 0..1 }.

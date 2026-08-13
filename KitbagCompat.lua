@@ -23,6 +23,11 @@ local container = _G.C_Container
 Compat.GetContainerNumSlots = (container and container.GetContainerNumSlots) or _G.GetContainerNumSlots
 Compat.GetContainerItemLink = (container and container.GetContainerItemLink) or _G.GetContainerItemLink
 Compat.PickupContainerItem = (container and container.PickupContainerItem) or _G.PickupContainerItem
+Compat.GetContainerNumFreeSlots =
+    (container and container.GetContainerNumFreeSlots) or _G.GetContainerNumFreeSlots
+
+--- The inventory slot id a bag itself occupies, for putting an item into that bag.
+Compat.ContainerToInventory = _G.ContainerIDToInventoryID or function(bag) return 19 + bag end
 
 --- The highest bag index to scan. Retail added the reagent bag at index 5.
 Compat.LAST_BAG = Compat.IS_MAINLINE and 5 or 4
