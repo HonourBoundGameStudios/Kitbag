@@ -1,0 +1,40 @@
+## Interface: 110100
+## Title: |cff8fd3ffKitbag|r
+## Notes: Gear sets that actually apply. Save what you're wearing, swap it back in one click, and let rules do it for you.
+## Author: Honour Bound Game Studios Inc.
+## Version: 0.1.0
+## IconTexture: Interface\Icons\INV_Chest_Plate06
+## SavedVariables: KitbagDB
+## X-Website: https://github.com/HonourBoundGameStudios/Kitbag
+## X-License: MIT
+
+# Retail (COMPAT-2). Same file list as Kitbag.toc — the flavour difference is confined to
+# KitbagCompat.lua, which resolves the 11.0 C_Item / C_Spell moves and the container namespace.
+#
+# THE ## Interface NUMBER ABOVE IS UNVERIFIED. It was not checked against a live Retail client,
+# because none was installed when this was written. A stale one shows the addon as out of date and,
+# on some flavours, refuses to load it — so check it before this flavour is published.
+#
+# Two Retail differences are handled by absence rather than by a branch, and are worth knowing:
+# there is no ranged/relic slot (inventory slot 18 simply reads empty, and CharacterRangedSlot does
+# not exist, which KitbagFlyout already tolerates), and the reagent bank is detected from
+# REAGENTBANK_CONTAINER rather than assumed.
+KitbagCompat.lua
+KitbagCore.lua
+KitbagRules.lua
+KitbagImport.lua
+KitbagDB.lua
+KitbagInventory.lua
+KitbagEquip.lua
+KitbagSets.lua
+KitbagEvents.lua
+KitbagIcons.lua
+KitbagFlyout.lua
+KitbagUI.lua
+KitbagRulesUI.lua
+KitbagTrinkets.lua
+KitbagMinimap.lua
+KitbagOptions.lua
+KitbagBindings.lua
+
+Kitbag.lua

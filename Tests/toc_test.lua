@@ -34,21 +34,26 @@ local function readToc(path)
     return files, order
 end
 
+-- Kitbag.toc is the reference; every other flavour must match it exactly.
+local OTHER_FLAVOURS = { "Kitbag_Mists.toc", "Kitbag_Retail.toc" }
+
 local ERA, eraOrder = readToc("Kitbag.toc")
-local MISTS, mistsOrder = readToc("Kitbag_Mists.toc")
 
 -- ---------------------------------------------------------------------------
 -- Parity between the flavours
 -- ---------------------------------------------------------------------------
 --
--- Adding a module and forgetting the second .toc breaks that flavour only, and only at runtime, for
--- someone who is not you. Load ORDER is checked too, not just membership: every module reads its
--- dependencies out of the Kitbag namespace at load time, so a reordered .toc is a nil-index error
--- on the flavour nobody launched.
+-- Adding a module and forgetting one of the other .toc files breaks that flavour only, and only at
+-- runtime, for someone who is not you. Load ORDER is checked too, not just membership: every module
+-- reads its dependencies out of the Kitbag namespace at load time, so a reordered .toc is a
+-- nil-index error on the flavour nobody launched.
 
-H.eq(#eraOrder, #mistsOrder, "both .toc files list the same number of files")
-for i, name in ipairs(eraOrder) do
-    H.eq(mistsOrder[i], name, "Kitbag_Mists.toc loads " .. name .. " in the same position")
+for _, flavour in ipairs(OTHER_FLAVOURS) do
+    local _, order = readToc(flavour)
+    H.eq(#order, #eraOrder, flavour .. " lists the same number of files as Kitbag.toc")
+    for i, name in ipairs(eraOrder) do
+        H.eq(order[i], name, flavour .. " loads " .. name .. " in the same position")
+    end
 end
 
 -- ---------------------------------------------------------------------------

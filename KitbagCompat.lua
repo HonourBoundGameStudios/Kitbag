@@ -51,11 +51,34 @@ if _G.REAGENTBANK_CONTAINER then
     Compat.BANK_BAGS[#Compat.BANK_BAGS + 1] = _G.REAGENTBANK_CONTAINER
 end
 
+-- Retail 11.0 moved a pile of loose globals into C_ namespaces and, in some cases, changed what they
+-- return. Both shapes are resolved once here, at load, so nothing downstream has to ask which client
+-- it is on. Preferring the namespace and falling back to the global is the same pattern as the
+-- container API above, and for the same reason: the fallback is what keeps Classic working.
+local itemInfo = (_G.C_Item and _G.C_Item.GetItemInfo) or _G.GetItemInfo
+
+--- The spell name for a spell id, across the 11.0 signature change.
+--
+-- The old GetSpellInfo returned the name first; C_Spell.GetSpellInfo returns a table. Returning the
+-- first value of the wrong one would give a table where a string is expected, and every spell rule
+-- would compare unequal forever with nothing to show for it.
+function Compat.SpellName(spellId)
+    if not spellId then return nil end
+
+    local modern = _G.C_Spell and _G.C_Spell.GetSpellInfo
+    if modern then
+        local info = modern(spellId)
+        return info and info.name or nil
+    end
+
+    return _G.GetSpellInfo and _G.GetSpellInfo(spellId) or nil
+end
+
 --- Item family/equip-location facts the pure planner can't know. Returns the equip location token
 -- (e.g. "INVTYPE_2HWEAPON") for an item id, or nil if the client hasn't cached the item yet.
 function Compat.EquipLocation(itemId)
     if not itemId then return nil end
-    local _, _, _, _, _, _, _, _, equipSlot = _G.GetItemInfo(itemId)
+    local _, _, _, _, _, _, _, _, equipSlot = itemInfo(itemId)
     return equipSlot
 end
 
@@ -65,7 +88,7 @@ end
 -- most of a set, and a 0 substituted here would read as "this raid gear is worthless".
 function Compat.ItemLevel(itemId)
     if not itemId then return nil end
-    local _, _, _, level = _G.GetItemInfo(itemId)
+    local _, _, _, level = itemInfo(itemId)
     return level
 end
 
@@ -91,7 +114,7 @@ function Compat.FormLabels()
     for i = 1, count do
         local _, second, _, fourth = _G.GetShapeshiftFormInfo(i)
         local name = type(second) == "string" and second or nil
-        if not name and fourth and _G.GetSpellInfo then name = _G.GetSpellInfo(fourth) end
+        if not name then name = Compat.SpellName(fourth) end
         labels[i] = name or ("form " .. i)
     end
     return labels
@@ -106,10 +129,7 @@ end
 -- to avoid.
 function Compat.CastSpellName(_, second, _, fourth)
     local spellId = tonumber(fourth)
-    if spellId then
-        local name = _G.GetSpellInfo and _G.GetSpellInfo(spellId)
-        return name
-    end
+    if spellId then return Compat.SpellName(spellId) end
     if type(second) == "string" then return second end
     return nil
 end
@@ -151,7 +171,7 @@ end
 --- An item's icon texture, or nil if the client hasn't cached the item yet.
 function Compat.ItemIcon(itemId)
     if not itemId then return nil end
-    local _, _, _, _, _, _, _, _, _, texture = _G.GetItemInfo(itemId)
+    local _, _, _, _, _, _, _, _, _, texture = itemInfo(itemId)
     return texture
 end
 
