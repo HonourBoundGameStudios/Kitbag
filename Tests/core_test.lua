@@ -38,6 +38,24 @@ H.eq(C.ItemKey(nil), nil, "ItemKey(nil) is nil, not an error — an empty slot h
 H.eq(C.ItemKey(""), nil, "ItemKey on an empty string is nil")
 H.eq(C.ItemId("19019:2504:0:0:0:0:0"), 19019, "ItemId recovers the numeric id from a key")
 
+-- A colon-delimited body with no "item:" prefix. Two things arrive in this shape and both matter:
+--
+--   * ItemKey's OWN output. Feeding a stored key back through must return it unchanged, or any code
+--     that re-normalises saved data silently turns every item into nil and the whole set reads as
+--     "missing" — a landmine for a feature nobody has written yet.
+--   * ItemRack's SavedVariables, which store "22196:1891:::::::60::::::::::" — note the EMPTY
+--     fields rather than zeros. Needed by the importer (COMPAT-1).
+
+H.eq(C.ItemKey("19019:2504:0:0:0:0:0"), "19019:2504:0:0:0:0:0",
+    "ItemKey is idempotent — its own output survives a second pass unchanged")
+H.eq(C.ItemKey("22196:1891:::::::60::::::::::"), "22196:1891:0:0:0:0:0",
+    "an ItemRack string with empty fields reads as zeros, keeping the enchant")
+H.eq(C.ItemKey("16955::::::::60::::::::::"), "16955:0:0:0:0:0:0",
+    "an unenchanted ItemRack string reduces to the bare item")
+H.eq(C.ItemKey("::::::"), nil, "colons with no id at all are not an item")
+H.eq(C.ItemKey("notanitem"), nil, "a non-numeric string is not an item")
+H.eq(C.ItemKey("0::::::"), nil, "item id 0 is not an item, however it is spelled")
+
 -- ---------------------------------------------------------------------------
 -- Plan — the heart of it
 -- ---------------------------------------------------------------------------

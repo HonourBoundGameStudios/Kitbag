@@ -71,7 +71,11 @@ function Core.ItemKey(link)
 
     local body = string.match(link, "item:([%-%d:]*)")
     if not body then
-        body = string.match(link, "^%s*(%d+)%s*$")
+        -- No "item:" prefix: a bare id, one of ItemKey's own keys, or an ItemRack SavedVariables
+        -- string ("22196:1891:::::::60::::::::::" — empty fields, not zeros). Accepting the
+        -- colon-delimited form is what makes ItemKey idempotent, so re-normalising stored data is
+        -- safe rather than silently turning every item into nil.
+        body = string.match(link, "^%s*([%-%d][%-%d:]*)%s*$")
         if not body then return nil end
     end
 
