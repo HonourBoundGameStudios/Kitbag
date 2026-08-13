@@ -9,6 +9,7 @@ Kitbag = Kitbag or {}
 local Core = Kitbag.Core
 local Inventory = Kitbag.Inventory
 local Equip = Kitbag.Equip
+local Import = Kitbag.Import
 
 local Sets = {}
 
@@ -54,6 +55,53 @@ function Sets.Names()
     for name in pairs(db().sets) do names[#names + 1] = name end
     table.sort(names)
     return names
+end
+
+--- Bring this character's ItemRack sets across, if that addon left any behind.
+--
+-- The conversion and every judgement call in it live in KitbagImport, which is pure and tested; this
+-- reads the global ItemRack wrote and reports. Existing Kitbag sets are never overwritten — the
+-- clash is named so it can be renamed and retried, because silently replacing curated gear sets is
+-- unrecoverable and refusing is not.
+function Sets.ImportItemRack()
+    local result = Import.FromItemRack(_G.ItemRackUser, db().sets)
+
+    if result.imported == 0 and #result.skipped == 0 then
+        say("no ItemRack sets found for this character. |cff808080ItemRack stores sets per " ..
+            "character, so log in as the one that has them.|r")
+        return result
+    end
+
+    local names = {}
+    for name, set in pairs(result.sets) do
+        db().sets[name] = set
+        names[#names + 1] = name
+    end
+    table.sort(names)
+
+    if #names > 0 then
+        say("imported |cffffd100%d|r set(s) from ItemRack: %s.", #names, table.concat(names, ", "))
+    else
+        say("nothing new to import from ItemRack.")
+    end
+
+    -- Only the actionable skips are worth a line. ItemRack's ~CombatQueue/~Unequip are on every
+    -- character and are nobody's sets, so naming them every time is noise.
+    local clashed = {}
+    for _, s in ipairs(result.skipped) do
+        if s.why == "exists" then clashed[#clashed + 1] = s.name end
+    end
+    if #clashed > 0 then
+        say("|cffff8080kept your existing|r %s — rename yours and import again to get ItemRack's.",
+            table.concat(clashed, ", "))
+    end
+    if result.unreadable > 0 then
+        say("|cffff8080%d item(s)|r could not be read and were left out; those slots are untouched " ..
+            "rather than emptied.", result.unreadable)
+    end
+
+    Kitbag.Refresh()
+    return result
 end
 
 --- Build the plan for a set without performing it — what the UI previews on hover.

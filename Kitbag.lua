@@ -29,6 +29,7 @@ local function help()
     say("  |cffffd100/kit delete <name>|r — remove a set")
     say("  |cffffd100/kit list|r — what's saved")
     say("  |cffffd100/kit why|r — which rule is choosing your set, and why")
+    say("  |cffffd100/kit import|r — bring this character's ItemRack sets across")
     say("  |cffffd100/kit minimap|r — toggle the minimap button")
 end
 
@@ -64,6 +65,7 @@ local function command(input)
             Sets.Say("%d set(s): %s", #names, table.concat(names, ", "))
         end
     elseif cmd == "why" then why()
+    elseif cmd == "import" then Sets.ImportItemRack()
     elseif cmd == "minimap" then Minimap_.SetHidden(not Kitbag.db.options.minimap.hide)
     else help()
     end
