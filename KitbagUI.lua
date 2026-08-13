@@ -18,7 +18,7 @@ local UI = {}
 local ROW_HEIGHT = 26
 local MAX_ROWS = 10
 
-local frame, rows, status
+local frame, rows, status, scroll
 
 local function rowReadiness(plan)
     if not plan then return "|cff808080—|r" end
@@ -124,10 +124,22 @@ local function build()
 
     local list = CreateFrame("Frame", nil, frame)
     list:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -32)
-    list:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -12, 66)
+    -- Room on the right for the scroll bar. Overlapping it would make the Delete button of every
+    -- row unclickable in its rightmost few pixels, which reads as a dead button, not as a layout bug.
+    list:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -34, 66)
 
     rows = {}
     for i = 1, MAX_ROWS do rows[i] = createRow(list, i) end
+
+    -- FauxScrollFrame rather than a real scrolling child: the rows stay put and the *data* moves
+    -- through them, so ten frames serve a hundred sets. It is also the one scrolling widget that
+    -- has existed unchanged in every flavour Kitbag targets.
+    scroll = CreateFrame("ScrollFrame", "KitbagScrollFrame", frame, "FauxScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", list, "TOPLEFT", 0, 0)
+    scroll:SetPoint("BOTTOMRIGHT", list, "BOTTOMRIGHT", 0, 0)
+    scroll:SetScript("OnVerticalScroll", function(self, offset)
+        FauxScrollFrame_OnVerticalScroll(self, offset, ROW_HEIGHT, UI.Refresh)
+    end)
 
     status = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     status:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 14, 40)
@@ -171,8 +183,12 @@ function UI.Refresh()
 
     local names = Sets.Names()
     local overview = Sets.Overview()   -- one reading of the world for every row
+
+    FauxScrollFrame_Update(scroll, #names, MAX_ROWS, ROW_HEIGHT)
+    local offset = FauxScrollFrame_GetOffset(scroll)
+
     for i, row in ipairs(rows) do
-        local name = names[i]
+        local name = names[i + offset]
         if name then
             local entry = overview[name] or {}
             row.name:SetText(name)
@@ -188,9 +204,6 @@ function UI.Refresh()
 
     if #names == 0 then
         status:SetText("No sets yet. Put on what you want to save, name it below, and press Save.")
-    elseif #names > MAX_ROWS then
-        status:SetText(string.format("Showing %d of %d sets — scrolling is on the backlog (UI-3).",
-            MAX_ROWS, #names))
     else
         status:SetText(string.format("%d set%s. Shift-click Delete to remove one.",
             #names, #names == 1 and "" or "s"))
