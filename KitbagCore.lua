@@ -214,6 +214,44 @@ function Core.Totals(set, info)
     }
 end
 
+-- ---------------------------------------------------------------------------
+-- Action-bar macros (UI-8)
+-- ---------------------------------------------------------------------------
+--
+-- An addon cannot put a button on the action bar. What it can do is make a macro and hand it to the
+-- cursor, which is what dragging a set off the list does.
+
+local MACRO_PREFIX = "Kit: "
+local MACRO_LIMIT = 16          -- the client's cap on a macro name
+
+--- A macro name for a set, unique against `taken` and short enough for the client to accept.
+--
+-- The front of the name is kept, because that is the part that identifies the set. `taken` is the
+-- set of names OTHER sets already hold — two long set names truncating identically would otherwise
+-- silently share one macro, and dragging the second would repoint the first.
+function Core.MacroName(setName, taken)
+    taken = taken or {}
+
+    local base = MACRO_PREFIX .. tostring(setName)
+    if #base <= MACRO_LIMIT and not taken[base] then return base end
+
+    local trimmed = string.sub(base, 1, MACRO_LIMIT)
+    if not taken[trimmed] then return trimmed end
+
+    -- Replace the last character rather than appending: there is no room to append.
+    for suffix = 2, 9 do
+        local candidate = string.sub(base, 1, MACRO_LIMIT - 1) .. suffix
+        if not taken[candidate] then return candidate end
+    end
+    return trimmed
+end
+
+--- The macro body that equips a set. `/kit equip` takes the rest of the line, so a name with spaces
+-- in it needs no quoting.
+function Core.MacroBody(setName)
+    return "/kit equip " .. tostring(setName)
+end
+
 --- A plan as slot-by-slot lines, for the tooltip that previews it (UI-6).
 --
 -- Returns { { slot = "Off hand", verb = "take off", key = …, from = "Ring 2" }, … } in the plan's

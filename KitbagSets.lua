@@ -203,6 +203,49 @@ function Sets.ImportItemRack()
     return result
 end
 
+--- Make (or refresh) the macro for a set and put it on the cursor, ready to drop on a bar (UI-8).
+--
+-- The client will not let an addon place a button on the action bar; a macro on the cursor is the
+-- sanctioned way, and it is also what the player ends up owning afterwards — the button keeps
+-- working whether or not Kitbag is loaded, it just says so in chat when it is not.
+function Sets.PickupMacro(name)
+    if not char().sets[name] then return false end
+
+    -- Macros cannot be created or edited in combat. Saying so beats a silent no-op that looks like
+    -- the drag simply not working.
+    if InCombatLockdown() then
+        say("|cffff8080not in combat|r — drop a set on your bar afterwards.")
+        return false
+    end
+
+    -- Every macro name this character's OTHER sets already own, so a truncated name cannot land on
+    -- one of theirs and repoint it.
+    local taken = {}
+    for other in pairs(char().sets) do
+        if other ~= name then taken[Core.MacroName(other, {})] = true end
+    end
+
+    local macroName = Core.MacroName(name, taken)
+    local index = GetMacroIndexByName(macroName)
+    local icon = Sets.Icon(name)
+
+    if index and index > 0 then
+        EditMacro(index, macroName, icon, Core.MacroBody(name))
+    else
+        -- Per-character rather than account-wide: sets are per character, so an account macro would
+        -- appear on alts that have no such set. The last argument is the per-character flag.
+        index = CreateMacro(macroName, icon, Core.MacroBody(name), true)
+    end
+
+    if not index or index == 0 then
+        say("|cffff8080no free macro slots|r — delete one and try again.")
+        return false
+    end
+
+    PickupMacro(index)
+    return true
+end
+
 --- Put one item in one slot, through the same planner and driver everything else uses (UI-5).
 --
 -- Deliberately not a shortcut straight to PickupInventoryItem: the flyout's click has to free the

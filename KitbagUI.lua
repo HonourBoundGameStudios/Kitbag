@@ -104,6 +104,9 @@ local function onRowEnter(self)
         end
     end
 
+    GameTooltip:AddLine(" ")
+    GameTooltip:AddLine("Click the icon to change it, or drag it to your action bar.", 0.5, 0.5, 0.5)
+
     if plan and plan.blocked == "bags" then
         GameTooltip:AddLine(string.format("Bags full — needs %d free slot(s).", plan.needsBagSlots),
             1, 0.3, 0.3)
@@ -146,6 +149,12 @@ local function createRow(parent, index)
     row.icon.texture:SetAllPoints()
     row.icon:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square")
     row.icon:SetScript("OnClick", function(self) Kitbag.Icons.Open(self:GetParent().setName) end)
+    -- Drag the icon to the action bar (UI-8). Click still opens the picker; the client distinguishes
+    -- the two, so the icon can be both without either getting in the way.
+    row.icon:RegisterForDrag("LeftButton")
+    row.icon:SetScript("OnDragStart", function(self)
+        Sets.PickupMacro(self:GetParent().setName)
+    end)
 
     row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     row.name:SetPoint("LEFT", row.icon, "RIGHT", 4, 0)

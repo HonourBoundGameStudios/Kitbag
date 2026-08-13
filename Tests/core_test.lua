@@ -251,6 +251,36 @@ H.eq(delta.name, "Raid Fire", "the delta keeps its name")
 H.eq(C.Diff(full, nil).slots[1], HELM, "with no parent, a diff is the set unchanged")
 
 -- ---------------------------------------------------------------------------
+-- Action-bar macros (UI-8)
+-- ---------------------------------------------------------------------------
+--
+-- The client will not let an addon put a button on the action bar, so dragging a set there means
+-- making a macro and handing it to the cursor. Macro names are capped at 16 characters, which is
+-- shorter than plenty of set names — and two sets truncating to the same name would silently
+-- overwrite each other's macro, which is the bug worth writing a test for.
+
+H.eq(C.MacroName("Tank"), "Kit: Tank", "a short set name is used as it is")
+H.eq(#C.MacroName("Molten Core Fire Resist"), 16, "a long one is cut to what the client will take")
+H.eq(C.MacroName("Molten Core Fire Resist"), "Kit: Molten Core",
+    "…keeping the front, which identifies it")
+
+-- The collision. Two sets that truncate the same way must not end up sharing one macro.
+local taken = { ["Kit: Molten Core"] = true }
+H.eq(C.MacroName("Molten Core Fire Resist", taken), "Kit: Molten Cor2",
+    "a name already taken gets a number, in the same 16 characters")
+taken["Kit: Molten Cor2"] = true
+H.eq(C.MacroName("Molten Core Fire Resist", taken), "Kit: Molten Cor3", "…and keeps counting")
+
+-- A set that already owns its macro keeps it, rather than growing a second one each time it is
+-- dragged. `taken` is what other sets hold, so the set's own name is not in it.
+H.eq(C.MacroName("Tank", { ["Kit: Raid"] = true }), "Kit: Tank",
+    "someone else's macro does not push a set off its own name")
+
+H.eq(C.MacroBody("Tank"), "/kit equip Tank", "the macro equips the set by name")
+H.eq(C.MacroBody("Raid Fire"), "/kit equip Raid Fire",
+    "…including one with a space, which needs no quoting because the command takes the rest of the line")
+
+-- ---------------------------------------------------------------------------
 -- Explaining a plan (UI-6)
 -- ---------------------------------------------------------------------------
 --
