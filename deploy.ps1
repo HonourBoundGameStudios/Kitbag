@@ -3,16 +3,46 @@
 # Copies rather than symlinks on purpose: a symlinked addon folder confuses some launchers' addon
 # scanners, and the copy is fast enough that "edit, deploy, /reload" is still a tight loop.
 #
-#   .\deploy.ps1                                  # default Classic Era path below
-#   .\deploy.ps1 -WowPath "D:\World of Warcraft\_classic_era_"
+#   .\deploy.ps1                                  # the installed client, read from the registry
+#   .\deploy.ps1 -WowPath "D:\World of Warcraft\_classic_era_"    # or another flavour
 #
 # Tests are NOT part of the shipped addon and are excluded — Tests/ is the offline harness.
 param(
-    [string]$WowPath = "C:\Program Files (x86)\World of Warcraft\_classic_era_"
+    [string]$WowPath
 )
 
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
+
+# Where WoW actually is, asked of the installer rather than guessed. The default used to be
+# "C:\Program Files (x86)\..." which is not where this machine's client lives, so every single
+# deploy needed -WowPath — a default that is always wrong is worse than no default.
+#
+# The installer records the flavour folder itself (…\_classic_era_\), which is exactly what this
+# script wants. Deploying to a DIFFERENT flavour still needs -WowPath: the registry only remembers
+# one, and silently guessing which flavour you meant would be the same mistake again.
+function Get-WowPathFromRegistry {
+    $keys = @(
+        'HKLM:\SOFTWARE\WOW6432Node\Blizzard Entertainment\World of Warcraft',
+        'HKLM:\SOFTWARE\Blizzard Entertainment\World of Warcraft'
+    )
+    foreach ($key in $keys) {
+        if (-not (Test-Path $key)) { continue }
+        $path = (Get-ItemProperty $key -ErrorAction SilentlyContinue).InstallPath
+        if ($path) { return $path.TrimEnd('\') }
+    }
+    return $null
+}
+
+if (-not $WowPath) {
+    $WowPath = Get-WowPathFromRegistry
+    if ($WowPath) {
+        Write-Host "Using the installed client at $WowPath" -ForegroundColor DarkGray
+    } else {
+        $WowPath = "C:\Program Files (x86)\World of Warcraft\_classic_era_"
+    }
+}
+
 $dest = Join-Path $WowPath "Interface\AddOns\Kitbag"
 
 if (-not (Test-Path $WowPath)) {
