@@ -25,6 +25,7 @@ KitbagIcons.lua
 KitbagFlyout.lua
 KitbagUI.lua
 KitbagRulesUI.lua
+KitbagTrinkets.lua
 KitbagMinimap.lua
 
 Kitbag.lua

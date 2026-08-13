@@ -37,6 +37,7 @@ local function help()
     say("  |cffffd100/kit why|r — which rule is choosing your set, and why")
     say("  |cffffd100/kit import|r — bring this character's ItemRack sets across")
     say("  |cffffd100/kit minimap|r — toggle the minimap button")
+    say("  |cffffd100/kit trinkets|r — toggle the trinket quick-use bar")
 end
 
 local function why()
@@ -89,6 +90,7 @@ local function command(input)
     elseif cmd == "why" then why()
     elseif cmd == "import" then Sets.ImportItemRack()
     elseif cmd == "minimap" then Minimap_.SetHidden(not Kitbag.db.options.minimap.hide)
+    elseif cmd == "trinkets" then Kitbag.Trinkets.SetHidden(not Kitbag.db.options.trinkets.hide)
     else help()
     end
 end
@@ -109,6 +111,7 @@ loader:SetScript("OnEvent", function(_, event, name)
         Minimap_.Create()
         Events.Enable()
         Kitbag.Flyout.Enable()
+        Kitbag.Trinkets.Create()
         Sets.Say("loaded. |cffffd100/kit|r to open, |cffffd100/kit help|r for commands.")
     end
 end)

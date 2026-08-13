@@ -37,6 +37,9 @@ local function defaults()
             announce = true,        -- print the set name on a successful swap
             flyouts = true,         -- per-slot alternatives on the character sheet (UI-5)
             minimap = { hide = false, angle = 200 },
+            -- Off by default (UI-7): an addon that puts unrequested frames on someone's screen is
+            -- an addon they uninstall.
+            trinkets = { hide = true, point = "CENTER", relative = "CENTER", x = 0, y = -160 },
         },
     }
 end
