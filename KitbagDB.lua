@@ -104,6 +104,59 @@ function DB.Character(db, key)
     return char
 end
 
+-- ---------------------------------------------------------------------------
+-- The options catalogue (UI-9)
+-- ---------------------------------------------------------------------------
+--
+-- The options panel is generated from this rather than hand-laid-out, so adding an option means
+-- adding it to the defaults and describing it here — not remembering to place a checkbox. It lives
+-- beside the defaults because the invariant that matters is between the two: a described option
+-- whose path is not in the defaults is a checkbox wired to nothing.
+--
+-- `invert` is for the flags stored as "hide": nobody wants a tick box labelled "hide the minimap
+-- button" that is ticked when the button is visible.
+DB.OPTIONS = {
+    { path = "autoSwap",      label = "Let rules swap my gear",
+      hint = "Turn this off to keep every rule without any of them firing." },
+    { path = "deferInCombat", label = "Wait until combat ends before swapping",
+      hint = "Most gear cannot be changed in combat anyway." },
+    { path = "announce",      label = "Say in chat when a set is equipped" },
+    { path = "flyouts",       label = "Show alternatives when I hover a paperdoll slot" },
+    { path = "minimap.hide",  label = "Show the minimap button", invert = true },
+    { path = "trinkets.hide", label = "Show the trinket quick-use bar", invert = true },
+}
+
+local function walk(db, path)
+    local node = db.options
+    local last = nil
+    for part in string.gmatch(path, "[^%.]+") do
+        if last then
+            node = node[last]
+            if type(node) ~= "table" then return nil, nil end
+        end
+        last = part
+    end
+    return node, last
+end
+
+--- Read an option by dotted path ("minimap.hide"). nil for a path that does not exist.
+function DB.Get(db, path)
+    local node, key = walk(db, path)
+    -- Written out rather than `node and key and node[key] or nil`: most of these options are
+    -- booleans, and that idiom turns a stored `false` into nil.
+    if not node or not key then return nil end
+    return node[key]
+end
+
+--- Write an option by dotted path. A path whose parent does not exist writes nothing: inventing the
+-- branch would produce an option that appears to save and is then read by nobody.
+function DB.Set(db, path, value)
+    local node, key = walk(db, path)
+    if not node or not key or node[key] == nil then return false end
+    node[key] = value
+    return true
+end
+
 DB.Defaults = defaults
 
 Kitbag.DB = DB

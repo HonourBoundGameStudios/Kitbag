@@ -62,4 +62,48 @@ H.eq(again.schema, DB.SCHEMA, "and does not re-run the migration")
 H.errors(function() DB.Character(fresh, nil) end, "a character key is required")
 H.errors(function() DB.Character(fresh, "") end, "an empty character key is refused")
 
+-- ---------------------------------------------------------------------------
+-- The options catalogue (UI-9)
+-- ---------------------------------------------------------------------------
+--
+-- Every option existed and only a slash command could reach some of them. The panel is generated
+-- from a catalogue rather than hand-laid-out, so an option added to the defaults appears in the
+-- window by being described rather than by someone remembering to add a checkbox.
+
+-- A table of its own: `fresh` has had its options written to by the sharing test above, and an
+-- options test that reads whatever an earlier test happened to leave behind proves nothing.
+local opts = DB.Load(nil)
+
+H.ok(#DB.OPTIONS > 0, "there is a catalogue of the options a panel can show")
+for _, option in ipairs(DB.OPTIONS) do
+    H.ok(option.label ~= nil and option.label ~= "", option.path .. " has a label to show")
+    -- The invariant that matters: a described option whose path is not in the defaults is a
+    -- checkbox wired to nothing, which reads as an option that does not work.
+    H.ok(DB.Get(opts, option.path) ~= nil, option.path .. " is a real option in the defaults")
+end
+
+-- Dotted paths, because the options are nested and a flat table would put minimap.hide next to
+-- announce and lose the grouping the defaults already express.
+H.eq(DB.Get(opts, "announce"), true, "a top-level option reads back")
+H.eq(DB.Get(opts, "minimap.hide"), false, "…and so does a nested one")
+H.eq(DB.Get(opts, "nothing.here"), nil, "a path that does not exist is nil, not an error")
+
+DB.Set(opts, "minimap.hide", true)
+H.eq(opts.options.minimap.hide, true, "setting a nested option writes where the defaults put it")
+DB.Set(opts, "announce", false)
+H.eq(opts.options.announce, false, "…and a top-level one likewise")
+
+-- Never invent structure. Writing to a path whose parent is absent would create a branch nothing
+-- reads, and the option would appear to save and then do nothing.
+DB.Set(opts, "nowhere.deep.thing", true)
+H.eq(opts.options.nowhere, nil, "a write to a path that does not exist creates nothing")
+
+-- Inverted options: the stored flag is `hide`, and nobody wants a checkbox labelled "hide the
+-- minimap button" that is ticked when the button is visible.
+local shown = nil
+for _, option in ipairs(DB.OPTIONS) do
+    if option.path == "minimap.hide" then shown = option end
+end
+H.eq(shown.invert, true, "the minimap option is shown the way round a player thinks about it")
+
 H.done()

@@ -27,5 +27,6 @@ KitbagUI.lua
 KitbagRulesUI.lua
 KitbagTrinkets.lua
 KitbagMinimap.lua
+KitbagOptions.lua
 
 Kitbag.lua

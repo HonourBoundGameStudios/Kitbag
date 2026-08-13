@@ -21,6 +21,7 @@ local Compat = Kitbag.Compat
 function Kitbag.Refresh()
     UI.Refresh()
     RulesUI.Refresh()
+    Kitbag.Options.Refresh()
 end
 
 local function help()
@@ -34,6 +35,7 @@ local function help()
     say("  |cffffd100/kit inherit <set> from <parent>|r — make a set a delta on another")
     say("  |cffffd100/kit inherit <set> none|r — stop inheriting, keeping the pieces")
     say("  |cffffd100/kit rules|r — the auto-swap rule editor")
+    say("  |cffffd100/kit options|r — auto-swap, announcements, minimap, trinket bar")
     say("  |cffffd100/kit why|r — which rule is choosing your set, and why")
     say("  |cffffd100/kit import|r — bring this character's ItemRack sets across")
     say("  |cffffd100/kit minimap|r — toggle the minimap button")
@@ -87,6 +89,7 @@ local function command(input)
             end
         end
     elseif cmd == "rules" then RulesUI.Toggle()
+    elseif cmd == "options" or cmd == "config" then Kitbag.Options.Toggle()
     elseif cmd == "why" then why()
     elseif cmd == "import" then Sets.ImportItemRack()
     elseif cmd == "minimap" then Minimap_.SetHidden(not Kitbag.db.options.minimap.hide)

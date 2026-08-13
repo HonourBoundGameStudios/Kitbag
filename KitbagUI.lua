@@ -226,8 +226,8 @@ local function build()
 
     status = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     status:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 14, 40)
-    -- Stops short of the Rules button, which shares this line.
-    status:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -112, 40)
+    -- Stops short of the Options and Rules buttons, which share this line.
+    status:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -208, 40)
     status:SetJustifyH("LEFT")
 
     local rulesButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
@@ -235,6 +235,12 @@ local function build()
     rulesButton:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -14, 38)
     rulesButton:SetText("Rules")
     rulesButton:SetScript("OnClick", function() Kitbag.RulesUI.Toggle() end)
+
+    local optionsButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    optionsButton:SetSize(90, 20)
+    optionsButton:SetPoint("RIGHT", rulesButton, "LEFT", -6, 0)
+    optionsButton:SetText("Options")
+    optionsButton:SetScript("OnClick", function() Kitbag.Options.Toggle() end)
 
     local nameBox = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
     nameBox:SetSize(200, 20)
