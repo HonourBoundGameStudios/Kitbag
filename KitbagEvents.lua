@@ -24,6 +24,9 @@ local WATCHED = {
     "UPDATE_STEALTH",
     "PLAYER_UPDATE_RESTING",
     "PLAYER_MOUNT_DISPLAY_CHANGED",
+    -- Buff and instance conditions (RULE-5). UNIT_AURA is noisy — it fires for every unit in the
+    -- group — so OnEvent filters to the player before anything is evaluated.
+    "UNIT_AURA",
     -- Spell-cast conditions (RULE-3). SENT rather than START: the pole has to be on before the cast
     -- resolves, and SENT is the earliest the client tells anyone. The four endings are all needed —
     -- a cast that fails must clear the condition exactly like one that succeeds, or the rule stays
@@ -62,6 +65,10 @@ function Events.State()
         -- false, not nil: a state key that is absent can never be compared against, and Rules
         -- compares state[k] to when[k] directly.
         spell = casting or false,
+        -- A set, not a value: a buff condition names one of the thirty auras you have, so the
+        -- matcher tests membership (see Rules.CONDITIONS).
+        buff = Compat.PlayerBuffs(),
+        instance = Compat.InstanceType(),
     }
 end
 
@@ -120,6 +127,13 @@ local CAST_GRACE = 12
 
 local castExpiry = nil
 
+local function usesBuffs()
+    for _, rule in ipairs(Kitbag.char.rules) do
+        if rule.when and rule.when.buff ~= nil then return true end
+    end
+    return false
+end
+
 local function onCast(event, unit, ...)
     if unit ~= "player" then return false end
 
@@ -143,9 +157,21 @@ frame:SetScript("OnUpdate", function()
     end
 end)
 
-function frame:OnEvent(event, ...)
+function frame:OnEvent(event, unit, ...)
+    -- UNIT_AURA fires for every unit in the group and a raid produces a torrent of it. Anyone
+    -- else's buffs cannot change what this character should be wearing.
+    if event == "UNIT_AURA" then
+        if unit ~= "player" then return end
+        -- Your own auras change several times a second in combat, and evaluating every rule each
+        -- time to conclude nothing has changed is the kind of cost that gets an addon blamed for
+        -- frame drops. If no rule asks about a buff, this event cannot change the answer.
+        if not usesBuffs() then return end
+        apply()
+        return
+    end
+
     if string.sub(event, 1, 15) == "UNIT_SPELLCAST_" then
-        if not onCast(event, ...) then return end
+        if not onCast(event, unit, ...) then return end
         apply()
         return
     end

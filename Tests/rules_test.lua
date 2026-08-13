@@ -105,7 +105,7 @@ H.ok(byKey.combat.label ~= nil, "every condition carries a human label for the e
 -- Every condition in the catalogue must exist in the state snapshot, or it can never match and the
 -- editor cheerfully offers a rule that will never fire.
 local STATE_KEYS = { form = true, combat = true, stealth = true, mounted = true, resting = true,
-    zone = true, spell = true }
+    zone = true, spell = true, buff = true, instance = true }
 for _, c in ipairs(R.CONDITIONS) do
     H.ok(STATE_KEYS[c.key] == true, c.key .. " is a key KitbagEvents actually reports")
 end
@@ -174,6 +174,45 @@ local castRules = { rule("Rod", 10, { spell = "Fishing" }) }
 H.eq(R.Match(castRules, { spell = "Fishing" }).set, "Rod", "the named spell matches")
 H.eq(R.Match(castRules, { spell = "Fish" }), nil, "a shorter name is a different spell")
 H.eq(R.Match(castRules, { spell = false }), nil, "no cast in flight matches no spell rule")
+
+-- ---------------------------------------------------------------------------
+-- Buffs and instance type (RULE-5)
+-- ---------------------------------------------------------------------------
+--
+-- A buff breaks the "state[k] == when[k]" shape every other condition has: the player has thirty
+-- auras and the rule names one. Rather than special-case it in Match, the catalogue entry says the
+-- state value is a set and the condition is a membership test — so the matcher stays one loop and a
+-- future set-valued condition costs a flag rather than a branch.
+
+H.eq(byKey.buff.membership, true, "a buff condition is a membership test, not an equality one")
+
+local buffRules = { rule("Ony", 10, { buff = "Onyxia Scale Cloak" }) }
+H.eq(R.Match(buffRules, { buff = { ["Onyxia Scale Cloak"] = true, ["Mark of the Wild"] = true } }).set,
+    "Ony", "a rule fires when the named buff is among the ones you have")
+H.eq(R.Match(buffRules, { buff = { ["Mark of the Wild"] = true } }), nil,
+    "…and not when it is merely one you might have")
+H.eq(R.Match(buffRules, { buff = {} }), nil, "no buffs at all matches no buff rule")
+H.eq(R.Match(buffRules, { buff = false }), nil,
+    "a state that is not a set of buffs fails the condition rather than erroring")
+
+H.eq(R.Describe({ set = "X", when = { buff = "Mark of the Wild" } }), "while Mark of the Wild is up",
+    "a buff condition reads as a state you are in")
+
+-- Instance type is ordinary equality, but its values are strings the client uses rather than
+-- anything a player would type, so the catalogue carries the list and the words for it.
+H.eq(byKey.instance.kind, "choice", "instance type is chosen from a fixed list")
+H.ok(#byKey.instance.options > 0, "…and the catalogue carries that list, not the client")
+H.eq(R.Describe({ set = "X", when = { instance = "raid" } }), "in a raid",
+    "an instance type reads as the place it is, not as its API token")
+H.eq(R.Match({ rule("Raid", 10, { instance = "raid" }) }, { instance = "raid" }).set, "Raid",
+    "an instance-type rule matches the client's own token")
+
+-- Coerce must not put an instance token through tonumber the way it does a form index — the two are
+-- both "choice" to the editor and only the catalogue knows one is a number.
+H.eq(R.Coerce({ instance = "raid" }).instance, "raid", "a string choice survives coercion as a string")
+H.eq(R.Coerce({ form = "2" }).form, 2, "…while a numeric choice is still made a number")
+H.eq(R.Coerce({ buff = "  Mark of the Wild " }).buff, "Mark of the Wild",
+    "a typed buff name is trimmed like any other text")
 
 -- ---------------------------------------------------------------------------
 -- Restore-previous (RULE-4)

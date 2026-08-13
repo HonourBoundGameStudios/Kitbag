@@ -30,9 +30,23 @@ local function conditionKeys(when)
 end
 
 -- nil = the rule matches; otherwise the name of the first condition that failed.
+--
+-- Most conditions are a plain equality against the state snapshot. A `membership` condition is the
+-- exception the shape has to allow for: the player has thirty auras and the rule names one, so the
+-- state holds a set and the condition tests for a member. Declaring that on the catalogue entry
+-- rather than branching on the key keeps this one loop, and makes the next set-valued condition a
+-- flag rather than a special case.
 local function firstFailure(when, state)
     for _, k in ipairs(conditionKeys(when)) do
-        if state[k] ~= when[k] then return k end
+        -- Via Rules.Condition, not the file-local lookup table: that local is declared further down
+        -- and would resolve as a global from here.
+        local condition = Rules.Condition(k)
+        if condition and condition.membership then
+            local held = state[k]
+            if type(held) ~= "table" or not held[when[k]] then return k end
+        elseif state[k] ~= when[k] then
+            return k
+        end
     end
     return nil
 end
@@ -110,8 +124,13 @@ end
 -- below MUST exist in that snapshot, or the editor cheerfully offers a rule that can never fire.
 -- `yes`/`no` are the phrases Describe uses, because "not in combat" is worse English than "out of
 -- combat" and this text is the whole of what a rule list row says.
+--
+-- `numeric` marks a choice whose values are numbers (a form index) rather than the client's own
+-- string tokens; only the catalogue knows the difference and Coerce would otherwise turn "raid"
+-- into nil. `options` supplies a fixed value list for choices the client cannot enumerate.
+-- `membership` says the state holds a set and the condition names one member of it.
 Rules.CONDITIONS = {
-    { key = "form",    label = "Form",       kind = "choice",  prefix = "in " },
+    { key = "form",    label = "Form",       kind = "choice",  prefix = "in ", numeric = true },
     { key = "combat",  label = "In combat",  kind = "boolean", yes = "in combat", no = "out of combat" },
     { key = "stealth", label = "Stealthed",  kind = "boolean", yes = "stealthed", no = "not stealthed" },
     { key = "mounted", label = "Mounted",    kind = "boolean", yes = "mounted",   no = "not mounted" },
@@ -121,6 +140,19 @@ Rules.CONDITIONS = {
     -- ones (Fishing, Mining, Herb Gathering) are three words the player already knows. The name must
     -- match exactly — Match compares with ==, so "Fish" does not govern "Fishing".
     { key = "spell",   label = "Casting",    kind = "text",    prefix = "when casting " },
+    -- The player has thirty auras and the rule names one, so this is the membership case.
+    { key = "buff",    label = "Buff",       kind = "text",    prefix = "while ", suffix = " is up",
+      membership = true },
+    -- The client's own tokens, which nobody would type correctly, so the list and the words for it
+    -- live here rather than in the editor.
+    { key = "instance", label = "Instance",  kind = "choice",  prefix = "in ", options = {
+        { value = "none",     text = "the open world" },
+        { value = "party",    text = "a dungeon" },
+        { value = "raid",     text = "a raid" },
+        { value = "pvp",      text = "a battleground" },
+        { value = "arena",    text = "an arena" },
+        { value = "scenario", text = "a scenario" },
+    } },
 }
 
 local conditionByKey = {}
@@ -148,10 +180,16 @@ function Rules.Describe(rule, labels)
                 parts[#parts + 1] = value and c.yes or c.no
             else
                 local label = labels[c.key] and labels[c.key][value]
+                -- A catalogue-supplied option carries its own words ("a raid", not "raid").
+                if not label and c.options then
+                    for _, option in ipairs(c.options) do
+                        if option.value == value then label = option.text end
+                    end
+                end
                 -- An unlabelled choice names its condition too: "in 1" is meaningless, "in form 1"
                 -- at least says what the 1 refers to. Text conditions are already self-describing.
                 if not label and c.kind == "choice" then label = c.key .. " " .. tostring(value) end
-                parts[#parts + 1] = (c.prefix or "") .. tostring(label or value)
+                parts[#parts + 1] = (c.prefix or "") .. tostring(label or value) .. (c.suffix or "")
             end
         end
     end
@@ -197,8 +235,10 @@ function Rules.Coerce(input)
         if value ~= nil then
             if c.kind == "boolean" then
                 when[c.key] = value and true or false
-            elseif c.kind == "choice" then
+            elseif c.kind == "choice" and c.numeric then
                 when[c.key] = tonumber(value)
+            elseif c.kind == "choice" then
+                when[c.key] = value
             else
                 local text = tostring(value):match("^%s*(.-)%s*$")
                 if text ~= "" then when[c.key] = text end

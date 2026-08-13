@@ -78,32 +78,43 @@ local function setOptions()
     return options
 end
 
--- `choice` means "form" for now — it is the only condition whose values come from the client. A
--- second one would want its own option source on the catalogue entry rather than a branch here.
+-- A choice either carries its own fixed list (instance type: the client's tokens, which nobody would
+-- type correctly) or is filled from the client (forms, which are per class). The catalogue says
+-- which, so a new condition needs no change here.
 local function conditionOptions(condition)
     local options = { { value = nil, text = ANY } }
+
     if condition.kind == "boolean" then
         options[2] = { value = true, text = "Yes" }
         options[3] = { value = false, text = "No" }
-    else
-        for index, label in pairs(Compat.FormLabels()) do
-            options[#options + 1] = { value = index, text = label }
-        end
-        -- pairs() over a table with a [0] key is not ordered; the form list must not reshuffle
-        -- itself between two openings of the same dropdown.
-        table.sort(options, function(a, b)
-            if a.value == nil then return true end
-            if b.value == nil then return false end
-            return a.value < b.value
-        end)
+        return options
     end
+
+    if condition.options then
+        for _, option in ipairs(condition.options) do options[#options + 1] = option end
+        return options
+    end
+
+    for index, label in pairs(Compat.FormLabels()) do
+        options[#options + 1] = { value = index, text = label }
+    end
+    -- pairs() over a table with a [0] key is not ordered; the form list must not reshuffle itself
+    -- between two openings of the same dropdown.
+    table.sort(options, function(a, b)
+        if a.value == nil then return true end
+        if b.value == nil then return false end
+        return a.value < b.value
+    end)
     return options
 end
 
 local function conditionText(condition, value)
     if value == nil then return ANY end
     if condition.kind == "boolean" then return value and "Yes" or "No" end
-    return Compat.FormLabels()[value] or tostring(value)
+    for _, option in ipairs(conditionOptions(condition)) do
+        if option.value == value then return option.text end
+    end
+    return tostring(value)
 end
 
 --- Load a rule (or nil, for a new one) into the editor pane.
@@ -223,7 +234,8 @@ end
 
 local function build()
     frame = CreateFrame("Frame", "KitbagRulesFrame", UIParent, "BasicFrameTemplateWithInset")
-    frame:SetSize(520, 470)
+    -- Tall enough for the whole condition catalogue in two columns; it grew with RULE-3 and RULE-5.
+    frame:SetSize(520, 520)
     frame:SetPoint("CENTER", UIParent, "CENTER", 60, 0)
     frame:SetMovable(true)
     frame:EnableMouse(true)

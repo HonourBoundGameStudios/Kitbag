@@ -114,6 +114,40 @@ function Compat.CastSpellName(_, second, _, fourth)
     return nil
 end
 
+--- Every buff currently on the player, as a set: { ["Mark of the Wild"] = true, … }.
+--
+-- A set rather than a list because that is what a membership condition tests against, and building
+-- it here means the rule engine never has to walk anything. C_UnitAuras is the modern reader and
+-- UnitBuff the old one; both exist on some flavours and neither on all.
+function Compat.PlayerBuffs()
+    local buffs = {}
+    local forEach = _G.AuraUtil and _G.AuraUtil.ForEachAura
+    if forEach then
+        forEach("player", "HELPFUL", nil, function(name)
+            if name then buffs[name] = true end
+            return false    -- keep going; returning true stops the walk
+        end, true)
+        return buffs
+    end
+
+    local unitBuff = _G.UnitBuff
+    if unitBuff then
+        for i = 1, 40 do
+            local name = unitBuff("player", i)
+            if not name then break end
+            buffs[name] = true
+        end
+    end
+    return buffs
+end
+
+--- Which kind of instance the player is in: the client's own token, or "none" outdoors.
+function Compat.InstanceType()
+    if not _G.IsInInstance then return "none" end
+    local _, kind = _G.IsInInstance()
+    return kind or "none"
+end
+
 --- The key this character's sets are stored under: "Name - Realm".
 --
 -- The realm has to be in it. Two characters can share a name across realms on one account, and a
