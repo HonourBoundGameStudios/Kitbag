@@ -295,6 +295,77 @@ function Core.Explain(plan)
 end
 
 -- ---------------------------------------------------------------------------
+-- The paperdoll view of a set (UI-13)
+-- ---------------------------------------------------------------------------
+
+--- Where each slot sits on the doll, in Blizzard's own arrangement.
+--
+-- Data rather than nineteen hand-placed SetPoints, because that grid fails silently: a slot listed
+-- twice draws over itself and a slot forgotten simply is not there, and neither reads as a bug until
+-- someone goes looking for their off hand. As a table it is one assertion in the test suite.
+Core.DOLL_LAYOUT = {
+    left   = { 1, 2, 3, 15, 5, 4, 19, 9 },      -- head down to wrist, cloak and shirt among them
+    right  = { 10, 6, 7, 8, 11, 12, 13, 14 },   -- hands down to feet, then rings and trinkets
+    bottom = { 16, 17, 18 },                    -- the weapons, in a row of their own
+}
+
+--- One cell per equippable slot: { [slotId] = { slot = <record>, key = …, state = "worn" } }.
+--
+-- The state is read out of the PLAN, never re-derived from the set, for the same reason Explain is:
+-- the panel and the driver must not be able to disagree about what is about to happen. `key` is what
+-- the slot will hold *afterwards* — nil where the set says nothing, false where it ends empty.
+--
+-- The states, and why each is worth its own word:
+--   unset   the set never mentions this slot, so it keeps whatever you are wearing
+--   worn    the set's item is already on — nothing to do
+--   swap    the plan will put the item in
+--   clear   the slot ends empty, whether the set asked for that or a two-hander forced it
+--   bank    the item exists but is at the bank, which is a walk, not a loss
+--   missing the item is nowhere
+--   unknown there is no plan yet, so there is no verdict — and "worn" would be a guess
+function Core.Doll(set, plan)
+    local slots = (type(set) == "table" and set.slots) or {}
+    local cells = {}
+
+    local acting, absent = {}, {}
+    if type(plan) == "table" then
+        for _, action in ipairs(plan.actions or {}) do acting[action.to] = action end
+        for _, miss in ipairs(plan.missing or {}) do absent[miss.slot] = miss end
+    end
+
+    for _, s in ipairs(Core.SLOTS) do
+        local key, state = slots[s.id], nil
+        local miss, action = absent[s.id], acting[s.id]
+
+        if miss then
+            -- Keep the item on the cell: a slot you cannot fill is far more useful greyed out
+            -- holding the thing you are missing than blank.
+            state, key = (miss.where == "bank") and "bank" or "missing", miss.key
+        elseif action then
+            -- An unequip can land on a slot the set never named — freeing the off hand for a
+            -- two-hander is the common one — so the plan, not the set, decides this cell.
+            if action.kind == "unequip" then
+                state, key = "clear", false
+            else
+                state, key = "swap", action.key
+            end
+        elseif key == nil then
+            state = "unset"
+        elseif key == false then
+            state = "clear"
+        elseif not plan then
+            state = "unknown"
+        else
+            state = "worn"
+        end
+
+        cells[s.id] = { slot = s, key = key, state = state }
+    end
+
+    return cells
+end
+
+-- ---------------------------------------------------------------------------
 -- Where an item can go (UI-5)
 -- ---------------------------------------------------------------------------
 --

@@ -517,4 +517,74 @@ H.errors(function() C.CaptureSet({}, "") end, "a set must be named")
 H.eq(C.Plan({ [1] = HELM, [16] = SWORD }, set, {}).empty, true,
     "capture then apply is a no-op — the round-trip that proves capture and plan agree")
 
+-- ---------------------------------------------------------------------------
+-- Doll — the set inspector's paperdoll (UI-13)
+-- ---------------------------------------------------------------------------
+--
+-- The layout is data because a hand-placed grid of nineteen slots fails silently: a slot listed
+-- twice draws over itself and a slot forgotten simply is not there, and neither looks like a bug
+-- until someone goes hunting for their off hand.
+
+local seen, cells = {}, 0
+for _, column in ipairs({ C.DOLL_LAYOUT.left, C.DOLL_LAYOUT.right, C.DOLL_LAYOUT.bottom }) do
+    for _, slotId in ipairs(column) do
+        H.ok(not seen[slotId], "slot " .. slotId .. " is placed exactly once on the doll")
+        H.ok(C.SlotById(slotId) ~= nil, "…and is a real equippable slot")
+        seen[slotId] = true
+        cells = cells + 1
+    end
+end
+H.eq(cells, 19, "the doll has a cell for every equippable slot and no more")
+H.eq(#C.DOLL_LAYOUT.left, 8, "the left column holds eight, as the character sheet does")
+H.eq(#C.DOLL_LAYOUT.right, 8, "…and the right column eight")
+H.eq(#C.DOLL_LAYOUT.bottom, 3, "…and the weapons sit in a row of three beneath")
+
+-- The cells themselves are read out of the PLAN, not re-derived from the set, for the same reason
+-- Explain is: the panel and the driver must not be able to disagree about what is about to happen.
+
+-- Wearing the helm already, sword waiting in a bag, and the set deliberately empties the tabard.
+local dollSet = { name = "Tank", slots = { [1] = HELM, [16] = SWORD, [19] = false } }
+local dollPlan = C.Plan({ [1] = HELM, [19] = SWORD }, dollSet,
+    { [SWORD] = { bag = 0, slot = 1 } }, { freeBagSlots = 4 })
+local doll = C.Doll(dollSet, dollPlan)
+
+H.eq(doll[1].state, "worn", "a slot whose item is already on reads as worn")
+H.eq(doll[1].key, HELM, "…and carries the item, so the cell can show its icon")
+H.eq(doll[16].state, "swap", "a slot the plan will fill reads as a swap")
+H.eq(doll[16].key, SWORD, "…carrying what is going in, not what is coming off")
+H.eq(doll[19].state, "clear", "a slot the set deliberately empties reads as clear")
+H.eq(doll[19].key, false, "…and ends holding nothing, which is false rather than nil")
+H.eq(doll[2].state, "unset", "a slot the set never mentions is untouched, not empty")
+H.eq(doll[2].key, nil, "…and has no item of its own")
+H.eq(doll[3].slot.label, "Shoulder", "every cell carries its slot record, for the label and tooltip")
+
+local count = 0
+for _ in pairs(doll) do count = count + 1 end
+H.eq(count, 19, "Doll answers for all nineteen slots, so no cell has to be invented by the caller")
+
+-- A slot the set does not name can still be emptied by the plan: a two-hander frees the off hand.
+-- Showing that as "untouched" is exactly the half-applied-swap surprise Kitbag exists to prevent.
+local twoHandSet = { name = "Fury", slots = { [16] = TWOHAND } }
+local twoHandPlan = C.Plan({ [16] = SWORD, [17] = SHIELD }, twoHandSet,
+    { [TWOHAND] = { bag = 0, slot = 1 } },
+    { twoHand = { [TWOHAND] = true }, freeBagSlots = 4 })
+local twoHandDoll = C.Doll(twoHandSet, twoHandPlan)
+H.eq(twoHandDoll[17].state, "clear", "the off hand a two-hander frees is shown as being emptied")
+H.eq(twoHandDoll[17].key, false, "…ending empty, though the set never mentioned that slot")
+
+-- What cannot be done has to look different from what merely has not happened yet.
+local goneSet = { name = "Gone", slots = { [11] = RING_A, [12] = RING_B } }
+local gonePlan = C.Plan({}, goneSet, { [RING_A] = { bag = 0, slot = 1, bank = true } })
+local goneDoll = C.Doll(goneSet, gonePlan)
+H.eq(goneDoll[11].state, "bank", "an item sitting in the bank says so, rather than reading as lost")
+H.eq(goneDoll[11].key, RING_A, "…and still names the item, so the cell can show it greyed")
+H.eq(goneDoll[12].state, "missing", "an item found nowhere is missing")
+
+-- Doll is called on every refresh, including before a plan exists. It must degrade, not throw.
+local bare = C.Doll({ name = "Bare", slots = { [1] = HELM } }, nil)
+H.eq(bare[1].state, "unknown", "with no plan there is no verdict — and 'worn' would be a guess")
+H.eq(bare[1].key, HELM, "…but the set's own contents are still worth drawing")
+H.eq(bare[2].state, "unset", "…and a slot the set never named is still plainly unset")
+H.eq(C.Doll(nil, nil)[1].state, "unset", "no set at all draws an empty doll rather than erroring")
+
 H.done()
