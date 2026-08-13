@@ -83,7 +83,12 @@ function Import.FromItemRack(user, existing)
             if count == 0 then
                 skip(name, "empty")
             else
-                out.sets[name] = { name = name, slots = slots, icon = set.icon }
+                out.sets[name] = {
+                    name = name, slots = slots, icon = set.icon,
+                    -- COMPAT-5: ItemRack's per-set keybinding. Carried on the set; binding it is
+                    -- the client's job, not this file's.
+                    key = type(set.key) == "string" and set.key ~= "" and set.key or nil,
+                }
                 out.imported = out.imported + 1
             end
         end
@@ -91,6 +96,78 @@ function Import.FromItemRack(user, existing)
 
     table.sort(out.skipped, function(a, b) return a.name < b.name end)
     return out
+end
+
+-- ---------------------------------------------------------------------------
+-- Options and keybindings (COMPAT-5)
+-- ---------------------------------------------------------------------------
+
+-- Which ItemRack settings have a Kitbag equivalent, and which way round. Everything absent from this
+-- table is deliberately not imported: most of ItemRack's options configure a UI Kitbag does not
+-- have, and a setting that half-transfers is worse than one that plainly did not.
+--
+-- `invert` covers the pairs that are stored the opposite way up — ItemRack asks whether to SHOW the
+-- minimap button, Kitbag stores whether to HIDE it.
+local OPTION_MAP = {
+    EnableEvents      = { path = "autoSwap" },
+    ShowMinimap       = { path = "minimap.hide", invert = true },
+    EnableTrinketMenu = { path = "trinkets.hide", invert = true },
+}
+
+--- Read an `ItemRackSettings` table into { [kitbagOptionPath] = value }.
+--
+-- ItemRack stores "ON"/"OFF" strings. An option it never stored is ABSENT from the result rather
+-- than false: ItemRack omits a setting sitting at its own default, and reading that as OFF would
+-- quietly turn auto-swap off for everyone who never touched it.
+function Import.OptionsFromItemRack(settings)
+    local out = {}
+    if type(settings) ~= "table" then return out end
+
+    for key, mapping in pairs(OPTION_MAP) do
+        local raw = settings[key]
+        if raw ~= nil then
+            local on = raw == "ON" or raw == true or raw == 1
+            -- Spelled out: `invert and not on or on` collapses to `on` whenever `not on` is false,
+            -- which is exactly the half of the truth table the inversion exists for.
+            if mapping.invert then on = not on end
+            out[mapping.path] = on
+        end
+    end
+
+    return out
+end
+
+--- Work out which keybindings can actually be applied, and which cannot.
+--
+-- Returns { bind = { { key =, set = } }, conflicts = { { key =, set = } } }, ordered by key so the
+-- result is the same every time. Two sets on one key is authorable in ItemRack and cannot be
+-- honoured; the contest is settled by set name — arbitrary, but stable and explainable — and the
+-- loser is reported rather than silently dropped.
+function Import.BindingPlan(sets)
+    local claims = {}
+    if type(sets) == "table" then
+        for name, set in pairs(sets) do
+            if type(set) == "table" and type(set.key) == "string" and set.key ~= "" then
+                local claim = claims[set.key]
+                if not claim or name < claim then claims[set.key] = name end
+            end
+        end
+    end
+
+    local bind, conflicts = {}, {}
+    for key, winner in pairs(claims) do
+        bind[#bind + 1] = { key = key, set = winner }
+    end
+    for name, set in pairs(sets or {}) do
+        if type(set) == "table" and type(set.key) == "string" and set.key ~= ""
+            and claims[set.key] ~= name then
+            conflicts[#conflicts + 1] = { key = set.key, set = name }
+        end
+    end
+
+    table.sort(bind, function(a, b) return a.key < b.key end)
+    table.sort(conflicts, function(a, b) return a.set < b.set end)
+    return { bind = bind, conflicts = conflicts }
 end
 
 Kitbag.Import = Import

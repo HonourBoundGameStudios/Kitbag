@@ -115,6 +115,7 @@ loader:SetScript("OnEvent", function(_, event, name)
         Events.Enable()
         Kitbag.Flyout.Enable()
         Kitbag.Trinkets.Create()
+        Kitbag.Bindings.Apply()
         Sets.Say("loaded. |cffffd100/kit|r to open, |cffffd100/kit help|r for commands.")
     end
 end)

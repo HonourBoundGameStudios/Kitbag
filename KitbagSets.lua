@@ -194,6 +194,30 @@ function Sets.ImportItemRack()
         say("|cffff8080kept your existing|r %s — rename yours and import again to get ItemRack's.",
             table.concat(clashed, ", "))
     end
+    -- The options and the keybindings (COMPAT-5). Only mapped options come across, and only for
+    -- someone who is importing anyway — this never runs on its own.
+    local options = Import.OptionsFromItemRack(_G.ItemRackSettings)
+    local changed = 0
+    for path, value in pairs(options) do
+        if Kitbag.DB.Set(db(), path, value) then changed = changed + 1 end
+    end
+    if changed > 0 then
+        say("brought %d ItemRack option(s) across. |cff808080The rest configure a UI Kitbag does " ..
+            "not have and were left alone.|r", changed)
+        Kitbag.Minimap.SetHidden(db().options.minimap.hide)
+        Kitbag.Trinkets.SetHidden(db().options.trinkets.hide)
+    end
+
+    local bound = 0
+    for _, set in pairs(result.sets) do
+        if set.key then bound = bound + 1 end
+    end
+    if bound > 0 then
+        Kitbag.Bindings.Apply()
+        say("bound |cffffd100%d|r set(s) to the keys ItemRack had them on. |cff808080Kitbag " ..
+            "re-applies these each login and never writes them into your saved bindings.|r", bound)
+    end
+
     if result.unreadable > 0 then
         say("|cffff8080%d item(s)|r could not be read and were left out; those slots are untouched " ..
             "rather than emptied.", result.unreadable)

@@ -28,8 +28,10 @@ local function onToggle(self)
     local option = self.option
     -- An inverted option's box is ticked when the stored flag is false ("Show the minimap button"
     -- against a stored `hide`), so the value has to be turned back over on the way in as well as out.
-    local checked = self:GetChecked() and true or false
-    local value = option.invert and not checked or checked
+    -- Spelled out rather than `invert and not checked or checked`: that idiom collapses to `checked`
+    -- whenever the inverted value is false, which is half the cases the inversion exists for.
+    local value = self:GetChecked() and true or false
+    if option.invert then value = not value end
 
     DB.Set(Kitbag.db, option.path, value)
     local apply = APPLY[option.path]
@@ -95,7 +97,8 @@ function Options.Refresh()
     if not frame or not frame:IsShown() then return end
     for _, box in ipairs(checkboxes) do
         local value = DB.Get(Kitbag.db, box.option.path) and true or false
-        box:SetChecked(box.option.invert and not value or value)
+        if box.option.invert then value = not value end
+        box:SetChecked(value)
     end
 end
 

@@ -137,4 +137,53 @@ local a = I.FromItemRack(user({ B = { equip = {} }, A = { equip = {} } }))
 H.eq(a.skipped[1].name, "A", "the skipped list is sorted by name, not by pairs() order")
 H.eq(a.skipped[2].name, "B", "…so the report reads the same every time")
 
+-- ---------------------------------------------------------------------------
+-- Options and keybindings (COMPAT-5)
+-- ---------------------------------------------------------------------------
+--
+-- COMPAT-1 brought the sets. The rest of what someone switching had configured is in a second
+-- global, ItemRackSettings, plus a `key` on each set. Most of ItemRack's options have no Kitbag
+-- equivalent, so the deliberate rule is that only a mapped option is imported and everything else
+-- is left alone rather than approximated — a setting that half-transfers is worse than one that
+-- plainly did not.
+
+local settings = I.OptionsFromItemRack({
+    EnableEvents = "OFF",
+    ShowMinimap = "ON",
+    EnableTrinketMenu = "OFF",
+    ButtonSpacing = 4,          -- no Kitbag equivalent
+})
+H.eq(settings["autoSwap"], false, "ItemRack's OFF becomes false, not the string")
+H.eq(settings["minimap.hide"], false, "a shown minimap button becomes a not-hidden one")
+H.eq(settings["trinkets.hide"], true, "…and the inversion holds the other way too")
+H.eq(settings["ButtonSpacing"], nil, "an option with no Kitbag equivalent is not imported")
+
+-- Absent is not "off". ItemRack omits a setting that is at its own default, and reading that as OFF
+-- would silently turn auto-swap off for anyone who never touched it.
+H.eq(I.OptionsFromItemRack({})["autoSwap"], nil, "an option ItemRack never stored is left alone")
+H.eq(next(I.OptionsFromItemRack(nil)), nil, "no settings table at all imports nothing")
+H.eq(next(I.OptionsFromItemRack("nonsense")), nil, "…and neither does a malformed one")
+
+-- Keybindings. ItemRack stores one per set; Kitbag keeps it on the set and binds it at login.
+local withKeys = I.FromItemRack(user({
+    Tank = { equip = { [1] = "16963:0:0:0:0:0:0:0" }, key = "CTRL-F1" },
+    Heal = { equip = { [1] = "16963:0:0:0:0:0:0:0" } },
+}))
+H.eq(withKeys.sets.Tank.key, "CTRL-F1", "a set's keybinding comes across with it")
+H.eq(withKeys.sets.Heal.key, nil, "a set with no binding gets none invented")
+
+-- Two sets bound to the same key is authorable in ItemRack and cannot be honoured. The conflict is
+-- resolved by name so the outcome is the same every time, and reported rather than silently dropped.
+local plan = I.BindingPlan({
+    Tank = { name = "Tank", key = "CTRL-F1" },
+    Heal = { name = "Heal", key = "CTRL-F1" },
+    Dps  = { name = "Dps",  key = "CTRL-F2" },
+    None = { name = "None" },
+})
+H.eq(#plan.bind, 2, "each key is bound once")
+H.eq(plan.bind[1].key, "CTRL-F1", "the plan is ordered by key, not by pairs()")
+H.eq(plan.bind[1].set, "Heal", "…and a contested key goes to the first set by name")
+H.eq(#plan.conflicts, 1, "the loser is reported")
+H.eq(plan.conflicts[1].set, "Tank", "…by name")
+
 H.done()

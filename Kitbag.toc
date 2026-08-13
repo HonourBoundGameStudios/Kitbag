@@ -27,6 +27,7 @@ KitbagRulesUI.lua
 KitbagTrinkets.lua
 KitbagMinimap.lua
 KitbagOptions.lua
+KitbagBindings.lua
 
 # The bootstrap binds the modules together, so it loads last.
 Kitbag.lua
