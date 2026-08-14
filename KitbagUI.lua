@@ -323,16 +323,48 @@ local function buildDoll(parent)
     end
 
     -- The gap between the two columns is the only real space the window has; the set's headline
-    -- numbers go there, where the eye already is.
+    -- numbers go there, where the eye already is, with the character beneath them.
+    local gapWidth = PANEL_WIDTH - 2 * (8 + CELL)
+
     panel.summary = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    panel.summary:SetPoint("TOP", panel, "TOP", 0, -70)
-    panel.summary:SetWidth(PANEL_WIDTH - 2 * (8 + CELL))
+    panel.summary:SetPoint("TOP", panel, "TOP", 0, -24)
+    panel.summary:SetWidth(gapWidth)
     panel.summary:SetJustifyH("CENTER")
 
     panel.note = panel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    panel.note:SetPoint("TOP", panel.summary, "BOTTOM", 0, -8)
-    panel.note:SetWidth(PANEL_WIDTH - 2 * (8 + CELL))
+    panel.note:SetPoint("TOP", panel.summary, "BOTTOM", 0, -6)
+    panel.note:SetWidth(gapWidth)
     panel.note:SetJustifyH("CENTER")
+
+    -- The character itself, filling what is left of the gap: the icons say WHICH items, the model
+    -- says what wearing them looks like, and neither answer was available before without equipping
+    -- the set to find out. It is a preview, so it dresses the player in the set's items over what
+    -- they already have on rather than undressing them — a slot the set does not name keeps showing
+    -- the piece that will still be there afterwards. A slot the plan will EMPTY still shows its old
+    -- piece, since the model can only add: the cell beside it already says "will be emptied", and a
+    -- naked preview would be the more misleading of the two answers.
+    --
+    -- Guarded: `DressUpModel` and `TryOn` are ancient, but a flavour that lacks either would take
+    -- the whole window down at build time, and the panel reads perfectly well without a model.
+    local modelTop = -70
+    local ok, model = pcall(CreateFrame, "DressUpModel", nil, panel)
+    if ok and model and model.TryOn then
+        model:SetSize(gapWidth, modelTop - weaponsY - 8)
+        model:SetPoint("TOP", panel, "TOP", 0, modelTop)
+        model:EnableMouse(true)
+        model:SetScript("OnMouseDown", function(self) self.dragX = GetCursorPosition() end)
+        model:SetScript("OnMouseUp", function(self) self.dragX = nil end)
+        -- Drag to turn them around, as the dressing-room does. Kept on the frame rather than in a
+        -- file-local so a redress can restore the angle the player chose.
+        model:SetScript("OnUpdate", function(self)
+            if not self.dragX then return end
+            local x = GetCursorPosition()
+            self.facing = (self.facing or 0) + (x - self.dragX) * 0.012
+            self.dragX = x
+            self:SetFacing(self.facing)
+        end)
+        panel.model = model
+    end
 
     panel.equip = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     panel.equip:SetSize(140, 24)
@@ -357,6 +389,40 @@ local function buildDoll(parent)
     return panel
 end
 
+--- Dress the preview in what the set would leave the player wearing.
+---
+--- Redressing is skipped when the items have not changed, because `SetUnit` restarts the model: an
+--- unconditional redress on every Refresh would snap the angle the player dragged to back to the
+--- front, and Refresh runs on bag and equipment events.
+local function dressModel(cells)
+    local model = doll.model
+    if not model then return end
+
+    local layout = Core.DOLL_LAYOUT
+    local ids, n = {}, 0
+    for _, list in ipairs({ layout.left, layout.right, layout.bottom }) do
+        for _, slotId in ipairs(list) do
+            local entry = cells[slotId]
+            if entry and entry.key then
+                n = n + 1
+                ids[n] = Core.ItemId(entry.key)
+            end
+        end
+    end
+
+    local signature = table.concat(ids, ",", 1, n)
+    if model.dressed == signature then return end
+    model.dressed = signature
+
+    -- SetUnit is the reset: it puts the player back in what they are actually wearing, which is the
+    -- right starting point since equipping a set only replaces the slots the set names.
+    model:SetUnit("player")
+    model:SetFacing(model.facing or 0)
+    for i = 1, n do
+        pcall(model.TryOn, model, "item:" .. tostring(ids[i]))
+    end
+end
+
 --- Draw the selected set into the doll. `plan` and `totals` come from the same Overview reading the
 --- list used, so the panel and the row beside it cannot disagree.
 local function refreshDoll(name, plan, totals)
@@ -369,6 +435,9 @@ local function refreshDoll(name, plan, totals)
     -- last three load-time failures were described, and the old pair has existed since 1.0.
     if shown then doll.equip:Show() else doll.equip:Hide() end
     if shown then doll.delete:Show() else doll.delete:Hide() end
+    if doll.model then
+        if shown then doll.model:Show() else doll.model:Hide() end
+    end
 
     if not shown then
         doll.title:SetText("")
@@ -381,6 +450,7 @@ local function refreshDoll(name, plan, totals)
     if Equip.IsRunning() then doll.equip:Disable() else doll.equip:Enable() end
 
     local cells = Core.Doll(Sets.Resolve(name), plan)
+    dressModel(cells)
     for slotId, cell in pairs(doll.cells) do
         local entry = cells[slotId]
         local state = STATE[entry.state] or STATE.unset
