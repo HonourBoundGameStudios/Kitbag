@@ -16,6 +16,7 @@
 Kitbag = Kitbag or {}
 
 local Core = Kitbag.Core
+local Rules = Kitbag.Rules
 
 local Debug = {}
 
@@ -39,6 +40,33 @@ local function stored(value)
     return tostring(value)
 end
 
+-- A state value in words. A membership condition holds a SET rather than a value (thirty buffs, the
+-- rule names one), and pairs() order would make two identical dumps look different — so it is sorted
+-- and joined rather than printed as a table address nobody can read.
+local function shown(value)
+    if type(value) ~= "table" then return tostring(value) end
+    local members = {}
+    for k, held in pairs(value) do
+        if held then members[#members + 1] = tostring(k) end
+    end
+    table.sort(members)
+    if #members == 0 then return "(none)" end
+    return table.concat(members, ", ")
+end
+
+-- Numbers compare as numbers, so form 10 sorts after form 2 rather than between 1 and 3. Mixed or
+-- non-numeric keys fall back to their text, which is enough to make the order stable — and stable is
+-- the whole requirement: two dumps must differ only where the world did.
+local function sortedKeys(t)
+    local keys = {}
+    for k in pairs(t) do keys[#keys + 1] = k end
+    table.sort(keys, function(a, b)
+        if type(a) == "number" and type(b) == "number" then return a < b end
+        return tostring(a) < tostring(b)
+    end)
+    return keys
+end
+
 --- The dump, as lines. PURE — see Tests/debug_test.lua.
 --
 -- Everything is stated, including the absences: a slot with nothing in it prints "(nothing)" rather
@@ -57,6 +85,9 @@ function Debug.Report(world)
     add("addon %s | %s | interface %s",
         tostring(world.version), tostring(world.flavour), tostring(world.interface))
     if world.character then add("character: %s", tostring(world.character)) end
+    -- The 1 -> 2 migration runs exactly once, on data nobody can regenerate. Whether it ran is a
+    -- fact about the file, so it is read off the file rather than inferred from the shape of a set.
+    add("db schema: %s", tostring(world.schema))
     add("bank open: %s", tostring(world.bankOpen))
 
     -- The world the planner was handed. Every slot in slot order, present or not.
@@ -77,6 +108,67 @@ function Debug.Report(world)
             -- rather than folded into a single "free slots" total.
             add("  bag %s: %s free, family %s",
                 tostring(bag.id), tostring(bag.free), tostring(bag.family))
+        end
+    end
+
+    -- The forms the CLIENT reported, verbatim. GetShapeshiftFormInfo's signature differs between
+    -- flavours and reading it wrong does not error — it silently labels every form "form <n>". That
+    -- fallback string is the fingerprint of the bug, so it is passed through untouched.
+    add("")
+    add("FORMS")
+    local formIndices = sortedKeys(world.forms or {})
+    if #formIndices == 0 then
+        add("  (no forms)")
+    else
+        for _, i in ipairs(formIndices) do
+            add("  %s: %s", tostring(i), tostring(world.forms[i]))
+        end
+    end
+
+    -- The snapshot the rule engine matched against, which is the other half of "why am I wearing
+    -- this". Absent and false are kept apart here for the same reason they are in a set's slots.
+    add("")
+    add("STATE")
+    if not world.state then
+        add("  (not read)")
+    else
+        for _, k in ipairs(sortedKeys(world.state)) do
+            add("  %s = %s", tostring(k), shown(world.state[k]))
+        end
+    end
+
+    -- Every rule and why it did or didn't fire — `/kit why`, written to disk. The question a rule
+    -- bug asks is never "what are my rules" but "why did THAT one win", so the verdict sits on each
+    -- row rather than being left for the reader to derive from priorities.
+    local explain = world.explain or {}
+    local rules = world.rules or {}
+    add("")
+    add("RULES — chosen: %s", tostring(explain.chosen or "(none)"))
+    if #rules == 0 then
+        -- Stated, because "no rules" is the likeliest explanation for "it never swapped" and a
+        -- missing section cannot be told apart from a dump taken before the rules were read.
+        add("  (no rules)")
+    else
+        -- Numbered by list position: that order is the documented tiebreak between equal priorities,
+        -- so a reader comparing this to the rule list needs the same numbers on both.
+        for i, rule in ipairs(rules) do
+            local entry = explain.considered and explain.considered[i]
+            local verdict
+            if not entry then
+                verdict = "(not explained)"
+            elseif not entry.matched then
+                verdict = "no: " .. tostring(entry.reason)
+            elseif explain.chosen == rule.set then
+                verdict = "MATCHED (winner)"
+            else
+                verdict = "MATCHED"
+            end
+            -- Described with the client's own form labels, so a rule the player wrote as "Cat Form"
+            -- reading back as "in form 3" is itself the bug report.
+            local describe = Rules and Rules.Describe
+            local words = describe and describe(rule, { form = world.forms }) or "(cannot describe)"
+            add('  %d. "%s" priority %s — %s — %s',
+                i, tostring(rule.set), tostring(rule.priority or 0), words, verdict)
         end
     end
 
@@ -127,10 +219,34 @@ end
 -- Reading the client (the part that is not pure)
 -- ---------------------------------------------------------------------------
 
+-- Anything that reads the client is guarded, because the two calls most likely to be WRONG on a
+-- given flavour — FormLabels and the state snapshot — are precisely the two this dump exists to
+-- inspect. A probe that dies on them hides the bug behind its own failure. The error is returned
+-- rather than swallowed so it appears in the dump as the answer.
+local function attempt(fn, ...)
+    if type(fn) ~= "function" then return nil end
+    local ok, value = pcall(fn, ...)
+    if ok then return value end
+    return { failed = tostring(value) }
+end
+
+local function failed(value)
+    return type(value) == "table" and value.failed ~= nil
+end
+
 --- Read the world and hand it to Report. Everything the planner sees, from ONE reading, so the dump
 --- cannot show a set planned against bags that had already changed by the time the next set was read.
 function Debug.Capture()
     local Sets, Inventory, Compat = Kitbag.Sets, Kitbag.Inventory, Kitbag.Compat
+    -- Looked up at call time, not held as a load-time local: KitbagEvents loads AFTER this file, so
+    -- a local captured at load would be nil forever (the lesson UI-17 paid for with the minimap).
+    local Events = Kitbag.Events
+
+    -- One reading, shared by the snapshot and the explanation below it. Asking Events.Explain() for
+    -- the second would re-read the world, and a dump whose "why" disagrees with its own STATE is a
+    -- false lead of exactly the kind this file exists to prevent.
+    local state = Events and attempt(Events.State)
+    local rules = Kitbag.char and Kitbag.char.rules
 
     local world = {
         when = date("%Y-%m-%d %H:%M:%S"),
@@ -141,9 +257,18 @@ function Debug.Capture()
         -- The same key the DB files this character's sets under, not a second spelling of it: a dump
         -- that names the character differently from the bucket it read is a false lead.
         character = Compat and Compat.CharacterKey(),
+        schema = Kitbag.db and Kitbag.db.schema,
         bankOpen = Inventory and Inventory.IsBankOpen(),
         worn = Inventory and Inventory.Equipped(),
         bags = Inventory and Inventory.Bags(),
+        forms = Compat and attempt(Compat.FormLabels),
+        state = state,
+        rules = rules,
+        -- Explained only against a state that was actually read. Handing the error table to Explain
+        -- would produce a full RULES section in which every rule missed on some condition — a
+        -- confident, detailed and entirely fictional answer to "why did nothing fire".
+        explain = (Rules and rules and state and not failed(state))
+            and attempt(Rules.Explain, rules, state) or nil,
         sets = {},
     }
 
