@@ -342,6 +342,26 @@ Verify.CHECKS = {
         end,
     },
     {
+        id = "delete-popup", item = "VERIFY-12", label = "Delete confirmation draws",
+        -- BUG-8: the delete guard used to be an invisible shift-click, so this popup is the whole
+        -- fix. If it does not draw, Delete is silently broken again in exactly the way reported.
+        run = function()
+            if not _G.StaticPopupDialogs or not _G.StaticPopupDialogs["KITBAG_DELETE"] then
+                return nil, "registered with the main window — open /kit once, then run this"
+            end
+            local popup = _G.StaticPopup_Show("KITBAG_DELETE", "TestSet",
+                "This is a verification run.", "TestSet")
+            if not popup then return false, "StaticPopup_Show returned nothing" end
+
+            local window = _G.KitbagFrame
+            local detail = string.format("%s strata %s; KitbagFrame strata %s",
+                popup:GetName() or "popup", tostring(popup:GetFrameStrata()),
+                window and tostring(window:GetFrameStrata()) or "(window not built)")
+            _G.StaticPopup_Hide("KITBAG_DELETE")
+            return true, detail
+        end,
+    },
+    {
         id = "inherit-menu", item = "VERIFY-13", label = "Inherit menu opens over the window",
         run = function()
             local menu = _G.KitbagParentMenu
