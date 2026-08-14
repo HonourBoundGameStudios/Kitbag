@@ -98,6 +98,22 @@ function Import.FromItemRack(user, existing)
     return out
 end
 
+--- Is there anything worth offering to import? (UI-18)
+--
+-- Returns { count = n } when pressing Import would actually bring sets across, and nil otherwise —
+-- so the window's button can hide rather than sit there permanently offering a migration that has
+-- already happened. The rule is deliberately the strict one: a name clash is NOT an offer, because
+-- importing over it is refused by design and the button would do nothing but re-report the clash.
+--
+-- This is `FromItemRack` run as a dry run — it writes nothing, and the caller throws the sets away.
+-- Asking the same function the import itself uses is what stops the button and `/kit import` from
+-- disagreeing about whether there is anything left to do.
+function Import.Offer(user, existing)
+    local result = Import.FromItemRack(user, existing)
+    if result.imported == 0 then return nil end
+    return { count = result.imported }
+end
+
 -- ---------------------------------------------------------------------------
 -- Options and keybindings (COMPAT-5)
 -- ---------------------------------------------------------------------------

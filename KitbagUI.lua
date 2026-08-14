@@ -31,7 +31,7 @@ local PITCH = CELL + CELL_GAP
 local PANEL_WIDTH = 300
 local PARENT_Y = -70       -- the inherit button, between the set's headline and the character model
 
-local frame, rows, status, scroll, doll
+local frame, rows, status, scroll, doll, importButton
 local selected = nil       -- the set the inspector is showing
 
 -- How each slot state reads, in one place: the colour of the cell's border and the words the
@@ -859,6 +859,37 @@ local function build()
         if name then created(Sets.New(name)) end
     end)
 
+    -- The migration door (UI-18). `/kit import` existed from the start and was reachable only from
+    -- `/kit help`, which is UI-17's lesson in the worst possible place: someone arriving from
+    -- ItemRack sees an empty set list and concludes their kits did not come across. It sits above
+    -- the name box rather than in the button row because that row is already full at 660 wide.
+    --
+    -- It hides itself when there is nothing to import, so it is absent for everyone who never used
+    -- ItemRack and disappears for good once the sets are across — this is a one-time migration, not
+    -- a control anyone needs permanently. Same reasoning as the Inherits button (UI-11): a
+    -- permanently dead control is a puzzle rather than an affordance.
+    importButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    -- Wide enough for a two-digit count: "Import 12 sets from ItemRack" is the longest this says,
+    -- and nothing else shares the row, so the room is free.
+    importButton:SetSize(220, 22)
+    -- -6 against the name box's own inset lines it up with the list above it.
+    importButton:SetPoint("BOTTOMLEFT", nameBox, "TOPLEFT", -6, 10)
+    importButton:SetScript("OnClick", function() Sets.ImportItemRack() end)
+    importButton:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:AddLine("Import from ItemRack", 1, 0.82, 0)
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("Brings this character's ItemRack sets across, with their icons and " ..
+            "keybindings.", 0.9, 0.9, 0.9, true)
+        -- Said before the click, because both are reassurances and a reassurance that arrives after
+        -- the fact is no use to someone deciding whether to press.
+        GameTooltip:AddLine("Your existing sets are never overwritten. ItemRack stores sets per " ..
+            "character, so this imports only the one you are on.", 0.5, 0.5, 0.5, true)
+        GameTooltip:Show()
+    end)
+    importButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    importButton:Hide()
+
     return frame
 end
 
@@ -907,6 +938,17 @@ function UI.Refresh()
     else
         status:SetText(string.format("%d set%s. Click one to inspect it.",
             #names, #names == 1 and "" or "s"))
+    end
+
+    -- Re-asked on every redraw rather than once at build: the import itself ends in a refresh, so
+    -- this is what makes the button take itself away the moment its job is done.
+    local offer = Sets.ImportOffer()
+    if offer then
+        importButton:SetText(string.format("Import %d set%s from ItemRack",
+            offer.count, offer.count == 1 and "" or "s"))
+        importButton:Show()
+    else
+        importButton:Hide()
     end
 end
 

@@ -186,4 +186,42 @@ H.eq(plan.bind[1].set, "Heal", "…and a contested key goes to the first set by 
 H.eq(#plan.conflicts, 1, "the loser is reported")
 H.eq(plan.conflicts[1].set, "Tank", "…by name")
 
+-- ---------------------------------------------------------------------------
+-- Is there anything to offer? (UI-18)
+-- ---------------------------------------------------------------------------
+--
+-- The window's Import button asks this before drawing itself. A button that is always there is a
+-- button most people will never have a use for, and one that is there but does nothing when pressed
+-- is worse — so the rule is the strict one: offer only when pressing it would actually bring a set
+-- across. Answered by the same dry run the import itself uses, so the button and the command cannot
+-- disagree about whether there is anything left to do.
+
+H.eq(I.Offer(nil, {}), nil, "no ItemRack at all offers nothing")
+H.eq(I.Offer({}, {}), nil, "…and neither does an ItemRack with no sets")
+H.eq(I.Offer(user({}), {}), nil, "…nor an empty set table")
+
+local offer = I.Offer(user({
+    HEAL = { equip = { [1] = HELM } },
+    DPS  = { equip = { [1] = GLOVES } },
+}), {})
+H.ok(offer ~= nil, "two importable sets are an offer")
+H.eq(offer.count, 2, "…and it counts them, so the button can say how many")
+
+-- The whole point of hiding it: once everything is across, the button goes away. Anything else and
+-- it sits there forever inviting a click that reports "nothing new to import".
+H.eq(I.Offer(user({ HEAL = { equip = { [1] = HELM } } }), { HEAL = {} }), nil,
+    "a set already imported is not offered again")
+
+-- Clashes alone are not an offer. Pressing would import nothing and only re-report the clash; the
+-- `/kit import` command is still there for someone who has renamed theirs and wants to retry.
+H.eq(I.Offer(user({
+    HEAL = { equip = { [1] = HELM } },
+    ["~Unequip"] = { equip = {} },
+}), { HEAL = {} }), nil, "a clash plus ItemRack's own scratch sets is nothing to offer")
+
+-- Malformed input reaches this at login, on a global another addon wrote. It must answer "nothing"
+-- rather than error: this decides whether a frame is drawn.
+H.eq(I.Offer("nonsense", {}), nil, "a malformed ItemRack table offers nothing rather than erroring")
+H.eq(I.Offer(user({ Bad = { equip = "not a table" } }), {}), nil, "…as does an unreadable set")
+
 H.done()

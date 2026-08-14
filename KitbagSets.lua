@@ -223,6 +223,14 @@ function Sets.ParentChoices(name)
     return Core.ParentChoices(char().sets, name)
 end
 
+--- Is there anything to import for this character? (UI-18)
+--
+-- The window asks before drawing its Import button; nil means don't. The judgement is `Import.Offer`
+-- and the reading of the world is here, so KitbagUI never touches a global another addon wrote.
+function Sets.ImportOffer()
+    return Import.Offer(_G.ItemRackUser, char().sets)
+end
+
 --- Bring this character's ItemRack sets across, if that addon left any behind.
 --
 -- The conversion and every judgement call in it live in KitbagImport, which is pure and tested; this
