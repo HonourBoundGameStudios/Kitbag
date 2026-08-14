@@ -168,6 +168,9 @@ end
 local function onRowClick(self)
     if not self.setName then return end
     selected = self.setName
+    -- The picker is bound to one slot of one set. Leaving it open over a different set would offer
+    -- a click that edits the set you just navigated away from.
+    Kitbag.Picker.Close()
     UI.Refresh()
 end
 
@@ -252,6 +255,12 @@ local function onCellEnter(self)
     local state = STATE[cell.state] or STATE.unset
     GameTooltip:AddLine(string.format("%s — %s", cell.slot.label, state.text),
         state[1], state[2], state[3])
+
+    GameTooltip:AddLine(" ")
+    GameTooltip:AddLine("Click to choose what this set puts here.", 0.5, 0.5, 0.5)
+    if cell.state ~= "unset" then
+        GameTooltip:AddLine("Shift-click to drop the slot from the set.", 0.5, 0.5, 0.5)
+    end
     GameTooltip:Show()
 end
 
@@ -259,8 +268,27 @@ local function onCellLeave()
     GameTooltip:Hide()
 end
 
+-- Click a slot to say what the set should put in it (UI-14).
+--
+-- Shift-click is the shortcut for the one choice worth reaching in a single gesture: dropping the
+-- slot out of the set entirely, so it keeps whatever you happen to be wearing. It is also the only
+-- destructive one, which is why it is behind a modifier — and why an untouched slot does not offer
+-- it, since there is nothing there to drop.
+local function onCellClick(self)
+    local cell = self.data.cell
+    if not selected or not cell then return end
+
+    if IsShiftKeyDown() then
+        if cell.state ~= "unset" then Sets.SetSlot(selected, cell.slot.id, nil) end
+        return
+    end
+    Kitbag.Picker.Open(selected, cell.slot.id, self)
+end
+
 local function createCell(parent, x, y)
-    local cell = CreateFrame("Frame", nil, parent)
+    -- A Button rather than a Frame: the cells were read-only when the inspector was built (UI-13)
+    -- and this is the pass that makes them the way a set is edited.
+    local cell = CreateFrame("Button", nil, parent)
     cell:SetSize(CELL, CELL)
     cell:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
     cell:EnableMouse(true)
@@ -285,8 +313,13 @@ local function createCell(parent, x, y)
     cell.icon = cell:CreateTexture(nil, "OVERLAY")
     cell.icon:SetAllPoints()
 
+    -- Something clickable has to look clickable. The highlight is the only affordance a bare cell
+    -- has, and without it the doll reads as a picture of the set rather than as the way to edit it.
+    cell:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square")
+
     cell:SetScript("OnEnter", onCellEnter)
     cell:SetScript("OnLeave", onCellLeave)
+    cell:SetScript("OnClick", onCellClick)
     return cell
 end
 
@@ -564,6 +597,10 @@ local function build()
 
     -- Esc closes it, like every other panel in the game.
     tinsert(UISpecialFrames, "KitbagFrame")
+
+    -- The slot picker belongs to this window and must not outlive it. OnHide rather than the Toggle
+    -- path, because Esc and the close button never go through Toggle.
+    frame:SetScript("OnHide", function() Kitbag.Picker.Close() end)
 
     frame.title = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     frame.title:SetPoint("TOP", frame, "TOP", 0, -5)

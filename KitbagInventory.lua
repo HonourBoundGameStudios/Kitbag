@@ -178,6 +178,21 @@ function Inventory.AlternativesFor(slotId)
     return Core.Alternatives(slotId, equipped, reachable, Inventory.EquipLocations(keys))
 end
 
+--- Everything you own that could go in one slot, for the set editor (UI-14).
+--
+-- Deliberately wider than AlternativesFor: the bank is kept, because a set is a list of what to wear
+-- rather than a promise about where things are, and what you have on is kept too, because building a
+-- set usually means wearing what you want and changing two pieces.
+function Inventory.ChoicesFor(slotId)
+    local equipped, where = Inventory.Equipped(), Inventory.Bagged()
+
+    local keys = {}
+    for key in pairs(where) do keys[#keys + 1] = key end
+    for _, key in pairs(equipped) do keys[#keys + 1] = key end
+
+    return Core.Choices(slotId, equipped, where, Inventory.EquipLocations(keys))
+end
+
 --- Everything Plan() needs, read once so the three views agree with each other.
 function Inventory.Snapshot(set)
     return Inventory.Equipped(), Inventory.Bagged(), Inventory.Meta(set)

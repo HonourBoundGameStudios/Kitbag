@@ -281,6 +281,22 @@ function Sets.EquipItem(key, slotId)
     return Sets.Apply({ slots = { [slotId] = key } }, slot.label, true)
 end
 
+--- Put one item in one slot of a stored set, or take the slot out of it (UI-14).
+--
+-- Writes to the STORED set, not the resolved one: a set that inherits stores only what differs, and
+-- flattening it here would silently sever it from its parent the first time a slot was edited.
+-- Core.SetSlot owns what the three values mean and refuses anything it cannot store.
+function Sets.SetSlot(name, slotId, key)
+    local set = char().sets[name]
+    if not set then
+        say("no set called |cffffd100%s|r.", tostring(name))
+        return false
+    end
+    if not Core.SetSlot(set, slotId, key) then return false end
+    Kitbag.Refresh()
+    return true
+end
+
 --- The texture to show for a set (UI-4).
 --
 -- A chosen icon wins. Otherwise the set borrows one from the item that best identifies it, because
