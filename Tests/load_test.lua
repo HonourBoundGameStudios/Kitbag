@@ -230,6 +230,56 @@ end
 -- that ran but registered nothing is a module the next one will fail to find.
 H.ok(type(G.Kitbag) == "table", "the Kitbag namespace exists after every module has run")
 
+-- ---------------------------------------------------------------------------
+-- Every module used is a module bound
+-- ---------------------------------------------------------------------------
+--
+-- Running the files catches a bad reference on a line that RUNS at load. Almost none of the UI does:
+-- the frames build lazily inside Toggle/Refresh, so `Core.ScrollOffset(...)` inside a Refresh body of
+-- a file that never wrote `local Core = Kitbag.Core` executes cleanly here and dies in the client the
+-- first time the panel redraws. That exact mistake was made adding ScrollOffset, and passed the load
+-- run above — which is what this check exists to close.
+--
+-- Source-scanned rather than executed, because the whole point is code that does not run at load.
+
+local MODULES = {
+    "Compat", "Core", "Rules", "Import", "DB", "Inventory", "Equip", "Sets", "Debug",
+    "Events", "Icons", "Picker", "Flyout", "UI", "RulesUI", "Trinkets", "Minimap",
+    "Options", "Bindings", "Broker",
+}
+
+local function sourceOf(path)
+    local f = assert(io.open(path, "r"), "cannot open " .. path)
+    local text = f:read("*a")
+    f:close()
+    -- Comments are stripped first: this file's own prose is full of `Core.Plan` references, and a
+    -- lint that fires on its own documentation gets switched off within a week.
+    return (text:gsub("%-%-[^\n]*", ""))
+end
+
+-- Every name this file declares as a local. Collected from the whole `local a, b, c =` name list
+-- rather than matched per-module: KitbagDebug binds three at once inside Capture, deliberately, and a
+-- lint that only understands one-name declarations reports that correct code as broken. A checker
+-- that cries wolf on the codebase's own idioms is one that gets deleted.
+local function localsOf(src)
+    local names = {}
+    for list in src:gmatch("local%s+([%w_%s,]+)=") do
+        for token in list:gmatch("[%w_]+") do names[token] = true end
+    end
+    return names
+end
+
+for _, name in ipairs(tocOrder("Kitbag.toc")) do
+    local src = sourceOf(name)
+    local bound = localsOf(src)
+    for _, mod in ipairs(MODULES) do
+        -- `Kitbag.Core.x` is already fully qualified and needs no local, so it is not a use.
+        if src:find("[^%w_%.]" .. mod .. "%.") then
+            H.ok(bound[mod], name .. " binds " .. mod .. " before using " .. mod .. ".something")
+        end
+    end
+end
+
 local EXPECTED = {
     "Compat", "Core", "Rules", "Import", "DB", "Inventory", "Equip", "Sets", "Debug",
     "Events", "Icons", "Picker", "Flyout", "UI", "RulesUI", "Trinkets", "Minimap",
