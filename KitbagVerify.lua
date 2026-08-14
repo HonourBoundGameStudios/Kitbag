@@ -232,6 +232,117 @@ Verify.CHECKS = {
         end,
     },
     {
+        id = "tooltip-template", item = "VERIFY-2", label = "TooltipBorderedFrameTemplate exists",
+        -- KitbagFlyout builds its panel from this template inside a pcall and silently falls back to
+        -- a plain frame. That fallback has never been seen, which means nobody knows which of the two
+        -- paths ships — so ask the client directly rather than inferring it from how the panel looks.
+        run = function()
+            local ok, created = pcall(CreateFrame, "Frame", nil, UIParent,
+                "TooltipBorderedFrameTemplate")
+            if ok and created then return true, "the template resolves; the pcall fallback is unused" end
+            return false, "the template is MISSING on this flavour — the plain-frame fallback is what ships"
+        end,
+    },
+    {
+        id = "flyout", item = "VERIFY-2", label = "Paperdoll flyout opens",
+        run = function()
+            local Flyout = Kitbag.Flyout
+            if not Flyout then return nil, "KitbagFlyout is not loaded" end
+            if not (Kitbag.db and Kitbag.db.options and Kitbag.db.options.flyouts) then
+                return nil, "flyouts are switched off in options"
+            end
+
+            Flyout.Open(1, UIParent)   -- slot 1 is the head, which every character has
+            local panel = _G.KitbagFlyoutPanel
+            if not panel then return false, "KitbagFlyoutPanel was never created" end
+
+            local shown = panel:IsShown()
+            local detail = string.format("KitbagFlyoutPanel  %dx%d  strata %s",
+                math.floor(panel:GetWidth() + 0.5), math.floor(panel:GetHeight() + 0.5),
+                tostring(panel:GetFrameStrata()))
+            panel:Hide()
+
+            if not shown then
+                -- Nothing to show is a real answer, not a fault: an empty head slot with no
+                -- alternatives in the bags has no flyout to open.
+                return nil, "the panel exists but stayed hidden — probably nothing fits slot 1"
+            end
+            return true, detail
+        end,
+    },
+    {
+        id = "picker", item = "VERIFY-2", label = "Slot picker opens",
+        run = function()
+            local Picker, Sets = Kitbag.Picker, Kitbag.Sets
+            if not Picker or not Sets then return nil, "KitbagPicker is not loaded" end
+            -- Sets.Names reads the character's bucket, which does not exist until PLAYER_LOGIN has
+            -- handed the SavedVariables over. Asking early is an error, not an empty list.
+            if not Kitbag.char then return nil, "no character bucket yet — not logged in" end
+            local name = (Sets.Names() or {})[1]
+            if not name then return nil, "no sets yet — make one and run this again" end
+
+            Picker.Open(name, 1, UIParent)
+            local frame = _G.KitbagPickerFrame
+            if not frame then return false, "KitbagPickerFrame was never created" end
+
+            local shown = frame:IsShown()
+            local detail = string.format("KitbagPickerFrame  %dx%d  strata %s",
+                math.floor(frame:GetWidth() + 0.5), math.floor(frame:GetHeight() + 0.5),
+                tostring(frame:GetFrameStrata()))
+            Picker.Close()
+
+            if not shown then return false, "the picker was built but did not show" end
+            return true, detail
+        end,
+    },
+    {
+        id = "overwrite-popup", item = "VERIFY-12", label = "Overwrite confirmation draws",
+        -- The popup must come up ABOVE the window that raised it. Blizzard's StaticPopup is not a
+        -- child of ours, so the addon's own strata discipline does not cover it — which is exactly
+        -- why this is worth measuring rather than assuming.
+        run = function()
+            if not _G.StaticPopupDialogs or not _G.StaticPopupDialogs["KITBAG_OVERWRITE"] then
+                return nil, "the popup is only registered once the main window has been built"
+            end
+
+            local popup = _G.StaticPopup_Show("KITBAG_OVERWRITE", "TestSet",
+                "Head, Chest (this is a verification run)", "TestSet")
+            if not popup then return false, "StaticPopup_Show returned nothing" end
+
+            local window = _G.KitbagFrame
+            local detail = string.format("%s strata %s; KitbagFrame strata %s",
+                popup:GetName() or "popup", tostring(popup:GetFrameStrata()),
+                window and tostring(window:GetFrameStrata()) or "(window not built)")
+            _G.StaticPopup_Hide("KITBAG_OVERWRITE")
+
+            return true, detail
+        end,
+    },
+    {
+        id = "inherit-menu", item = "VERIFY-13", label = "Inherit menu opens over the window",
+        run = function()
+            local menu = _G.KitbagParentMenu
+            if not menu then
+                return nil, "the menu is built with the main window — open /kit once, then run this"
+            end
+
+            _G.ToggleDropDownMenu(1, nil, menu, _G.KitbagFrame, 0, 0)
+            local list = _G.DropDownList1
+            if not list then return false, "DropDownList1 does not exist" end
+
+            local shown = list:IsShown()
+            local detail = string.format("DropDownList1 strata %s level %s; KitbagFrame strata %s",
+                tostring(list:GetFrameStrata()), tostring(list:GetFrameLevel()),
+                _G.KitbagFrame and tostring(_G.KitbagFrame:GetFrameStrata()) or "(not built)")
+            _G.CloseDropDownMenus()
+
+            if not shown then
+                return nil, "the menu did not open — this set may have nothing it can inherit from"
+            end
+            return true, detail
+        end,
+    },
+    {
         id = "scroll-clamp", item = "VERIFY-11", label = "A shrinking list cannot go blank",
         -- Pure arithmetic, but run HERE too: the pure test proves ScrollOffset is right, and this
         -- proves the client is running a build that contains it.
