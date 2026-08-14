@@ -38,5 +38,6 @@ KitbagMinimap.lua
 KitbagOptions.lua
 KitbagBindings.lua
 KitbagBroker.lua
+KitbagVerify.lua
 
 Kitbag.lua

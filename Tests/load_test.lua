@@ -231,6 +231,36 @@ end
 H.ok(type(G.Kitbag) == "table", "the Kitbag namespace exists after every module has run")
 
 -- ---------------------------------------------------------------------------
+-- The self-check's own checks actually run
+-- ---------------------------------------------------------------------------
+--
+-- KitbagVerify's checks are the one part of the addon whose whole job is to run in the client, and
+-- they are each wrapped in pcall — which makes them the easiest place in the codebase for a typo to
+-- hide, because a check that calls a function that does not exist reports a tidy FAIL and looks like
+-- it did its job. That is exactly what happened writing them: a call to a non-existent
+-- Inventory.Locations reported "the check itself errored" and would have shipped as a red line
+-- somebody believed.
+--
+-- So they are run here against the mock. The outcomes are meaningless — a stubbed client passes and
+-- fails arbitrarily — but "this check referenced something that does not exist" is not meaningless,
+-- and that is all this asserts.
+
+G.print = function() end
+local verifyResults = Kitbag.Verify.Run()
+G.print = realPrint
+
+H.eq(#verifyResults, #Kitbag.Verify.CHECKS, "every registered check produced a result")
+
+for _, r in ipairs(verifyResults) do
+    local detail = tostring(r.detail or "")
+    -- A nil-value error is a name that does not exist: a typo, or an API that was renamed. Any other
+    -- error against a stub client is expected and says nothing.
+    local missing = detail:find("a nil value", 1, true)
+    H.ok(not missing, "check '" .. tostring(r.id) .. "' does not call something nonexistent" ..
+        (missing and (": " .. detail) or ""))
+end
+
+-- ---------------------------------------------------------------------------
 -- Every module used is a module bound
 -- ---------------------------------------------------------------------------
 --
@@ -245,7 +275,7 @@ H.ok(type(G.Kitbag) == "table", "the Kitbag namespace exists after every module 
 local MODULES = {
     "Compat", "Core", "Rules", "Import", "DB", "Inventory", "Equip", "Sets", "Debug",
     "Events", "Icons", "Picker", "Flyout", "UI", "RulesUI", "Trinkets", "Minimap",
-    "Options", "Bindings", "Broker",
+    "Options", "Bindings", "Broker", "Verify",
 }
 
 local function sourceOf(path)
@@ -283,7 +313,7 @@ end
 local EXPECTED = {
     "Compat", "Core", "Rules", "Import", "DB", "Inventory", "Equip", "Sets", "Debug",
     "Events", "Icons", "Picker", "Flyout", "UI", "RulesUI", "Trinkets", "Minimap",
-    "Options", "Bindings", "Broker",
+    "Options", "Bindings", "Broker", "Verify",
 }
 for _, key in ipairs(EXPECTED) do
     H.ok(type(G.Kitbag[key]) == "table", "Kitbag." .. key .. " is registered on the namespace")

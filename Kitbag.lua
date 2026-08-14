@@ -43,6 +43,7 @@ local function help()
     say("  |cffffd100/kit minimap|r — toggle the minimap button")
     say("  |cffffd100/kit trinkets|r — toggle the trinket quick-use bar")
     say("  |cffffd100/kit debug|r — dump gear, bags, sets, rules and plans for a bug report")
+    say("  |cffffd100/kit verify|r — check the addon's own frames and report what could not be checked")
 end
 
 local function why()
@@ -108,6 +109,13 @@ local function command(input)
     elseif cmd == "minimap" then Minimap_.SetHidden(not Kitbag.db.options.minimap.hide)
     elseif cmd == "trinkets" then Kitbag.Trinkets.SetHidden(not Kitbag.db.options.trinkets.hide)
     elseif cmd == "debug" then Kitbag.Debug.Toggle()
+    elseif cmd == "verify" then
+        -- The summary goes to chat so the player knows it ran and whether anything failed; the
+        -- detail goes to SavedVariables, because the interesting part is longer than the chat frame
+        -- keeps and needs to be readable by someone who is not sitting at this machine.
+        local lines = Kitbag.Verify.Store()
+        Sets.Say("self-check done — %s", tostring(lines[#lines]))
+        Sets.Say("|cffffd100/reload|r to write the full report to disk.")
     else help()
     end
 end
