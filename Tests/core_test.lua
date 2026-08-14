@@ -587,4 +587,81 @@ H.eq(bare[1].key, HELM, "…but the set's own contents are still worth drawing")
 H.eq(bare[2].state, "unset", "…and a slot the set never named is still plainly unset")
 H.eq(C.Doll(nil, nil)[1].state, "unset", "no set at all draws an empty doll rather than erroring")
 
+-- ---------------------------------------------------------------------------
+-- Choices — the wardrobe for one slot, for editing a set (UI-14)
+-- ---------------------------------------------------------------------------
+--
+-- The flyout on the character sheet asks "what else could I be wearing here", so it leaves out what
+-- is already on. Editing a SET asks a different question — "what should this set put here" — and
+-- there the item currently on your body is the single most likely answer, because building a set
+-- usually means taking what you are wearing and changing two pieces. Same fitting rules, one fewer
+-- exclusion, so they are one function with the exclusion passed in rather than two that can drift.
+
+local wardrobe = {
+    [RING_A] = { bag = 0, slot = 1 },
+    [SHIELD] = { bag = 0, slot = 3 },
+}
+local wardrobeLoc = {
+    [RING_A] = "INVTYPE_FINGER",
+    [RING_B] = "INVTYPE_FINGER",
+    [SHIELD] = "INVTYPE_SHIELD",
+}
+
+local choices = C.Choices(11, { [11] = RING_B }, wardrobe, wardrobeLoc)
+H.eq(#choices, 2, "editing a slot offers the ring you are wearing as well as the one in the bag")
+H.eq(choices[1].key, RING_A, "…sorted, so the panel does not reshuffle between two clicks")
+H.eq(choices[1].bag, 0, "…each carrying where it can be found")
+H.eq(choices[2].key, RING_B, "…and the worn one is in the list")
+H.eq(choices[2].worn, 11, "…marked with the slot it is worn in, so it can be shown as such")
+
+H.eq(#C.Choices(2, {}, wardrobe, wardrobeLoc), 0, "a slot you own nothing for offers nothing")
+H.eq(#C.Choices(17, {}, wardrobe, wardrobeLoc), 1, "the off hand offers the shield")
+H.eq(#C.Choices(nil, {}, wardrobe, wardrobeLoc), 0, "no slot asked about offers nothing, not an error")
+
+-- Alternatives is Choices with the worn item taken out, and must stay that way: the flyout's whole
+-- job is to offer something OTHER than what is on.
+H.eq(#C.Alternatives(11, { [11] = RING_B }, wardrobe, wardrobeLoc), 1,
+    "the flyout still leaves out the item already in the slot")
+
+-- ---------------------------------------------------------------------------
+-- SetSlot — editing one slot of a set (UI-14)
+-- ---------------------------------------------------------------------------
+--
+-- Three states, and the difference between the last two is the one people get wrong: an item, a
+-- deliberate `false` ("take whatever is there off"), and absence ("this set has no opinion, keep
+-- wearing what you have"). Capture writes false for every empty slot precisely so a set saved
+-- bare-headed takes your helmet off; dropping a slot has to be a separate gesture from emptying it.
+
+local edited = { name = "Tank", slots = { [1] = HELM, [16] = SWORD } }
+
+H.eq(C.SetSlot(edited, 16, TWOHAND), true, "putting an item in a slot reports that it changed")
+H.eq(edited.slots[16], TWOHAND, "…and the set now names it")
+H.eq(C.SetSlot(edited, 17, "item:17066:0:0:0:0:0:0:0:0"), true, "a raw link is accepted")
+H.eq(edited.slots[17], SHIELD, "…and normalised to a key, as everything stored in a set is")
+
+H.eq(C.SetSlot(edited, 1, false), true, "a slot can be set to deliberately empty")
+H.eq(edited.slots[1], false, "…which stores as false, the same thing capture writes")
+
+H.eq(C.SetSlot(edited, 16, nil), true, "dropping a slot from the set reports a change")
+H.eq(edited.slots[16], nil, "…and leaves no opinion behind — absent, not false")
+H.eq(C.SetSlot(edited, 16, nil), false, "…and dropping it again changes nothing")
+
+H.eq(C.SetSlot(edited, 99, HELM), false, "an unknown slot id is refused rather than stored")
+H.eq(edited.slots[99], nil, "…and nothing is written for it")
+H.eq(C.SetSlot(edited, 5, "notanitem"), false, "something that is not an item is refused")
+H.eq(edited.slots[5], nil, "…rather than stored as a key that can never be found")
+H.eq(C.SetSlot(nil, 1, HELM), false, "no set at all is refused rather than erroring")
+
+-- A set may be stored as a delta on a parent, in which case dropping a slot means "let the parent
+-- decide" rather than "wear nothing" — which is exactly what absence already means to Resolve. This
+-- is the assertion that keeps the editing gesture and the inheritance rule in agreement.
+local parent = { name = "Base", slots = { [1] = HELM, [16] = SWORD } }
+local child = { name = "Fire", parent = "Base", slots = { [16] = TWOHAND } }
+local family = { Base = parent, Fire = child }
+H.eq(C.Resolve(family, "Fire").slots[16], TWOHAND, "a child overrides its parent's slot")
+C.SetSlot(child, 16, nil)
+H.eq(C.Resolve(family, "Fire").slots[16], SWORD, "dropping the override hands the slot back to the parent")
+C.SetSlot(child, 16, false)
+H.eq(C.Resolve(family, "Fire").slots[16], false, "…where emptying it instead overrides the parent with nothing")
+
 H.done()

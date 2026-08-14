@@ -167,6 +167,39 @@ function Core.Diff(set, parent)
     return { name = set.name, icon = set.icon, parent = set.parent, slots = slots }
 end
 
+--- Put one item in one slot of a set, or take the slot out of it entirely (UI-14).
+--
+-- The three states a slot can be in are the whole of this function, and the difference between the
+-- last two is the one that gets built wrong:
+--
+--   key    an item — the set puts this on
+--   false  deliberately empty — the set takes off whatever is there
+--   nil    absent — the set has no opinion and you keep wearing what you have
+--
+-- Capture writes `false` for every empty slot precisely so that a set saved bare-headed removes your
+-- helmet, which means "drop this slot" cannot be spelled the same way as "empty this slot". For a
+-- set stored as a delta, absence also means "let the parent decide" — Resolve already reads it that
+-- way, so dropping a slot and inheriting it are the same write.
+--
+-- Mutates `set` and returns whether anything actually changed, so a caller can skip a redraw. An
+-- unknown slot id or an unreadable item is refused rather than stored: both arrive from the client
+-- and from saved data, and a key nothing can ever match would read in the window as an item you have
+-- lost rather than as a slot that was never set.
+function Core.SetSlot(set, slotId, key)
+    if type(set) ~= "table" then return false end
+    if not Core.SlotById(slotId) then return false end
+
+    if key ~= nil and key ~= false then
+        key = Core.ItemKey(key)
+        if not key then return false end
+    end
+
+    set.slots = set.slots or {}
+    if set.slots[slotId] == key then return false end
+    set.slots[slotId] = key
+    return true
+end
+
 --- How good a set is and how close it is to breaking (CORE-4).
 --
 --   set  : { slots = { [slotId] = key | false } }
@@ -408,17 +441,23 @@ function Core.SlotsFor(equipLocation)
     return FITS[equipLocation] or NO_SLOTS
 end
 
---- Everything you own that could go in this slot, other than what is in it already.
+--- Everything you own that could go in this slot.
 --
 --   equipped  : { [slotId] = itemKey }
 --   where     : { [itemKey] = { bag =, slot = } }        unworn copies
 --   locations : { [itemKey] = "INVTYPE_…" }              what the client says each one is
+--   exclude   : an item key to leave out, or nil for the whole wardrobe
 --
--- Returns an ordered list of { key, bag, slot, worn }, sorted by key so the menu does not reshuffle
--- itself between two hovers. `worn` is the slot an alternative is currently worn in, if any — a ring
--- on the other finger is a genuine alternative for this one, and the planner already handles the
--- two-way swap that moving it produces.
-function Core.Alternatives(slotId, equipped, where, locations)
+-- Returns an ordered list of { key, bag, slot, worn }, sorted by key so the list does not reshuffle
+-- itself between two openings. `worn` is the slot an entry is currently worn in, if any.
+--
+-- Two callers ask this with different exclusions, and the difference is the question each is asking.
+-- The flyout on the character sheet asks "what else could I be wearing here", so it takes out what
+-- is already on — offering it would be an entry that does nothing. The set editor asks "what should
+-- this set put here", where the item on your body is the most likely answer of all, because building
+-- a set is usually wearing what you want and changing two pieces. One function with the exclusion
+-- passed in, so the fitting rules cannot drift apart between the two panels.
+function Core.Choices(slotId, equipped, where, locations, exclude)
     equipped, where, locations = equipped or {}, where or {}, locations or {}
 
     local function fits(key)
@@ -428,25 +467,29 @@ function Core.Alternatives(slotId, equipped, where, locations)
         return false
     end
 
-    -- What is in the slot already is not an alternative to itself, and neither is a second copy of
-    -- it sitting in a bag: identical keys are the same item by definition, so either would be a
-    -- menu entry that does nothing.
-    local here = equipped[slotId]
-
     local byKey = {}
     for key, at in pairs(where) do
-        if key ~= here and fits(key) then byKey[key] = { key = key, bag = at.bag, slot = at.slot } end
+        if key ~= exclude and fits(key) then
+            byKey[key] = { key = key, bag = at.bag, slot = at.slot }
+        end
     end
     for id, key in pairs(equipped) do
         -- A worn copy beats a bagged one: moving it is a single slot-to-slot swap, where fetching
-        -- from the bag would take the worn one off first.
-        if id ~= slotId and key ~= here and fits(key) then byKey[key] = { key = key, worn = id } end
+        -- from the bag would take the worn one off first. Identical keys are the same item by
+        -- definition — the key carries the enchant and the gems — so this loses nothing.
+        if key ~= exclude and fits(key) then byKey[key] = { key = key, worn = id } end
     end
 
     local found = {}
     for _, entry in pairs(byKey) do found[#found + 1] = entry end
     table.sort(found, function(a, b) return a.key < b.key end)
     return found
+end
+
+--- The flyout's contents (UI-5): everything that fits, other than what is in the slot already.
+function Core.Alternatives(slotId, equipped, where, locations)
+    equipped = equipped or {}
+    return Core.Choices(slotId, equipped, where, locations, equipped[slotId])
 end
 
 -- Which item best identifies a set, for the icon a set without one borrows (UI-4).
