@@ -370,7 +370,9 @@ local function buildDoll(parent)
     -- Guarded: `DressUpModel` and `TryOn` are ancient, but a flavour that lacks either would take
     -- the whole window down at build time, and the panel reads perfectly well without a model.
     local modelTop = -70
-    local ok, model = pcall(CreateFrame, "DressUpModel", nil, panel)
+    -- Named, unlike every other frame here: a model that renders nothing looks identical to a model
+    -- that was never created, and a name is the only way to tell the two apart from a `/run` line.
+    local ok, model = pcall(CreateFrame, "DressUpModel", "KitbagPreviewModel", panel)
     if ok and model and model.TryOn then
         model:SetSize(gapWidth, modelTop - weaponsY - 8)
         model:SetPoint("TOP", panel, "TOP", 0, modelTop)
