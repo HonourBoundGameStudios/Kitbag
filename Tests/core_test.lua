@@ -485,6 +485,45 @@ H.eq(plan.blocked, nil, "with no bag count supplied, the plan proceeds rather th
 H.eq(plan.needsBagSlots, 1, "…but still says what it would need")
 
 -- ---------------------------------------------------------------------------
+-- StowBags — which bags a removed item is offered to
+-- ---------------------------------------------------------------------------
+--
+-- The other end of the same count. The driver used to put a removed item down by trying the backpack
+-- and then every bag in turn until one took it — and every bag it hit on the way answered "That bag
+-- is full" in the chat frame. A swap that worked perfectly still read as a string of errors, with
+-- nothing to distinguish that spam from a swap that had genuinely failed.
+--
+-- This is the rule freeBagSlots above is counted BY, named once so the count and the attempt cannot
+-- be about two different sets of bags.
+--
+--   StowBags(bags) -> the usable ones, in order.  bags : { { id =, free =, family = }, … }
+
+local function stowIds(bags)
+    local ids = {}
+    for _, bag in ipairs(C.StowBags(bags)) do ids[#ids + 1] = bag.id end
+    return table.concat(ids, ",")
+end
+
+H.eq(stowIds({ { id = 0, free = 0, family = 0 }, { id = 1, free = 4, family = 0 } }), "1",
+    "a bag with no room is never offered the item — that is the 'That bag is full' message")
+H.eq(stowIds({ { id = 0, free = 2, family = 0 }, { id = 1, free = 4, family = 0 } }), "0,1",
+    "bags with room are offered in order, the backpack first")
+
+-- A quiver's free slots will never take a helmet, so offering it one is an error message with no
+-- chance of success behind it — and counting those slots promises room that does not exist.
+H.eq(stowIds({ { id = 0, free = 0, family = 0 }, { id = 1, free = 8, family = 1 },
+               { id = 2, free = 1, family = 0 } }), "2",
+    "a special bag is skipped however much room it has")
+H.eq(stowIds({ { id = 3, free = 1 } }), "3",
+    "a bag whose family the client did not name counts as usable, not as lost capacity")
+
+-- Nowhere to put it is a real state: the planner blocks the set up front, but a bag can fill between
+-- the plan and the action. An empty answer leaves the item on the cursor for ClearCursor to put
+-- back, which is quiet and correct; trying anyway is loud and still fails.
+H.eq(stowIds({ { id = 0, free = 0, family = 0 } }), "",
+    "no bag with room -> nothing to try, rather than one error per bag")
+
+-- ---------------------------------------------------------------------------
 -- Totals (CORE-4)
 -- ---------------------------------------------------------------------------
 --

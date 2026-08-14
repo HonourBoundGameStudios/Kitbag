@@ -758,5 +758,25 @@ function Core.Plan(equipped, set, where, meta)
     }
 end
 
+--- Of the bags read off the client, the ones a removed piece of gear can actually go into, in order.
+--
+-- One rule, named once, because two consumers have to agree about it: the planner counts these slots
+-- to decide a swap is possible (`meta.freeBagSlots`), and the driver spends them when it puts the old
+-- item down. Counted from one set of bags and spent from another, the plan promises room it cannot
+-- reach — and every bag the driver tries in vain answers "That bag is full" in the chat frame.
+--
+-- A bag with no room is not offered the item at all, and neither is a special one: a quiver's free
+-- slots will never take a helmet. A bag whose family the client did not name counts as usable, since
+-- the backpack is always general-purpose and treating unknown as unusable would lose real capacity.
+function Core.StowBags(bags)
+    local usable = {}
+    for _, bag in ipairs(bags) do
+        if (bag.free or 0) > 0 and (not bag.family or bag.family == 0) then
+            usable[#usable + 1] = bag
+        end
+    end
+    return usable
+end
+
 Kitbag.Core = Core
 return Core

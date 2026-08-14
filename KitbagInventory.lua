@@ -73,18 +73,25 @@ function Inventory.Bagged()
     return where
 end
 
---- How many bag slots an unequipped item could actually go into (CORE-5).
+--- The carried bags as the planner sees them: { { id =, free =, family = }, … }.
 --
--- Only the carried bags, and only the general-purpose ones: a herb bag has free slots that will
--- never take a helmet, and counting them is how you promise a swap that then fails. The bank is not
--- counted either — the driver puts removed gear in the bags, not the bank.
+-- The bank is not among them — the driver puts removed gear in the bags, not the bank — and nothing
+-- is filtered here. Which of these will actually take a helmet is Core.StowBags' single answer, so
+-- that counting the room and using it cannot be two different opinions.
+function Inventory.Bags()
+    local bags = {}
+    for bag = 0, Compat.LAST_BAG do
+        local free, family = Compat.GetContainerNumFreeSlots(bag)
+        bags[#bags + 1] = { id = bag, free = free, family = family }
+    end
+    return bags
+end
+
+--- How many bag slots an unequipped item could actually go into (CORE-5).
 function Inventory.FreeBagSlots()
     local free = 0
-    for bag = 0, Compat.LAST_BAG do
-        local slots, bagType = Compat.GetContainerNumFreeSlots(bag)
-        -- bagType 0 is "anything goes". A nil bagType means the client didn't say, and the backpack
-        -- is always general-purpose, so treat unknown as usable rather than losing real capacity.
-        if slots and (not bagType or bagType == 0) then free = free + slots end
+    for _, bag in ipairs(Core.StowBags(Inventory.Bags())) do
+        free = free + bag.free
     end
     return free
 end

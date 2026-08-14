@@ -14,6 +14,7 @@ Kitbag = Kitbag or {}
 
 local Core = Kitbag.Core
 local Compat = Kitbag.Compat
+local Inventory = Kitbag.Inventory
 
 local Equip = {}
 
@@ -43,11 +44,19 @@ end
 -- three empty bags hanging off it — and the failure looked identical to genuinely having nowhere to
 -- put the item. The planner refuses the plan up front when there is truly no room (CORE-5); this is
 -- the other half of the same bug.
+--
+-- Which bags to ask is Core.StowBags, not "all of them in turn": asking a bag that cannot take the
+-- item is not a free miss, it is a "That bag is full" in the chat frame. A swap that worked
+-- perfectly still read as a string of errors, one per bag passed on the way to the one with room —
+-- and nothing distinguished that spam from a swap that genuinely failed.
 local function stow()
-    PutItemInBackpack()
-    if not CursorHasItem() then return end
-    for bag = 1, Compat.LAST_BAG do
-        PutItemInBag(Compat.ContainerToInventory(bag))
+    for _, bag in ipairs(Core.StowBags(Inventory.Bags())) do
+        -- The backpack has no inventory id to hand PutItemInBag; it has its own call.
+        if bag.id == 0 then
+            PutItemInBackpack()
+        else
+            PutItemInBag(Compat.ContainerToInventory(bag.id))
+        end
         if not CursorHasItem() then return end
     end
 end
