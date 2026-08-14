@@ -42,6 +42,7 @@ local function help()
     say("  |cffffd100/kit import|r — bring this character's ItemRack sets across")
     say("  |cffffd100/kit minimap|r — toggle the minimap button")
     say("  |cffffd100/kit trinkets|r — toggle the trinket quick-use bar")
+    say("  |cffffd100/kit debug|r — dump gear, bags, sets and plans for a bug report")
 end
 
 local function why()
@@ -106,6 +107,7 @@ local function command(input)
     elseif cmd == "import" then Sets.ImportItemRack()
     elseif cmd == "minimap" then Minimap_.SetHidden(not Kitbag.db.options.minimap.hide)
     elseif cmd == "trinkets" then Kitbag.Trinkets.SetHidden(not Kitbag.db.options.trinkets.hide)
+    elseif cmd == "debug" then Kitbag.Debug.Toggle()
     else help()
     end
 end

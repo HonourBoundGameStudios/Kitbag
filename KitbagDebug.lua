@@ -1,0 +1,286 @@
+-- KitbagDebug — write the whole world into SavedVariables so it can be read outside the game.
+--
+-- The addon has no way to talk to anything outside the client: no sockets, no HTTP, no file IO. The
+-- one sanctioned channel out is SavedVariables, which the client writes on /reload and on logout.
+-- So diagnosis goes: click Dump, /reload, and the file on disk holds everything that was true at the
+-- moment of the click.
+--
+-- This exists because the alternative is asking the player to read numbers out of their chat frame
+-- and type them to someone else. Every round trip through a human loses detail and costs a session,
+-- and the detail that gets lost is reliably the one that mattered — "the off hand is empty" and
+-- "the SET says the off hand should be empty" are different facts that sound identical when relayed.
+--
+-- Report() is PURE: a plain reading of the world in, text out. The format is the load-bearing part,
+-- so it is tested exhaustively in Tests/debug_test.lua rather than by taking a dump and squinting.
+
+Kitbag = Kitbag or {}
+
+local Core = Kitbag.Core
+
+local Debug = {}
+
+-- How many dumps to keep. More than one because the interesting comparison is usually "working" then
+-- "broken"; few enough that SavedVariables does not grow without bound, since nothing ever prunes it
+-- but this line.
+local KEEP = 5
+
+Debug.KEEP = KEEP
+
+local function label(slotId)
+    local slot = Core and Core.SlotById(slotId)
+    return slot and slot.label or ("slot " .. tostring(slotId))
+end
+
+-- What a set stores for one slot, in words that keep the three states apart. They are the states the
+-- whole planner turns on: an item to put on, a deliberate empty, and no opinion at all.
+local function stored(value)
+    if value == false then return "(empty)" end
+    if value == nil then return "(not named)" end
+    return tostring(value)
+end
+
+--- The dump, as lines. PURE — see Tests/debug_test.lua.
+--
+-- Everything is stated, including the absences: a slot with nothing in it prints "(nothing)" rather
+-- than being left out, because "the dump did not mention the off hand" and "the off hand is empty"
+-- are indistinguishable to the reader and only one of them is a fact.
+function Debug.Report(world)
+    world = world or {}
+    local out = {}
+    local function add(fmt, ...)
+        out[#out + 1] = select("#", ...) > 0 and string.format(fmt, ...) or fmt
+    end
+
+    -- Which build produced this. First, because a dump from a stale deploy is worse than no dump —
+    -- it sends the reader hunting for a bug in source the client never loaded (see UI-15).
+    add("Kitbag dump — %s", tostring(world.when))
+    add("addon %s | %s | interface %s",
+        tostring(world.version), tostring(world.flavour), tostring(world.interface))
+    if world.character then add("character: %s", tostring(world.character)) end
+    add("bank open: %s", tostring(world.bankOpen))
+
+    -- The world the planner was handed. Every slot in slot order, present or not.
+    add("")
+    add("WORN")
+    for _, s in ipairs(Core and Core.SLOTS or {}) do
+        local key = world.worn and world.worn[s.id]
+        add("  %-12s %2d: %s", s.label, s.id, key and tostring(key) or "(nothing)")
+    end
+
+    add("")
+    add("BAGS")
+    if not world.bags or #world.bags == 0 then
+        add("  (not read)")
+    else
+        for _, bag in ipairs(world.bags) do
+            -- family is why a bag with room still refuses a helmet, so it is dumped beside the count
+            -- rather than folded into a single "free slots" total.
+            add("  bag %s: %s free, family %s",
+                tostring(bag.id), tostring(bag.free), tostring(bag.family))
+        end
+    end
+
+    -- Sorted, so two dumps differ only where the world differed. pairs() order would make every
+    -- line look changed and hide the one that did.
+    local sets = {}
+    for _, set in ipairs(world.sets or {}) do sets[#sets + 1] = set end
+    table.sort(sets, function(a, b) return tostring(a.name) < tostring(b.name) end)
+
+    for _, set in ipairs(sets) do
+        add("")
+        add('set "%s"%s', tostring(set.name),
+            set.parent and (" — inherits " .. tostring(set.parent)) or "")
+
+        -- Only the slots the set names, in slot order. A set is a patch, not an outfit, so listing
+        -- the nineteen it says nothing about would bury the two it does.
+        local named = false
+        for _, s in ipairs(Core and Core.SLOTS or {}) do
+            local value = set.slots and set.slots[s.id]
+            if value ~= nil then
+                named = true
+                add("  %s = %s", s.label, stored(value))
+            end
+        end
+        if not named then add("  (names no slots — an empty set)") end
+
+        local plan = set.plan
+        if not plan then
+            add("  plan: (none — it could not be built)")
+        else
+            add("  plan: %d action(s), needs %s bag slot(s), blocked: %s",
+                #(plan.actions or {}), tostring(plan.needsBagSlots or 0), tostring(plan.blocked))
+            for i, action in ipairs(plan.actions or {}) do
+                add("    %d. %s -> %s%s", i, tostring(action.kind), label(action.to),
+                    action.key and ("  " .. tostring(action.key)) or "")
+            end
+            for _, m in ipairs(plan.missing or {}) do
+                add("    missing: %s  %s  (%s)", label(m.slot), tostring(m.key),
+                    m.where or "not found anywhere")
+            end
+        end
+    end
+
+    return out
+end
+
+-- ---------------------------------------------------------------------------
+-- Reading the client (the part that is not pure)
+-- ---------------------------------------------------------------------------
+
+--- Read the world and hand it to Report. Everything the planner sees, from ONE reading, so the dump
+--- cannot show a set planned against bags that had already changed by the time the next set was read.
+function Debug.Capture()
+    local Sets, Inventory, Compat = Kitbag.Sets, Kitbag.Inventory, Kitbag.Compat
+
+    local world = {
+        when = date("%Y-%m-%d %H:%M:%S"),
+        version = GetAddOnMetadata and GetAddOnMetadata("Kitbag", "Version") or
+            (C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata("Kitbag", "Version")),
+        flavour = Compat and (Compat.IS_MAINLINE and "Retail" or "Classic"),
+        interface = select(4, GetBuildInfo()),
+        -- The same key the DB files this character's sets under, not a second spelling of it: a dump
+        -- that names the character differently from the bucket it read is a false lead.
+        character = Compat and Compat.CharacterKey(),
+        bankOpen = Inventory and Inventory.IsBankOpen(),
+        worn = Inventory and Inventory.Equipped(),
+        bags = Inventory and Inventory.Bags(),
+        sets = {},
+    }
+
+    for _, name in ipairs(Sets and Sets.Names() or {}) do
+        local plan, set = Sets.Preview(name)
+        world.sets[#world.sets + 1] = {
+            name = name,
+            parent = Sets.ParentOf(name),
+            -- The RESOLVED slots: what the set will actually put on, parent included. The stored
+            -- delta alone would show a child as almost empty and send the reader after a set that
+            -- looks broken and is not.
+            slots = set and set.slots,
+            plan = plan,
+        }
+    end
+
+    return Debug.Report(world)
+end
+
+--- Take a dump and keep it in SavedVariables. Returns how many are now stored.
+--
+-- Written into the DB rather than printed: the chat frame truncates, scrolls away, and cannot be
+-- read by anyone who is not sitting at the machine. The file survives all three.
+function Debug.Dump()
+    local db = Kitbag.db
+    if not db then return 0 end
+
+    db.dumps = db.dumps or {}
+    table.insert(db.dumps, 1, Debug.Capture())
+    while #db.dumps > KEEP do table.remove(db.dumps) end
+    return #db.dumps
+end
+
+--- Throw the dumps away. They are the only part of the DB that is pure noise once read.
+function Debug.Clear()
+    local count = Kitbag.db and Kitbag.db.dumps and #Kitbag.db.dumps or 0
+    if Kitbag.db then Kitbag.db.dumps = nil end
+    return count
+end
+
+-- ---------------------------------------------------------------------------
+-- The panel
+-- ---------------------------------------------------------------------------
+--
+-- Buttons rather than a slash command, because a dump is asked for when something has just gone
+-- wrong and the player is mid-fight with a bug — that is the worst moment to be typing an exact
+-- incantation. The panel also has room to say what happens NEXT, which a chat line does not: a dump
+-- that is never flushed to disk helps nobody, and /reload is the step that flushes it.
+
+local frame
+
+local function status()
+    local count = Kitbag.db and Kitbag.db.dumps and #Kitbag.db.dumps or 0
+    if count == 0 then return "No dumps stored." end
+    return string.format("%d dump(s) stored — |cffffd100/reload|r to write them to disk.", count)
+end
+
+local function build()
+    frame = CreateFrame("Frame", "KitbagDebugFrame", UIParent, "BasicFrameTemplateWithInset")
+    frame:SetSize(420, 210)
+    frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+    frame:SetMovable(true)
+    frame:EnableMouse(true)
+    frame:RegisterForDrag("LeftButton")
+    frame:SetScript("OnDragStart", frame.StartMoving)
+    frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
+    frame:SetClampedToScreen(true)
+    -- Above the main window, which is where the bug being dumped usually is. See KitbagUI's note.
+    frame:SetFrameStrata("DIALOG")
+    frame:SetToplevel(true)
+    frame:Hide()
+    tinsert(UISpecialFrames, "KitbagDebugFrame")
+
+    frame.title = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    frame.title:SetPoint("TOP", frame, "TOP", 0, -5)
+    frame.title:SetText("Kitbag — debug")
+
+    frame.blurb = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    frame.blurb:SetPoint("TOPLEFT", frame, "TOPLEFT", 16, -34)
+    frame.blurb:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -16, -34)
+    frame.blurb:SetJustifyH("LEFT")
+    frame.blurb:SetText("Dump takes a full reading of your gear, bags, every set and the plan " ..
+        "each one would run. Nothing leaves your machine — it is written into Kitbag's saved " ..
+        "variables, which the game flushes to disk on |cffffd100/reload|r or logout.")
+
+    frame.where = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    frame.where:SetPoint("TOPLEFT", frame.blurb, "BOTTOMLEFT", 0, -10)
+    frame.where:SetPoint("TOPRIGHT", frame.blurb, "BOTTOMRIGHT", 0, -10)
+    frame.where:SetJustifyH("LEFT")
+    frame.where:SetText("WTF\\Account\\<ACCOUNT>\\SavedVariables\\Kitbag.lua")
+
+    frame.status = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    frame.status:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 16, 46)
+
+    local dump = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    dump:SetSize(150, 22)
+    dump:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 16, 14)
+    dump:SetText("Dump everything")
+    dump:SetScript("OnClick", function()
+        local count = Debug.Dump()
+        frame.status:SetText(status())
+        Kitbag.Sets.Say("dumped. |cffffd100/reload|r to write it to disk (%d stored).", count)
+    end)
+
+    -- Reload from the panel, because the dump is worthless until the file is written and the step is
+    -- easy to forget when the reason you opened this was that something else was going wrong.
+    local reload = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    reload:SetSize(110, 22)
+    reload:SetPoint("LEFT", dump, "RIGHT", 6, 0)
+    reload:SetText("Dump + reload")
+    reload:SetScript("OnClick", function()
+        Debug.Dump()
+        ReloadUI()
+    end)
+
+    local clear = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    clear:SetSize(110, 22)
+    clear:SetPoint("LEFT", reload, "RIGHT", 6, 0)
+    clear:SetText("Clear")
+    clear:SetScript("OnClick", function()
+        Debug.Clear()
+        frame.status:SetText(status())
+    end)
+
+    return frame
+end
+
+--- Open or close the panel.
+function Debug.Toggle()
+    if not frame then build() end
+    if frame:IsShown() then
+        frame:Hide()
+    else
+        frame.status:SetText(status())
+        frame:Show()
+    end
+end
+
+Kitbag.Debug = Debug
+return Debug

@@ -20,6 +20,7 @@ KitbagDB.lua
 KitbagInventory.lua
 KitbagEquip.lua
 KitbagSets.lua
+KitbagDebug.lua
 KitbagEvents.lua
 KitbagIcons.lua
 KitbagPicker.lua
