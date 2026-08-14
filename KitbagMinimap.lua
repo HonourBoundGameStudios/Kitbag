@@ -52,13 +52,27 @@ function Minimap_.Create()
 
     button:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
 
-    button:SetScript("OnClick", function() UI.Toggle() end)
+    -- Without this the frame only hears LeftButtonUp, so the right-click below would never fire.
+    button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+
+    button:SetScript("OnClick", function(_, click)
+        if click == "RightButton" then
+            -- Looked up at call time, not captured at load: KitbagOptions loads *after* this file
+            -- (it drives the button through APPLY), so the two cannot both hold a load-time local.
+            Kitbag.Options.Toggle()
+        else
+            UI.Toggle()
+        end
+    end)
     button:SetScript("OnDragStart", function(self) self:SetScript("OnUpdate", onDragUpdate) end)
     button:SetScript("OnDragStop", function(self) self:SetScript("OnUpdate", nil) end)
     button:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
         GameTooltip:AddLine("Kitbag")
-        GameTooltip:AddLine("Click to open. Drag to move.", 1, 1, 1)
+        GameTooltip:AddLine("Left-click to open. Drag to move.", 1, 1, 1)
+        -- The hide switch lives in that panel, and a button nobody knows is togglable is a button
+        -- people uninstall the addon over.
+        GameTooltip:AddLine("Right-click for options.", 1, 1, 1)
         GameTooltip:Show()
     end)
     button:SetScript("OnLeave", function() GameTooltip:Hide() end)
