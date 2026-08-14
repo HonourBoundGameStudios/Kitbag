@@ -16,9 +16,19 @@ local Inventory = Kitbag.Inventory
 
 local Picker = {}
 
-local COLUMNS, ROWS = 6, 5
-local CELL = 40
+-- Sized to sit BESIDE the doll rather than over it. The panel is a momentary thing you open, click
+-- once and dismiss, so every pixel it spends on itself is one it takes from the window it is
+-- explaining. Four rows of five at the inspector's own cell pitch is a page of twenty, which covers
+-- every slot but the rings on a well-travelled character — and those scroll.
+local COLUMNS, ROWS = 5, 4
+local CELL = 32
 local PER_PAGE = COLUMNS * ROWS
+
+local PAD = 6
+local GRID_WIDTH = COLUMNS * CELL
+-- FauxScrollFrameTemplate hangs its bar OUTSIDE the scroll frame's right edge, so the strip is not
+-- optional: without it the bar lands on the last column of icons.
+local BAR_STRIP = 20
 
 local frame, buttons, scroll
 local current                 -- { set =, slot = <record>, choices = , key = } while open
@@ -55,11 +65,16 @@ local function onButtonClick(self)
 end
 
 local function build()
-    frame = CreateFrame("Frame", "KitbagPickerFrame", UIParent, "BasicFrameTemplateWithInset")
-    -- The width carries the grid plus a strip on the right for the scroll bar, which
-    -- FauxScrollFrameTemplate hangs OUTSIDE the scroll frame's right edge. Without the strip the bar
-    -- lands on the last column of icons, which reads as a dead column rather than as a layout bug.
-    frame:SetSize(COLUMNS * CELL + 62, ROWS * CELL + 96)
+    -- A plain frame with a one-pixel border, NOT BasicFrameTemplateWithInset. That template spends
+    -- roughly twenty pixels a side on stone and a header bar this panel has no use for, which on
+    -- something the size of twenty icons is more chrome than content. The border here is the idiom
+    -- the inspector's own cells already use — a tinted plate a pixel proud of a dark ground — so it
+    -- is thin by construction, costs two textures, and cannot fail to load on any flavour.
+    frame = CreateFrame("Frame", "KitbagPickerFrame", UIParent)
+    -- Height is the sum of what is actually in it: the title strip, the grid, the count line and the
+    -- row of buttons, plus the padding. Measured rather than rounded up, because slack at the bottom
+    -- of a small panel reads as a missing control.
+    frame:SetSize(PAD + GRID_WIDTH + BAR_STRIP + PAD, ROWS * CELL + 66)
     frame:SetMovable(true)
     frame:EnableMouse(true)
     frame:RegisterForDrag("LeftButton")
@@ -73,12 +88,37 @@ local function build()
     frame:Hide()
     tinsert(UISpecialFrames, "KitbagPickerFrame")
 
-    frame.title = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    frame.title:SetPoint("TOP", frame, "TOP", 0, -5)
+    frame.border = frame:CreateTexture(nil, "BACKGROUND")
+    frame.border:SetAllPoints()
+    frame.border:SetTexture("Interface\\Buttons\\WHITE8X8")
+    frame.border:SetVertexColor(0.35, 0.35, 0.35, 1)
+
+    frame.ground = frame:CreateTexture(nil, "BORDER")
+    frame.ground:SetPoint("TOPLEFT", 1, -1)
+    frame.ground:SetPoint("BOTTOMRIGHT", -1, 1)
+    frame.ground:SetTexture("Interface\\Buttons\\WHITE8X8")
+    frame.ground:SetVertexColor(0.04, 0.04, 0.04, 0.94)
+
+    -- Left-aligned and width-limited rather than centred: a long set name should run out of room
+    -- against the close button instead of sliding out from under it.
+    frame.title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    frame.title:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD, -PAD)
+    frame.title:SetWidth(GRID_WIDTH + BAR_STRIP - 16)
+    frame.title:SetJustifyH("LEFT")
+    -- Set names are whatever the player typed. Wrapping is the wrong answer for a one-line strip —
+    -- a second line would land on the first row of icons — so a long one is clipped instead.
+    if frame.title.SetWordWrap then frame.title:SetWordWrap(false) end
+
+    -- Esc closes it and so does picking anything, but a panel with no visible way out reads as
+    -- stuck. Scaled well down from the template's default, which is itself the size of four icons.
+    local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
+    close:SetSize(20, 20)
+    close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -2, -2)
+    close:SetScript("OnClick", function() frame:Hide() end)
 
     local grid = CreateFrame("Frame", nil, frame)
-    grid:SetPoint("TOPLEFT", frame, "TOPLEFT", 14, -30)
-    grid:SetSize(COLUMNS * CELL, ROWS * CELL)
+    grid:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD, -20)
+    grid:SetSize(GRID_WIDTH, ROWS * CELL)
 
     buttons = {}
     for i = 1, PER_PAGE do
@@ -88,10 +128,12 @@ local function build()
         button:SetPoint("TOPLEFT", grid, "TOPLEFT", column * CELL, -row * CELL)
 
         -- The set's current pick gets a gold plate a pixel proud of the icon — the same "the border
-        -- IS the state" idiom the inspector's cells use, so the two panels read alike.
+        -- IS the state" idiom the inspector's cells use, so the two panels read alike. One pixel and
+        -- not two: at this pitch a two-pixel plate touches its neighbour and the marked icon reads
+        -- as a gap in the grid rather than as a selection.
         button.mark = button:CreateTexture(nil, "BACKGROUND")
-        button.mark:SetPoint("TOPLEFT", -2, 2)
-        button.mark:SetPoint("BOTTOMRIGHT", 2, -2)
+        button.mark:SetPoint("TOPLEFT", -1, 1)
+        button.mark:SetPoint("BOTTOMRIGHT", 1, -1)
         button.mark:SetTexture("Interface\\Buttons\\WHITE8X8")
         button.mark:SetVertexColor(1, 0.82, 0, 1)
         button.mark:Hide()
@@ -105,8 +147,8 @@ local function build()
         buttons[i] = button
     end
 
-    -- One scroll row is one row of icons, not one icon: a six-wide grid that scrolls by a single
-    -- cell moves its contents a sixth of a row and looks broken.
+    -- One scroll row is one row of icons, not one icon: a five-wide grid that scrolls by a single
+    -- cell moves its contents a fifth of a row and looks broken.
     scroll = CreateFrame("ScrollFrame", "KitbagPickerScroll", frame, "FauxScrollFrameTemplate")
     scroll:SetPoint("TOPLEFT", grid, "TOPLEFT", 0, 0)
     scroll:SetPoint("BOTTOMRIGHT", grid, "BOTTOMRIGHT", 0, 0)
@@ -115,31 +157,43 @@ local function build()
     end)
 
     frame.note = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    frame.note:SetPoint("TOPLEFT", grid, "BOTTOMLEFT", 0, -8)
-    frame.note:SetWidth(COLUMNS * CELL)
+    frame.note:SetPoint("TOPLEFT", grid, "BOTTOMLEFT", 0, -4)
+    frame.note:SetWidth(GRID_WIDTH)
     frame.note:SetJustifyH("LEFT")
 
     -- The two answers that are not an item, and they are genuinely different answers. "Empty" is a
-    -- deliberate instruction to take off whatever is there — a caster set that wants no shield. "Not
-    -- in this set" is the absence of an instruction, so the slot keeps whatever you have on. Storing
+    -- deliberate instruction to take off whatever is there — a caster set that wants no shield.
+    -- "Ignore" is the absence of an instruction, so the slot keeps whatever you have on. Storing
     -- them the same way is the bug that makes a set saved bare-headed refuse to remove your helmet.
-    frame.empty = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    frame.empty:SetSize(COLUMNS * CELL / 2 - 3, 22)
-    frame.empty:SetPoint("TOPLEFT", frame.note, "BOTTOMLEFT", 0, -6)
-    frame.empty:SetText("Wear nothing")
-    frame.empty:SetScript("OnClick", function()
-        Sets.SetSlot(current.set, current.slot.id, false)
-        frame:Hide()
-    end)
+    --
+    -- One word each, because the panel is narrower than the sentence — so the sentence goes in a
+    -- tooltip, where it can say the whole thing rather than a truncated half of it.
+    local function bottomButton(text, tip, key)
+        local button = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+        button:SetSize((GRID_WIDTH - 4) / 2, 20)
+        button:SetText(text)
+        button:SetScript("OnClick", function()
+            Sets.SetSlot(current.set, current.slot.id, key)
+            frame:Hide()
+        end)
+        button:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:AddLine(text, 1, 0.82, 0)
+            GameTooltip:AddLine(tip, 0.8, 0.8, 0.8, true)
+            GameTooltip:Show()
+        end)
+        button:SetScript("OnLeave", onButtonLeave)
+        return button
+    end
 
-    frame.drop = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    frame.drop:SetSize(COLUMNS * CELL / 2 - 3, 22)
-    frame.drop:SetPoint("LEFT", frame.empty, "RIGHT", 6, 0)
-    frame.drop:SetText("Leave alone")
-    frame.drop:SetScript("OnClick", function()
-        Sets.SetSlot(current.set, current.slot.id, nil)
-        frame:Hide()
-    end)
+    frame.empty = bottomButton("Empty",
+        "The set takes off whatever is in this slot.", false)
+    frame.empty:SetPoint("TOPLEFT", frame.note, "BOTTOMLEFT", 0, -4)
+
+    frame.drop = bottomButton("Ignore",
+        "The set has no opinion about this slot, so you keep wearing whatever you have on. " ..
+        "For a set that inherits, this hands the slot back to its parent.", nil)
+    frame.drop:SetPoint("LEFT", frame.empty, "RIGHT", 4, 0)
 
     return frame
 end
@@ -173,11 +227,12 @@ function Picker.Refresh()
         end
     end
 
+    -- Short by necessity: the line is one grid wide, and anything longer wraps onto the buttons
+    -- beneath it rather than being truncated.
     if #choices == 0 then
-        frame.note:SetText("|cff808080You own nothing else that fits this slot.|r")
+        frame.note:SetText("|cff808080Nothing you own fits here.|r")
     else
-        frame.note:SetText(string.format("%d item%s fit this slot.",
-            #choices, #choices == 1 and "" or "s"))
+        frame.note:SetText(string.format("%d item%s fit.", #choices, #choices == 1 and "" or "s"))
     end
 end
 
