@@ -35,9 +35,13 @@ function Minimap_.Create()
     button:SetMovable(true)
     button:RegisterForDrag("LeftButton")
 
+    -- 17x17 centred on (0, 1), not 20x20 on (-1, 1). The hole in MiniMap-TrackingBorder is round and
+    -- about 20px across at this size, so a 20px *square* cannot fit in it — it needs 28px of
+    -- diagonal, and the corners it could not fit spilled outside the ring as a black box. These are
+    -- the numbers LibDBIcon uses against the same 31px button and 53px border.
     local icon = button:CreateTexture(nil, "BACKGROUND")
-    icon:SetSize(20, 20)
-    icon:SetPoint("CENTER", -1, 1)
+    icon:SetSize(17, 17)
+    icon:SetPoint("CENTER", 0, 1)
     icon:SetTexture("Interface\\Icons\\INV_Chest_Plate06")
     icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
 
