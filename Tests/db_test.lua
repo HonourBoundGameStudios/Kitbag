@@ -58,6 +58,38 @@ local again = DB.Load(old)
 H.eq(again.chars["Alice - Whitemane"].sets["HEAL"].slots[5], "i:1", "reloading keeps the buckets")
 H.eq(again.schema, DB.SCHEMA, "and does not re-run the migration")
 
+-- The shape of a real report (2026-08-14): two characters were found holding the SAME set, naming
+-- twelve items only one of them owned. Whatever produced it, these are the invariants that make it
+-- impossible now, and they are asserted against the full login sequence rather than a single call —
+-- because the damage needs only one login in the sequence to behave differently from the first.
+--
+-- Note the trap that makes this class of bug so hard to see afterwards: SavedVariables serialises a
+-- shared table TWICE, so two buckets sharing one table in memory come back as two independent copies
+-- on the next load. By the time anyone looks, the evidence of sharing is gone and all that remains is
+-- two sets that drift apart a slot at a time.
+local leak = DB.Load({
+    schema = 1,
+    sets = { ArcaneBuster = { name = "ArcaneBuster", slots = { [3] = "9796:0:0:0:0:0:1805" } } },
+    lastSet = "ArcaneBuster",
+})
+
+local amoondi = DB.Character(leak, "Amoondi - Whitemane")
+H.eq(amoondi.sets.ArcaneBuster.slots[3], "9796:0:0:0:0:0:1805", "the first character adopts the set")
+
+-- Every subsequent login, with a reload between each, exactly as the client does it.
+for _, name in ipairs({ "Verin - Whitemane", "Pobble - Whitemane", "Deller - Whitemane" }) do
+    leak = DB.Load(leak)
+    local bucket = DB.Character(leak, name)
+    H.eq(bucket.sets.ArcaneBuster, nil, name .. " does not receive another character's set")
+end
+
+-- And the adopter still has it, unshared: mutating one bucket must never be visible in another.
+amoondi = DB.Character(leak, "Amoondi - Whitemane")
+amoondi.sets.ArcaneBuster.slots[1] = "10406:0:0:0:0:0:1810"
+H.eq(DB.Character(leak, "Verin - Whitemane").sets.ArcaneBuster, nil,
+    "…and editing the adopter's set does not make it appear elsewhere")
+H.eq(leak.legacy, nil, "legacy is gone for good, not merely emptied")
+
 -- An unnamed bucket would silently merge two characters' gear, which is unrecoverable.
 H.errors(function() DB.Character(fresh, nil) end, "a character key is required")
 H.errors(function() DB.Character(fresh, "") end, "an empty character key is refused")
