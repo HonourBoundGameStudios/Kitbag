@@ -21,7 +21,7 @@ local RulesUI = {}
 local ROW_HEIGHT = 22
 local MAX_ROWS = 8
 
-local frame, rows, hint
+local frame, rows, hint, scroll
 local editor = nil      -- { index = n | nil, set = "…", priority = n, values = { … }, widgets = … }
 
 local function rules() return Kitbag.char.rules end
@@ -255,10 +255,21 @@ local function build()
 
     local list = CreateFrame("Frame", nil, frame)
     list:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -32)
-    list:SetSize(496, MAX_ROWS * ROW_HEIGHT)
+    -- Short of the frame's right edge, to leave the scroll bar its own room. An overlap would put
+    -- the bar on top of every row's X, which reads as a dead button rather than as a layout bug.
+    list:SetSize(476, MAX_ROWS * ROW_HEIGHT)
 
     rows = {}
     for i = 1, MAX_ROWS do rows[i] = createRow(list, i) end
+
+    -- The same FauxScrollFrame the set list uses: the rows stay put and the rules move through them,
+    -- so eight frames serve any number of rules. See the note in KitbagUI.
+    scroll = CreateFrame("ScrollFrame", "KitbagRulesScrollFrame", frame, "FauxScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", list, "TOPLEFT", 0, 0)
+    scroll:SetPoint("BOTTOMRIGHT", list, "BOTTOMRIGHT", 0, 0)
+    scroll:SetScript("OnVerticalScroll", function(self, offset)
+        FauxScrollFrame_OnVerticalScroll(self, offset, ROW_HEIGHT, RulesUI.Refresh)
+    end)
 
     hint = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     hint:SetPoint("TOPLEFT", list, "BOTTOMLEFT", 2, -6)
@@ -354,12 +365,18 @@ function RulesUI.Refresh()
     local report = Events.Explain()
     local names = labels()
 
+    FauxScrollFrame_Update(scroll, #list, MAX_ROWS, ROW_HEIGHT)
+    local offset = FauxScrollFrame_GetOffset(scroll)
+
     for i, row in ipairs(rows) do
-        local rule = list[i]
+        -- Every index below is the rule's own, not the row's: the marker, the [editing] tag and the
+        -- ^ v X buttons all address the list, and off-by-an-offset here would move the wrong rule.
+        local index = i + offset
+        local rule = list[index]
         if rule then
-            row.ruleIndex = i
+            row.ruleIndex = index
             row.enabled:SetChecked(rule.enabled ~= false)
-            local entry = report.considered[i]
+            local entry = report.considered[index]
             local marker = ""
             if entry and entry.matched and report.chosen == rule.set then
                 marker = "|cff40ff40>|r "
@@ -367,7 +384,7 @@ function RulesUI.Refresh()
             local text = string.format("%swear |cffffd100%s|r %s%s |cff808080(%d)|r",
                 marker, rule.set, Rules.Describe(rule, names),
                 rule.restore and ", then put it back" or "", rule.priority or 0)
-            if editor.index == i then text = "|cff8fd3ff[editing]|r " .. text end
+            if editor.index == index then text = "|cff8fd3ff[editing]|r " .. text end
             if rule.enabled == false then text = "|cff808080" .. text .. "|r" end
             row.text:SetText(text)
             row:Show()
@@ -378,9 +395,6 @@ function RulesUI.Refresh()
 
     if #list == 0 then
         hint:SetText("No rules yet. Pick a set below, choose when to wear it, and press Add rule.")
-    elseif #list > MAX_ROWS then
-        hint:SetText(string.format("Showing %d of %d rules. Higher priority wins; ties go to the " ..
-            "rule nearer the top.", MAX_ROWS, #list))
     else
         hint:SetText("Higher priority wins; ties go to the rule nearer the top. " ..
             "Click a rule to edit it, |cff40ff40>|r marks the one that applies now.")
