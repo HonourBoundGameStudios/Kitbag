@@ -533,14 +533,30 @@ local function buildDoll(parent)
     panel.delete:SetSize(140, 24)
     panel.delete:SetPoint("LEFT", panel.equip, "RIGHT", 4, 0)
     panel.delete:SetText("Delete")
+    -- Deleting asks first, in a popup, rather than demanding a modifier nobody can see (BUG-8). The
+    -- guard itself was right — this is the only unrecoverable thing the window does — but it lived
+    -- entirely in a chat line printed AFTER a click that appeared to do nothing, so the button read
+    -- as broken. Shift-click still skips the prompt, for anyone clearing out several at once.
     panel.delete:SetScript("OnClick", function()
         if not selected then return end
         if IsShiftKeyDown() then
             Sets.Delete(selected)
-        else
-            Sets.Say("shift-click to delete |cffffd100%s|r.", selected)
+            return
         end
+        -- The name goes through as `data` for the same reason the overwrite popup does it: the list
+        -- underneath stays live while the question is up, and the answer must apply to the set the
+        -- question NAMED.
+        StaticPopup_Show("KITBAG_DELETE", selected,
+            Sets.DeleteWarning(selected), selected)
     end)
+
+    panel.delete:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:AddLine("Delete the selected set")
+        GameTooltip:AddLine("Asks first. Shift-click to skip the question.", 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    panel.delete:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
     panel.cells = cells
     return panel
@@ -797,6 +813,20 @@ local function build()
         -- The conventional slot for an addon's popup: the first two are what Blizzard's own code
         -- reaches for, and sharing one is how a confirmation ends up answering for a dialog the
         -- player never saw.
+        preferredIndex = 3,
+    }
+
+    -- Deleting a set cannot be undone and there is no other copy of it, so this one asks. Unlike the
+    -- overwrite prompt it fires every time rather than only when something would be lost: there is no
+    -- "harmless delete" the way there is a harmless re-save.
+    StaticPopupDialogs["KITBAG_DELETE"] = {
+        text = "Delete %s?\n\n%s",
+        button1 = DELETE or "Delete",
+        button2 = CANCEL,
+        OnAccept = function(self, name) Sets.Delete(name) end,
+        hideOnEscape = true,
+        whileDead = true,
+        timeout = 0,
         preferredIndex = 3,
     }
 

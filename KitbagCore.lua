@@ -809,5 +809,33 @@ function Core.ScrollOffset(count, rows, offset)
     return offset
 end
 
+--- What deleting a set would cost: { exists = bool, orphans = { <name>, … } }.
+--
+-- Deleting is the one unrecoverable thing the window does, so it asks first — and the question has to
+-- name the consequences rather than just the set. A set with children does not simply vanish: the
+-- children keep working, because Resolve treats a missing parent as contributing nothing, but they
+-- quietly shrink to their own slots. Discovering that by equipping one and getting half an outfit is
+-- exactly the "it half-applied my set" report this addon exists to prevent.
+--
+-- Pure and separate from Sets.Delete for the ParentChoices reason (UI-11): the delete could report
+-- orphans afterwards, but a CONFIRMATION has to know them before it is drawn. One answer, so the
+-- prompt and the deletion cannot disagree about what is about to happen.
+function Core.DeleteImpact(sets, name)
+    local out = { exists = false, orphans = {} }
+    if type(sets) ~= "table" or type(name) ~= "string" then return out end
+    if not sets[name] then return out end
+
+    out.exists = true
+    for other, set in pairs(sets) do
+        -- Only downwards: a child being deleted takes nothing with it, and getting the direction
+        -- backwards would warn about the parent every time a child was removed.
+        if type(set) == "table" and set.parent == name then
+            out.orphans[#out.orphans + 1] = other
+        end
+    end
+    table.sort(out.orphans)
+    return out
+end
+
 Kitbag.Core = Core
 return Core

@@ -860,4 +860,45 @@ H.eq(C.ScrollOffset(nil, 8, 4), 0, "no count at all reads as an empty list")
 H.eq(C.ScrollOffset(20, nil, 4), 0, "no row count reads as no room, so nothing is indexed")
 H.eq(C.ScrollOffset(20, 8, 4.7), 4, "a fractional offset is floored, since it indexes a table")
 
+-- ---------------------------------------------------------------------------
+-- DeleteImpact (BUG-8)
+-- ---------------------------------------------------------------------------
+--
+-- Deleting a set is the one unrecoverable thing the window does, so it asks first — and the question
+-- has to name the CONSEQUENCES, not just the set. A set with children does not simply vanish: the
+-- children keep working but quietly shrink to their own slots, which is discovered later by equipping
+-- one and finding half an outfit.
+--
+-- Same shape as ParentChoices (UI-11): Sets.Delete could report the orphans afterwards, but a
+-- confirmation has to know them BEFORE it is drawn. One pure answer, so the prompt and the delete
+-- cannot disagree about what is about to happen.
+
+local family = {
+    Base = { name = "Base", slots = { [1] = HELM } },
+    Fire = { name = "Fire", parent = "Base", slots = { [16] = SWORD } },
+    Frost = { name = "Frost", parent = "Base", slots = { [16] = TWOHAND } },
+    Alone = { name = "Alone", slots = { [5] = CHEST } },
+}
+
+local impact = C.DeleteImpact(family, "Base")
+H.eq(impact.exists, true, "deleting a set that is there is possible")
+H.eq(#impact.orphans, 2, "every set that inherits from it is counted")
+H.eq(impact.orphans[1], "Fire", "…named, so the prompt can list them")
+H.eq(impact.orphans[2], "Frost", "…in name order, so the prompt reads the same twice running")
+
+local lonely = C.DeleteImpact(family, "Alone")
+H.eq(lonely.exists, true, "a set with no children is still deletable")
+H.eq(#lonely.orphans, 0, "…and orphans nobody, so the prompt stays short")
+
+-- A child being deleted takes nothing with it — the direction of the relationship matters, and
+-- getting it backwards would warn about the parent every time a child was removed.
+H.eq(#C.DeleteImpact(family, "Fire").orphans, 0, "deleting a CHILD orphans nothing")
+
+local missing = C.DeleteImpact(family, "Nope")
+H.eq(missing.exists, false, "a set that is not there reports so rather than erroring")
+H.eq(#missing.orphans, 0, "…and orphans nothing")
+
+H.eq(C.DeleteImpact(nil, "Base").exists, false, "no sets at all is not a crash")
+H.eq(C.DeleteImpact(family, nil).exists, false, "no name at all is not a crash")
+
 H.done()

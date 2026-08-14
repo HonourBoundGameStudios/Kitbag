@@ -171,6 +171,17 @@ function Sets.Inherit(name, parentName)
     return true
 end
 
+--- What the confirmation says under "Delete <name>?" — the consequences, in a sentence (BUG-8).
+--
+-- Empty when there are none, so the prompt does not pad itself with reassurance nobody needs; a
+-- dialog that always has a paragraph in it is a dialog people stop reading.
+function Sets.DeleteWarning(name)
+    local impact = Core.DeleteImpact(char().sets, name)
+    if #impact.orphans == 0 then return "This cannot be undone." end
+    return string.format("%s inherited from it and will keep only their own slots.\n" ..
+        "This cannot be undone.", table.concat(impact.orphans, ", "))
+end
+
 function Sets.Delete(name)
     if not char().sets[name] then
         say("no set called |cffffd100%s|r.", tostring(name))
@@ -178,12 +189,9 @@ function Sets.Delete(name)
     end
     -- Children keep working — Core.Resolve treats a vanished parent as contributing nothing — but
     -- they quietly become smaller sets than they were, so say so rather than let it be discovered
-    -- by equipping one.
-    local orphans = {}
-    for other, set in pairs(char().sets) do
-        if set.parent == name then orphans[#orphans + 1] = other end
-    end
-    table.sort(orphans)
+    -- by equipping one. Read through the same pure answer the confirmation used, so the prompt and
+    -- the deletion cannot name different sets.
+    local orphans = Core.DeleteImpact(char().sets, name).orphans
 
     char().sets[name] = nil
     if char().lastSet == name then char().lastSet = nil end
