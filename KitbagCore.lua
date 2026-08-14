@@ -470,7 +470,7 @@ function Core.Choices(slotId, equipped, where, locations, exclude)
     local byKey = {}
     for key, at in pairs(where) do
         if key ~= exclude and fits(key) then
-            byKey[key] = { key = key, bag = at.bag, slot = at.slot }
+            byKey[key] = { key = key, bag = at.bag, slot = at.slot, bank = at.bank }
         end
     end
     for id, key in pairs(equipped) do

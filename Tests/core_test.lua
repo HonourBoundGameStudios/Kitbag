@@ -614,6 +614,15 @@ H.eq(choices[1].bag, 0, "…each carrying where it can be found")
 H.eq(choices[2].key, RING_B, "…and the worn one is in the list")
 H.eq(choices[2].worn, 11, "…marked with the slot it is worn in, so it can be shown as such")
 
+-- A set may perfectly well name an item that is sitting in the bank — the set is a list of what to
+-- wear, not a promise about where things are, and the inspector already says "in your bank" when it
+-- comes to equipping it. So the editor offers banked items and has to be able to mark them, which
+-- means the flag has to survive the trip out of the bag scan.
+local banked = C.Choices(1, {}, { [HELM] = { bag = -1, slot = 2, bank = true } },
+    { [HELM] = "INVTYPE_HEAD" })
+H.eq(#banked, 1, "an item in the bank is still something a set can name")
+H.eq(banked[1].bank, true, "…and says so, so the picker can mark it rather than promise it is to hand")
+
 H.eq(#C.Choices(2, {}, wardrobe, wardrobeLoc), 0, "a slot you own nothing for offers nothing")
 H.eq(#C.Choices(17, {}, wardrobe, wardrobeLoc), 1, "the off hand offers the shield")
 H.eq(#C.Choices(nil, {}, wardrobe, wardrobeLoc), 0, "no slot asked about offers nothing, not an error")
