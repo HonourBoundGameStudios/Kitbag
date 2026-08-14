@@ -296,6 +296,29 @@ Verify.CHECKS = {
         end,
     },
     {
+        id = "icon-picker", item = "VERIFY-2", label = "Set icon picker opens",
+        run = function()
+            local Icons, Sets = Kitbag.Icons, Kitbag.Sets
+            if not Icons or not Sets then return nil, "KitbagIcons is not loaded" end
+            if not Kitbag.char then return nil, "no character bucket yet — not logged in" end
+            local name = (Sets.Names() or {})[1]
+            if not name then return nil, "no sets yet — make one and run this again" end
+
+            Icons.Open(name)
+            local frame = _G.KitbagIconFrame
+            if not frame then return false, "KitbagIconFrame was never created" end
+
+            local shown = frame:IsShown()
+            local detail = string.format("KitbagIconFrame  %dx%d  strata %s",
+                math.floor(frame:GetWidth() + 0.5), math.floor(frame:GetHeight() + 0.5),
+                tostring(frame:GetFrameStrata()))
+            frame:Hide()
+
+            if not shown then return false, "the icon picker was built but did not show" end
+            return true, detail
+        end,
+    },
+    {
         id = "overwrite-popup", item = "VERIFY-12", label = "Overwrite confirmation draws",
         -- The popup must come up ABOVE the window that raised it. Blizzard's StaticPopup is not a
         -- child of ours, so the addon's own strata discipline does not cover it — which is exactly
