@@ -243,6 +243,9 @@ local function build()
     frame:SetScript("OnDragStart", frame.StartMoving)
     frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
     frame:SetClampedToScreen(true)
+    -- Above the main window, which is what opens it. See the strata note in KitbagUI.
+    frame:SetFrameStrata("DIALOG")
+    frame:SetToplevel(true)
     frame:Hide()
     tinsert(UISpecialFrames, "KitbagRulesFrame")
 

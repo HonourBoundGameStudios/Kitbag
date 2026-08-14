@@ -550,6 +550,16 @@ local function build()
     frame:SetScript("OnDragStart", frame.StartMoving)
     frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
     frame:SetClampedToScreen(true)
+    -- Kitbag's windows were all in the default MEDIUM strata with no level of their own, which is
+    -- the same shelf Blizzard's character sheet and bags sit on: they interleaved with the game's
+    -- UI and with each other by creation order, which is not an order anyone can predict. One
+    -- deliberate stack instead — the main window above the game's frames, the panels it opens
+    -- (rules, options, icon picker) in DIALOG above that. `SetToplevel` is what raises a window
+    -- when it is clicked, so two Kitbag windows in the same strata cannot get stuck the wrong way
+    -- round. This also matters for the character preview: a 3D model is drawn in its strata's own
+    -- pass, and anything sitting above it hides it completely rather than partially.
+    frame:SetFrameStrata("HIGH")
+    frame:SetToplevel(true)
     frame:Hide()
 
     -- Esc closes it, like every other panel in the game.

@@ -55,6 +55,7 @@ local function build()
     frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
     frame:SetClampedToScreen(true)
     frame:SetFrameStrata("DIALOG")   -- it is opened from the set list and must sit above it
+    frame:SetToplevel(true)          -- and above the other DIALOG panels once clicked
     frame:Hide()
     tinsert(UISpecialFrames, "KitbagIconFrame")
 
