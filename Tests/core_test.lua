@@ -38,6 +38,17 @@ H.eq(C.ItemKey(nil), nil, "ItemKey(nil) is nil, not an error — an empty slot h
 H.eq(C.ItemKey(""), nil, "ItemKey on an empty string is nil")
 H.eq(C.ItemId("19019:2504:0:0:0:0:0"), 19019, "ItemId recovers the numeric id from a key")
 
+-- A tooltip built from the id alone is the base item: no enchant, no gems, and — the one that shows
+-- up as "my stats are missing" — no random suffix. "of the Eagle" IS the stats, so a preview of
+-- item:12345 shows a belt with nothing on it. The key already carries all of it; hand the whole
+-- thing to SetHyperlink.
+H.eq(C.ItemLink("19019:2504:0:0:0:0:0"), "item:19019:2504:0:0:0:0:0",
+    "ItemLink keeps the enchant, so the preview shows the enchant line")
+H.eq(C.ItemLink("7073:0:0:0:0:0:-19"), "item:7073:0:0:0:0:0:-19",
+    "ItemLink keeps the random suffix, which on a Classic drop IS the stats")
+H.eq(C.ItemLink(nil), nil, "ItemLink(nil) is nil — an empty slot has no tooltip")
+H.eq(C.ItemLink("not an item"), nil, "ItemLink refuses a string that is not a key")
+
 -- A colon-delimited body with no "item:" prefix. Two things arrive in this shape and both matter:
 --
 --   * ItemKey's OWN output. Feeding a stored key back through must return it unchanged, or any code

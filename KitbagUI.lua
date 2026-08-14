@@ -255,7 +255,7 @@ local function onCellEnter(self)
     if cell.key then
         -- The real item tooltip where there is a real item, so stats and enchants read exactly as
         -- they do everywhere else in the game.
-        GameTooltip:SetHyperlink("item:" .. tostring(Core.ItemId(cell.key)))
+        GameTooltip:SetHyperlink(Core.ItemLink(cell.key))
         GameTooltip:AddLine(" ")
     else
         GameTooltip:AddLine(cell.slot.label, 1, 0.82, 0)

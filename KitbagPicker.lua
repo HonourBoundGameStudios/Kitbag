@@ -43,7 +43,7 @@ end
 
 local function onButtonEnter(self)
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-    GameTooltip:SetHyperlink("item:" .. tostring(Core.ItemId(self.entry.key)))
+    GameTooltip:SetHyperlink(Core.ItemLink(self.entry.key))
     -- Where it is, in the words the rest of the window uses. An item in the bank can be named by a
     -- set perfectly well; it just cannot be put on until you are standing at one.
     if self.entry.bank then

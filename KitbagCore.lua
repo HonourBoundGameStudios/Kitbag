@@ -88,10 +88,22 @@ function Core.ItemKey(link)
     return string.format("%d:%d:%d:%d:%d:%d:%d", id, num(2), num(3), num(4), num(5), num(6), num(7))
 end
 
---- The numeric item id back out of a key — for GetItemInfo, icons, and tooltips.
+--- The numeric item id back out of a key — for GetItemInfo and icons.
 function Core.ItemId(key)
     if type(key) ~= "string" then return nil end
     return tonumber(string.match(key, "^(%d+)"))
+end
+
+--- The key as a hyperlink the client will build a tooltip from.
+--
+-- "item:" .. ItemId(key) is the base item and nothing else: no enchant, no gems, and no random
+-- suffix. On a Classic drop the suffix IS the stats — "of the Eagle" is not a name, it is the
+-- +Intellect — so an id-only preview shows an item with an empty stat block and looks like a bug in
+-- the addon. The key already carries every field the link needs, so pass the whole thing.
+function Core.ItemLink(key)
+    if type(key) ~= "string" then return nil end
+    if not Core.ItemId(key) then return nil end
+    return "item:" .. key
 end
 
 -- ---------------------------------------------------------------------------

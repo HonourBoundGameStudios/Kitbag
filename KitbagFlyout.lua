@@ -45,7 +45,7 @@ end
 
 local function onButtonEnter(self)
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-    GameTooltip:SetHyperlink("item:" .. tostring(Core.ItemId(self.key)))
+    GameTooltip:SetHyperlink(Core.ItemLink(self.key))
     GameTooltip:Show()
 end
 
