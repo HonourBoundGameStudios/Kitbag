@@ -11,6 +11,7 @@
 
 Kitbag = Kitbag or {}
 
+local Core = Kitbag.Core
 local Rules = Kitbag.Rules
 local Sets = Kitbag.Sets
 local Events = Kitbag.Events
@@ -366,7 +367,10 @@ function RulesUI.Refresh()
     local names = labels()
 
     FauxScrollFrame_Update(scroll, #list, MAX_ROWS, ROW_HEIGHT)
-    local offset = FauxScrollFrame_GetOffset(scroll)
+    -- Clamped against the list as it is NOW: deleting rules while scrolled down leaves the bar
+    -- reporting an offset the shortened list cannot support, and every row would index past the end
+    -- and draw nothing. A blank rule list reads as "my rules are gone", not as "scrolled too far".
+    local offset = Core.ScrollOffset(#list, MAX_ROWS, FauxScrollFrame_GetOffset(scroll))
 
     for i, row in ipairs(rows) do
         -- Every index below is the rule's own, not the row's: the marker, the [editing] tag and the

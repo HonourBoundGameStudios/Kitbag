@@ -847,7 +847,9 @@ function UI.Refresh()
     if not exists then selected = names[1] end
 
     FauxScrollFrame_Update(scroll, #names, MAX_ROWS, ROW_HEIGHT)
-    local offset = FauxScrollFrame_GetOffset(scroll)
+    -- Clamped against the list as it is NOW — deleting sets while scrolled down would otherwise
+    -- leave every row indexing past the end of a shortened list, and the panel would draw empty.
+    local offset = Core.ScrollOffset(#names, MAX_ROWS, FauxScrollFrame_GetOffset(scroll))
 
     for i, row in ipairs(rows) do
         local name = names[i + offset]

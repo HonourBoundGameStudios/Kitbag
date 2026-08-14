@@ -778,5 +778,36 @@ function Core.StowBags(bags)
     return usable
 end
 
+--- The row offset a scrolling list should actually draw at, given how much data it now holds.
+--
+-- Both scrolling lists read their offset out of Blizzard's FauxScrollFrame and then index the data
+-- with it, and the scroll bar's idea of where it is survives the data shrinking underneath it. Delete
+-- rules while scrolled to the bottom and every row indexes past the end of the shortened list: the
+-- frame draws nothing at all. A blank list does not read as "you scrolled too far", it reads as "my
+-- rules are gone", and the natural response to that is to write them again.
+--
+-- Clamping here rather than trusting FauxScrollFrame_Update to have done it: that is Blizzard
+-- internals, it differs between flavours, and whether it rewrites the stored offset is invisible from
+-- our side. The list's own arithmetic is ours and belongs where it can be tested.
+function Core.ScrollOffset(count, rows, offset)
+    count = tonumber(count) or 0
+    rows = tonumber(rows) or 0
+    offset = math.floor(tonumber(offset) or 0)
+
+    -- No rows means no page to be scrolled within, so every offset is equally meaningless and 0 is
+    -- the only one that cannot be wrong. Reached when a caller passes a frame that has not built its
+    -- rows yet, which is a bug in the caller — but not one this function should amplify.
+    if rows <= 0 then return 0 end
+
+    -- The last offset that still fills the rows. Negative when the list is shorter than the frame,
+    -- which is the shrunk case, so it floors to 0 and the list snaps back to the top.
+    local last = count - rows
+    if last < 0 then last = 0 end
+
+    if offset < 0 then return 0 end
+    if offset > last then return last end
+    return offset
+end
+
 Kitbag.Core = Core
 return Core

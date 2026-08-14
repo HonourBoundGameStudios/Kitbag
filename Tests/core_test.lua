@@ -826,4 +826,38 @@ H.eq(#C.SaveLoss(nil, worn), 0, "no set at all loses nothing, rather than errori
 H.eq(#C.SaveLoss({ slots = { [1] = HELM } }, nil), 1,
     "…while wearing nothing at all loses every item the set named")
 
+-- ---------------------------------------------------------------------------
+-- ScrollOffset (VERIFY-11)
+-- ---------------------------------------------------------------------------
+--
+-- Both scrolling lists — the set list and the rule list — read their row offset straight out of
+-- Blizzard's FauxScrollFrame and index the data with it. Nothing clamps it against the data, so a
+-- list that SHRINKS while scrolled down keeps an offset the shortened list cannot support, every row
+-- indexes past the end, and the frame goes blank. That is not a cosmetic fault: to the player the
+-- rules have vanished, and the natural response to a blank list is to write them again.
+--
+-- Trusting FauxScrollFrame_Update to fix this up is the assumption worth refusing. It is Blizzard
+-- internals, its clamping differs between flavours, and it is invisible from here — which is exactly
+-- the shape of thing this codebase makes pure and tests instead.
+
+H.eq(C.ScrollOffset(20, 8, 5), 5, "an offset the list can support is used as-is")
+H.eq(C.ScrollOffset(20, 8, 12), 12, "…including the very last one that still fills the rows")
+H.eq(C.ScrollOffset(20, 8, 13), 12, "an offset past the end is pulled back to the last full page")
+H.eq(C.ScrollOffset(20, 8, 999), 12, "…however far past the end it is")
+
+-- The one that matters: deleting rules until fewer remain than there are rows. The backlog calls
+-- this out by name — "puts the list back at the top rather than leaving it blank".
+H.eq(C.ScrollOffset(5, 8, 4), 0, "a list shorter than its rows goes back to the top, never blank")
+H.eq(C.ScrollOffset(8, 8, 3), 0, "…and one exactly filling its rows has nowhere to scroll to")
+H.eq(C.ScrollOffset(0, 8, 6), 0, "an emptied list goes to the top rather than indexing nowhere")
+H.eq(C.ScrollOffset(9, 8, 5), 1, "one row past a full page scrolls by exactly one")
+
+-- Junk in. This runs on every redraw, including the redraw that follows a delete, so it must not be
+-- the thing that throws.
+H.eq(C.ScrollOffset(20, 8, -3), 0, "a negative offset is not trusted either")
+H.eq(C.ScrollOffset(20, 8, nil), 0, "a missing offset reads as the top")
+H.eq(C.ScrollOffset(nil, 8, 4), 0, "no count at all reads as an empty list")
+H.eq(C.ScrollOffset(20, nil, 4), 0, "no row count reads as no room, so nothing is indexed")
+H.eq(C.ScrollOffset(20, 8, 4.7), 4, "a fractional offset is floored, since it indexes a table")
+
 H.done()
