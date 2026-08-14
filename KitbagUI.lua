@@ -290,6 +290,29 @@ local function createCell(parent, x, y)
     return cell
 end
 
+-- Light a model frame.
+--
+-- `SetLight` is one of the few WoW API calls whose *signature* changed rather than its name: modern
+-- clients take (enabled, lightTable), older ones take thirteen positional numbers. Getting it wrong
+-- is not a visible error — it is an invisible model — so both are tried and the first that does not
+-- throw wins. The table form goes first because every flavour Kitbag targets is built on the modern
+-- code base; the positional form is the belt-and-braces.
+local function lightModel(model)
+    if not model.SetLight then return end
+
+    local ok = pcall(model.SetLight, model, true, {
+        omnidirectional  = false,
+        point            = CreateVector3D and CreateVector3D(0, 0, 0) or nil,
+        ambientIntensity = 1.0,
+        ambientColor     = CreateColor and CreateColor(1, 1, 1) or nil,
+        diffuseIntensity = 1.0,
+        diffuseColor     = CreateColor and CreateColor(1, 1, 1) or nil,
+    })
+    if not ok then
+        pcall(model.SetLight, model, true, false, 0, 0, -1, 1.0, 1, 1, 1, 1.0, 1, 1, 1)
+    end
+end
+
 local function buildDoll(parent)
     local panel = CreateFrame("Frame", nil, parent)
     panel:SetPoint("TOPLEFT", parent, "TOPLEFT", 344, -34)
@@ -363,6 +386,16 @@ local function buildDoll(parent)
             self.dragX = x
             self:SetFacing(self.facing)
         end)
+        -- A model frame built in Lua has no lighting and no camera of its own — the dressing room
+        -- gets both from XML this addon does not have — and an unlit model draws as nothing at all
+        -- against a dark panel. Re-applied on every show because a model can also come back blank
+        -- after the frame has been hidden.
+        model:SetScript("OnShow", function(self)
+            lightModel(self)
+            -- Clearing the signature is enough to force a redress: OnShow fires from inside
+            -- refreshDoll, before the pass reaches dressModel.
+            self.dressed = nil
+        end)
         panel.model = model
     end
 
@@ -417,6 +450,8 @@ local function dressModel(cells)
     -- SetUnit is the reset: it puts the player back in what they are actually wearing, which is the
     -- right starting point since equipping a set only replaces the slots the set names.
     model:SetUnit("player")
+    lightModel(model)
+    pcall(model.SetPosition, model, 0, 0, 0)
     model:SetFacing(model.facing or 0)
     for i = 1, n do
         pcall(model.TryOn, model, "item:" .. tostring(ids[i]))
