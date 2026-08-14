@@ -106,4 +106,44 @@ for _, option in ipairs(DB.OPTIONS) do
 end
 H.eq(shown.invert, true, "the minimap option is shown the way round a player thinks about it")
 
+-- ---------------------------------------------------------------------------
+-- The restore point survives a reload (VERIFY-4)
+-- ---------------------------------------------------------------------------
+--
+-- A `restore` rule remembers what you were wearing before it took over, so shifting out of bear form
+-- gives you your own gear back rather than a named set. That memory is deliberately SAVED rather than
+-- held in a local: reloading mid-shapeshift would otherwise strand the player in the rule's set with
+-- nothing to go back to, and the gear it was holding is not recoverable by any other means.
+--
+-- "Reload" here is exactly what the client does — hand the saved table back to DB.Load and re-fetch
+-- the bucket.
+--
+-- The load-bearing detail is that `restorePoint` is deliberately ABSENT from characterDefaults
+-- rather than defaulted to anything. applyDefaults only fills keys the defaults name, so nothing can
+-- overwrite a stored point — and equally nothing may invent one. That absence is not tidiness:
+-- Rules.Next takes `hasSaved` as "there is somewhere to go back to", so a character handed an empty
+-- restore point would, on the first rule that stops matching, restore to nothing at all. Both halves
+-- are asserted below, and the second is the one a well-meaning "give it a sensible default" would
+-- break.
+
+local saved = DB.Load(nil)
+local carol = DB.Character(saved, "Carol - Whitemane")
+carol.restorePoint = { name = "restore", slots = { [1] = "item:111", [16] = false } }
+carol.lastSet = "Bear"
+
+-- Round-trip: the same table the client would have written to disk and read back.
+local reloaded = DB.Load(saved)
+local after = DB.Character(reloaded, "Carol - Whitemane")
+
+H.ok(after.restorePoint ~= nil, "the restore point survives a reload — it is saved, not remembered")
+H.eq(after.restorePoint.slots[1], "item:111", "…with the gear it was holding intact")
+H.eq(after.restorePoint.slots[16], false,
+    "…including a slot it deliberately emptied, which nil would silently turn into 'keep what you have'")
+H.eq(after.lastSet, "Bear", "…and the rest of the character's bucket comes back with it")
+
+-- A character who never triggered a restore rule must not acquire an empty one: Rules.Next keys off
+-- `hasSaved`, so a non-nil restore point would make it restore to nothing on the next rule miss.
+local dave = DB.Character(reloaded, "Dave - Whitemane")
+H.eq(dave.restorePoint, nil, "a character with no restore point does not get given one by defaults")
+
 H.done()
