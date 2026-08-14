@@ -98,6 +98,20 @@ end
 -- Sets
 -- ---------------------------------------------------------------------------
 
+--- The name a set will actually be stored under, or nil if it is not a usable name.
+--
+-- There is more than one door into creating a set — saving what you are wearing, starting an empty
+-- one, the slash command — and the stored name is the identity everything else keys off: the set
+-- list, `parent`, the macro, the keybinding. A name trimmed at one door and not at another produces
+-- "Tank" and "Tank " sitting side by side in the list looking identical, and no way to tell which
+-- one a rule is pointing at. One function so that cannot happen.
+function Core.CleanName(name)
+    if type(name) ~= "string" then return nil end
+    name = name:match("^%s*(.-)%s*$")
+    if name == "" then return nil end
+    return name
+end
+
 --- Capture what is currently worn as a named set.
 --
 -- Every slot is recorded, and an empty one records as `false` — "deliberately empty" — rather than
@@ -646,6 +660,11 @@ function Core.Plan(equipped, set, where, meta)
         -- because half the set is in the bank is not "already worn", and must not be skipped
         -- silently — that difference is a bug report waiting to happen.
         empty = #actions == 0 and #missing == 0,
+        -- Whether the set says anything AT ALL, which `empty` cannot tell you: a blank set and a set
+        -- you are already wearing both have nothing to do, and they are opposite answers. Read off
+        -- the declarations rather than off the items, so that "strip to your shirt" — every slot
+        -- named, every one of them `false` — stays a real set with plenty to say.
+        nothing = next(set.slots) == nil,
     }
 end
 

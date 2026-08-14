@@ -39,11 +39,11 @@ Sets.Resolve = resolved
 -- everything the parent already gets right is dropped. Keeping it would defeat the point — the
 -- shared piece would be duplicated again the first time the child was re-saved.
 function Sets.Save(name)
-    if type(name) ~= "string" or name:match("^%s*$") then
+    name = Core.CleanName(name)
+    if not name then
         say("give the set a name — |cffffd100/kit save Tank|r")
         return nil
     end
-    name = name:match("^%s*(.-)%s*$")
 
     local existing = char().sets[name]
     local set = Core.CaptureSet(Inventory.Equipped(), name)
@@ -58,6 +58,35 @@ function Sets.Save(name)
     end
 
     char().sets[name] = set
+    Kitbag.Refresh()
+    return set
+end
+
+--- Start an empty set, to be filled in slot by slot from the inspector (UI-16).
+--
+-- Until now the only door into creating a set was wearing it first, which is precisely the awkward
+-- part of making a second set: half of it is in the bank. An empty set has no opinion about any
+-- slot, so equipping it is a no-op until the picker puts something in it — which means it can be
+-- built out of gear you never take off the shelf.
+--
+-- Never overwrites. Save deliberately does, because re-saving a set you are wearing is the whole
+-- gesture; replacing a curated set with an empty one is unrecoverable, and refusing is not.
+function Sets.New(name)
+    name = Core.CleanName(name)
+    if not name then
+        say("give the set a name — |cffffd100/kit new Tank|r")
+        return nil
+    end
+    if char().sets[name] then
+        say("|cffffd100%s|r already exists. |cff808080Pick another name, or use Save to " ..
+            "overwrite it with what you are wearing.|r", name)
+        return nil
+    end
+
+    local set = { name = name, slots = {} }
+    char().sets[name] = set
+    say("started |cffffd100%s|r — empty. |cff808080Click a slot in the window to fill it in.|r",
+        name)
     Kitbag.Refresh()
     return set
 end
@@ -395,6 +424,17 @@ function Sets.Apply(set, label, silent)
                 "|cff808080Open the bank and equip again to finish the set.|r",
                 #atBank, label, table.concat(atBank, ", "))
         end
+    end
+
+    -- Ahead of the "already wearing it" line, which a blank set would otherwise get: it has nothing
+    -- to do for the opposite reason, and saying you are wearing a set that names nothing is how a
+    -- half-built set looks finished (UI-16).
+    if plan.nothing then
+        if not silent then
+            say("|cffffd100%s|r is empty — |cff808080click a slot in the window to fill it in.|r",
+                label)
+        end
+        return true
     end
 
     if plan.empty then

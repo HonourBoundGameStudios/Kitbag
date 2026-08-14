@@ -588,6 +588,47 @@ H.eq(bare[2].state, "unset", "…and a slot the set never named is still plainly
 H.eq(C.Doll(nil, nil)[1].state, "unset", "no set at all draws an empty doll rather than erroring")
 
 -- ---------------------------------------------------------------------------
+-- A set that names nothing at all (UI-16)
+-- ---------------------------------------------------------------------------
+--
+-- An empty set is now a thing that exists: UI-16 creates one so it can be filled in slot by slot
+-- from gear that never leaves the bank. It has nothing to do, so it plans as `empty` — but "nothing
+-- to do because you are already wearing it" and "nothing to do because it says nothing" are
+-- opposite answers, and the window paints the first one green. `empty` alone cannot tell them
+-- apart, so the plan says which it is.
+
+plan = C.Plan({ [1] = HELM }, { slots = {} }, {})
+H.eq(plan.empty, true, "a set that names nothing has nothing to do")
+H.eq(plan.nothing, true, "…but it is empty because it is BLANK, not because you are wearing it")
+
+plan = C.Plan({ [1] = HELM }, { slots = { [1] = HELM } }, {})
+H.eq(plan.empty, true, "a set you are already wearing also has nothing to do")
+H.eq(plan.nothing, false, "…and that is the other answer entirely — it names something")
+
+-- A set of nothing but deliberate emptiness is NOT blank: "strip to your shirt" is a real set, and
+-- it has plenty to say. This is the assertion that keeps `nothing` from being read off the item
+-- count, where an all-`false` set would look identical to one that was never filled in.
+plan = C.Plan({ [1] = HELM }, { slots = { [1] = false } }, {}, { freeBagSlots = 4 })
+H.eq(plan.nothing, false, "a set that deliberately empties a slot is not a blank set")
+H.eq(#plan.actions, 1, "…and it has work to do, which a blank set never does")
+
+-- ---------------------------------------------------------------------------
+-- CleanName — the name a set is actually stored under (UI-16)
+-- ---------------------------------------------------------------------------
+--
+-- Three doors create a set now — "save what I'm wearing", "new empty set", and the slash command —
+-- and a name that is trimmed at one door and not at another produces two sets whose names look
+-- identical in the list. One function, so "Tank" and "Tank " cannot both exist.
+
+H.eq(C.CleanName("Tank"), "Tank", "an ordinary name is left alone")
+H.eq(C.CleanName("  Tank  "), "Tank", "surrounding space is trimmed, not stored")
+H.eq(C.CleanName("Raid Fire"), "Raid Fire", "a name may contain spaces — sets are named by people")
+H.eq(C.CleanName(""), nil, "an empty name is not a name")
+H.eq(C.CleanName("   "), nil, "…and neither is one made only of space")
+H.eq(C.CleanName(nil), nil, "nil is refused rather than erroring — it arrives from an empty edit box")
+H.eq(C.CleanName(42), nil, "…as is anything that is not a string")
+
+-- ---------------------------------------------------------------------------
 -- Choices — the wardrobe for one slot, for editing a set (UI-14)
 -- ---------------------------------------------------------------------------
 --

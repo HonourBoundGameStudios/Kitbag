@@ -60,6 +60,9 @@ local SLOT_ART = {
 
 local function rowReadiness(plan)
     if not plan then return "|cff808080—|r" end
+    -- Before "worn", because a blank set also has nothing to do and painting that green would read
+    -- as "you are wearing this" about a set that says nothing at all (UI-16).
+    if plan.nothing then return "|cff808080empty|r" end
     if plan.empty then return "|cff40ff40worn|r" end
     -- Ahead of "missing": a full bag stops the whole swap, so it is the thing to fix first.
     if plan.blocked == "bags" then return "|cffff8080bags full|r" end
@@ -128,7 +131,12 @@ local function onRowEnter(self)
 
     local lines = Core.Explain(plan)
     if #lines == 0 then
-        GameTooltip:AddLine(plan and plan.empty and "Already worn." or "Nothing to do.", 0.4, 1, 0.4)
+        if plan and plan.nothing then
+            GameTooltip:AddLine("Empty — nothing in it yet.", 0.6, 0.6, 0.6)
+        else
+            GameTooltip:AddLine(plan and plan.empty and "Already worn." or "Nothing to do.",
+                0.4, 1, 0.4)
+        end
     else
         GameTooltip:AddLine(" ")
         for _, line in ipairs(lines) do
@@ -553,7 +561,9 @@ local function refreshDoll(name, plan, totals)
     end
 
     -- One line for what stands between you and wearing this, in the words the row uses.
-    if plan and plan.blocked == "bags" then
+    if plan and plan.nothing then
+        doll.note:SetText("|cff808080Empty — click a slot to say what goes there.|r")
+    elseif plan and plan.blocked == "bags" then
         doll.note:SetText(string.format("|cffff5050Bags full — needs %d free slot(s).|r",
             plan.needsBagSlots))
     elseif plan and plan.empty then
@@ -644,26 +654,54 @@ local function build()
     optionsButton:SetText("Options")
     optionsButton:SetScript("OnClick", function() Kitbag.Options.Toggle() end)
 
+    -- Narrower than it was, to buy the second button its room. An edit box scrolls, so a long set
+    -- name still types fine; the button row is what has a hard limit.
     local nameBox = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
-    nameBox:SetSize(180, 20)
+    nameBox:SetSize(150, 20)
     nameBox:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 20, 15)
     nameBox:SetAutoFocus(false)
+
+    -- Both buttons take the name from the same box, so they read it the same way — through the same
+    -- function the store uses. Selecting the RAW text would leave the inspector pointing at " Tank "
+    -- when the set went in as "Tank", and the panel would silently fall back to the first set.
+    local function nameFromBox()
+        local name = Core.CleanName(nameBox:GetText())
+        if not name then Sets.Say("type a name in the box first.") end
+        return name
+    end
+
+    local function created(set)
+        if not set then return end
+        -- Show what was just made: it is the set the player is thinking about, and for a new empty
+        -- one it is also the set they are about to start clicking slots on.
+        selected = set.name
+        nameBox:SetText("")
+        nameBox:ClearFocus()
+        -- And redraw, because the store already refreshed — before this line moved the selection.
+        -- Without this the inspector keeps showing the previous set until some unrelated event
+        -- refreshes the window, which on a live character is soon enough to hide the bug and not
+        -- soon enough to look deliberate.
+        UI.Refresh()
+    end
 
     local save = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     save:SetSize(150, 22)
     save:SetPoint("LEFT", nameBox, "RIGHT", 10, 0)
     save:SetText("Save what I'm wearing")
     save:SetScript("OnClick", function()
-        local name = nameBox:GetText()
-        if name == "" then
-            Sets.Say("type a name in the box first.")
-            return
-        end
-        Sets.Save(name)
-        -- Show what was just saved: it is the set the player is thinking about.
-        selected = name
-        nameBox:SetText("")
-        nameBox:ClearFocus()
+        local name = nameFromBox()
+        if name then created(Sets.Save(name)) end
+    end)
+
+    -- The other way in (UI-16). Saving what you are wearing cannot make a set out of gear that is
+    -- still in the bank; an empty set plus the slot picker can.
+    local blank = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    blank:SetSize(90, 22)
+    blank:SetPoint("LEFT", save, "RIGHT", 6, 0)
+    blank:SetText("New set")
+    blank:SetScript("OnClick", function()
+        local name = nameFromBox()
+        if name then created(Sets.New(name)) end
     end)
 
     return frame
