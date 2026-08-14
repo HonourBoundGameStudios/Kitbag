@@ -38,7 +38,13 @@ Sets.Resolve = resolved
 -- A set that declares a parent is re-saved as a delta: capture reads all nineteen slots, and
 -- everything the parent already gets right is dropped. Keeping it would defeat the point — the
 -- shared piece would be duplicated again the first time the child was re-saved.
-function Sets.Save(name)
+--
+-- Refuses, and returns `nil, lost`, when the save would drop gear that is not on the player (BUG-3):
+-- a set built by hand out of bank items names things a capture cannot see, and overwriting it
+-- destroys work nothing can rebuild. `force` is the caller's answer once it has asked. The check is
+-- against the RESOLVED set, because what the player stands to lose is what the set wears, not what
+-- this particular delta happens to store.
+function Sets.Save(name, force)
     name = Core.CleanName(name)
     if not name then
         say("give the set a name — |cffffd100/kit save Tank|r")
@@ -46,7 +52,14 @@ function Sets.Save(name)
     end
 
     local existing = char().sets[name]
-    local set = Core.CaptureSet(Inventory.Equipped(), name)
+    local equipped = Inventory.Equipped()
+
+    if existing and not force then
+        local lost = Core.SaveLoss(resolved(name), equipped)
+        if #lost > 0 then return nil, lost end
+    end
+
+    local set = Core.CaptureSet(equipped, name)
     set.icon = existing and existing.icon or nil
     set.parent = existing and existing.parent or nil
 
@@ -60,6 +73,21 @@ function Sets.Save(name)
     char().sets[name] = set
     Kitbag.Refresh()
     return set
+end
+
+--- The slots a refused save would have dropped, as one readable line (BUG-3).
+--
+-- Named per slot, with the item where the client can name it. The slot is what the player recognises
+-- — they put it there — and it is also the half that is always available, since the items most
+-- likely to be listed here are the uncached ones sitting in the bank.
+function Sets.LossText(lost)
+    local parts = {}
+    for _, entry in ipairs(lost or {}) do
+        local slot = Core.SlotById(entry.slot)
+        local item = Compat.ItemName(Core.ItemId(entry.key))
+        parts[#parts + 1] = item and string.format("%s (%s)", slot.label, item) or slot.label
+    end
+    return table.concat(parts, ", ")
 end
 
 --- Start an empty set, to be filled in slot by slot from the inspector (UI-16).

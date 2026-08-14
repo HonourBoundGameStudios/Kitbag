@@ -214,6 +214,43 @@ function Core.SetSlot(set, slotId, key)
     return true
 end
 
+--- What re-capturing over an existing set would throw away (BUG-3).
+--
+--   set      : the set as it stands, RESOLVED — { slots = { [slotId] = key | false } }
+--   equipped : what is on the player now — { [slotId] = key }
+--
+-- Returns an array of { slot = id, key = key }, in slot order, one per slot the save would drop.
+--
+-- Overwriting a set with what you are wearing is the ordinary way to keep it current, so this must
+-- not report an ordinary save. A slot counts as lost only when the set names an item that the
+-- capture does not hold in ANY slot: that item is somewhere the capture cannot see — the bank, an
+-- alt, a hand-picked choice — and once the save lands, nothing in the addon knows it was ever there.
+-- An item that merely moved slots is still in the capture and is not a loss, or every trinket swap
+-- would raise a prompt and the prompt would stop being read.
+--
+-- `false` is not a loss either. "Deliberately empty" is a decision the capture can restate; it is
+-- not a piece of gear that goes missing.
+function Core.SaveLoss(set, equipped)
+    local lost = {}
+    if type(set) ~= "table" or type(set.slots) ~= "table" then return lost end
+
+    local held = {}
+    for _, key in pairs(equipped or {}) do
+        if key then held[key] = true end
+    end
+
+    -- Walked over SLOTS rather than over set.slots: pairs() has no order, and a prompt that lists
+    -- the same two slots in a different order each time cannot be read at a glance.
+    for _, s in ipairs(Core.SLOTS) do
+        local key = set.slots[s.id]
+        if key and not held[key] then
+            lost[#lost + 1] = { slot = s.id, key = key }
+        end
+    end
+
+    return lost
+end
+
 --- How good a set is and how close it is to breaking (CORE-4).
 --
 --   set  : { slots = { [slotId] = key | false } }

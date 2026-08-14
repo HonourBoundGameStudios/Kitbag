@@ -65,7 +65,16 @@ local function command(input)
     cmd = string.lower(cmd or "")
 
     if cmd == "" then UI.Toggle()
-    elseif cmd == "save" then Sets.Save(rest)
+    elseif cmd == "save" or cmd == "resave" then
+        -- `resave` is `save` having already answered the "this would drop gear you are not
+        -- wearing" question. A separate word rather than a flag on `save`, because a flag would be
+        -- indistinguishable from part of a set's name.
+        local set, lost = Sets.Save(rest, cmd == "resave")
+        if not set and lost then
+            Sets.Say("|cffff8080%s|r names gear you are not wearing: %s.", rest, Sets.LossText(lost))
+            Sets.Say("saving over it would drop those. |cffffd100/kit resave %s|r to do it anyway.",
+                rest)
+        end
     elseif cmd == "new" then Sets.New(rest)
     elseif cmd == "equip" or cmd == "wear" then Sets.Equip(rest)
     elseif cmd == "delete" or cmd == "remove" then Sets.Delete(rest)

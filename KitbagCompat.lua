@@ -82,6 +82,16 @@ function Compat.EquipLocation(itemId)
     return equipSlot
 end
 
+--- An item's name, or nil if the client hasn't cached the item yet.
+--
+-- nil is the common answer for exactly the items this is asked about: gear sitting in the bank on a
+-- fresh login. Callers name the slot instead rather than printing a stand-in, because "an item" in a
+-- warning about what is going to be destroyed tells the player nothing they can act on.
+function Compat.ItemName(itemId)
+    if not itemId then return nil end
+    return (itemInfo(itemId))
+end
+
 --- An item's level, or nil if the client hasn't cached the item yet.
 --
 -- nil is a real answer and callers must keep it as one: on a fresh login GetItemInfo returns nil for

@@ -684,13 +684,41 @@ local function build()
         UI.Refresh()
     end
 
+    -- The one destructive thing this window does without a shift held (BUG-3). Delete gets away with
+    -- shift-click because its label says what it does; this button's label says "save", and no
+    -- gesture on a button called Save is going to read as "and lose the four pieces you picked by
+    -- hand". So it asks, in words, and only when there is something to lose.
+    StaticPopupDialogs["KITBAG_OVERWRITE"] = {
+        text = "%s already names gear you are not wearing:\n\n|cffff8080%s|r\n\n" ..
+               "Saving what you are wearing over it will drop those pieces.",
+        button1 = "Save anyway",
+        button2 = CANCEL,
+        OnAccept = function(self, name) created(Sets.Save(name, true)) end,
+        hideOnEscape = true,
+        whileDead = true,
+        timeout = 0,
+        -- The conventional slot for an addon's popup: the first two are what Blizzard's own code
+        -- reaches for, and sharing one is how a confirmation ends up answering for a dialog the
+        -- player never saw.
+        preferredIndex = 3,
+    }
+
     local save = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     save:SetSize(150, 22)
     save:SetPoint("LEFT", nameBox, "RIGHT", 10, 0)
     save:SetText("Save what I'm wearing")
     save:SetScript("OnClick", function()
         local name = nameFromBox()
-        if name then created(Sets.Save(name)) end
+        if not name then return end
+        local set, lost = Sets.Save(name)
+        if set then
+            created(set)
+        elseif lost then
+            -- The name goes through as `data` rather than being read back off the box on accept:
+            -- the box is still editable while the popup is up, and answering "Save anyway" must
+            -- overwrite the set the question named.
+            StaticPopup_Show("KITBAG_OVERWRITE", name, Sets.LossText(lost), name)
+        end
     end)
 
     -- The other way in (UI-16). Saving what you are wearing cannot make a set out of gear that is

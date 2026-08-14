@@ -714,4 +714,42 @@ H.eq(C.Resolve(family, "Fire").slots[16], SWORD, "dropping the override hands th
 C.SetSlot(child, 16, false)
 H.eq(C.Resolve(family, "Fire").slots[16], false, "…where emptying it instead overrides the parent with nothing")
 
+-- ---------------------------------------------------------------------------
+-- SaveLoss — what re-saving over an existing set would throw away (BUG-3)
+-- ---------------------------------------------------------------------------
+--
+-- "Save what I'm wearing" over a set that already exists is the normal way to keep a set current,
+-- and it is also the one gesture that can destroy work no capture can put back: a set built by hand
+-- out of bank gear names items that are not on your body.
+--
+-- The rule that separates the two, and the reason this is not a blanket "are you sure": a slot is
+-- only LOST when the set names an item the capture does not hold ANYWHERE. Moving a trinket between
+-- the two trinket slots loses nothing, because the item is still in the capture. Asking every time
+-- would train the player to click through the one prompt that matters.
+
+local BANK_RING = "19147:0:0:0:0:0:0"
+local worn = { [1] = HELM, [11] = RING_A, [12] = RING_B, [16] = SWORD }
+
+H.eq(#C.SaveLoss({ slots = worn }, worn), 0,
+    "re-saving a set you are already wearing loses nothing")
+H.eq(#C.SaveLoss({ slots = { [11] = RING_A, [12] = RING_B } }, { [11] = RING_B, [12] = RING_A }), 0,
+    "swapping two items between slots is not a loss — both are still in the capture")
+
+local lost = C.SaveLoss({ slots = { [1] = HELM, [11] = BANK_RING } }, worn)
+H.eq(#lost, 1, "a set naming an item you are not wearing loses exactly that slot")
+H.eq(lost[1].slot, 11, "…reported by the slot the set named it in")
+H.eq(lost[1].key, BANK_RING, "…and by the item, so the prompt can name what it is about to drop")
+
+local many = C.SaveLoss({ slots = { [16] = TWOHAND, [1] = HELM, [11] = BANK_RING } }, { [1] = HELM })
+H.eq(#many, 2, "every unrecoverable slot is reported, not just the first")
+H.ok(many[1].slot < many[2].slot,
+    "…in slot order, because a prompt that reshuffles itself cannot be read twice")
+
+H.eq(#C.SaveLoss({ slots = { [1] = false } }, worn), 0,
+    "a slot the set deliberately empties is not a loss — false is not an item to lose")
+H.eq(#C.SaveLoss({ slots = {} }, worn), 0, "an empty set has nothing to lose")
+H.eq(#C.SaveLoss(nil, worn), 0, "no set at all loses nothing, rather than erroring")
+H.eq(#C.SaveLoss({ slots = { [1] = HELM } }, nil), 1,
+    "…while wearing nothing at all loses every item the set named")
+
 H.done()
