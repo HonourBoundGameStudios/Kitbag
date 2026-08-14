@@ -40,6 +40,56 @@ local OTHER_FLAVOURS = { "Kitbag_Mists.toc", "Kitbag_Mainline.toc", "Kitbag_Cata
 local ERA, eraOrder = readToc("Kitbag.toc")
 
 -- ---------------------------------------------------------------------------
+-- The ## Interface number
+-- ---------------------------------------------------------------------------
+--
+-- A stale interface number marks the addon out of date and, on some clients, stops it loading at
+-- all — and it goes stale every patch without anything in the repo changing. Three of these four
+-- were originally GUESSED, which is the failure this section exists to make impossible: a guess and
+-- a reading look identical in a .toc file.
+--
+-- The numbers below were read off `<install>/.build.info` — the manifest Blizzard's own launcher
+-- maintains, which names the exact version of every installed product. That file is on disk, so
+-- this needs no client launched and no human. RE-READ IT each patch rather than editing the number
+-- to whatever makes the test pass.
+
+local function readInterface(path)
+    local f = assert(io.open(path, "r"), "cannot open " .. path)
+    local found
+    for line in f:lines() do
+        found = found or line:match("^##%s*Interface%s*:%s*(%d+)")
+    end
+    f:close()
+    return tonumber(found)
+end
+
+-- major.minor.patch packs as major*10000 + minor*100 + patch. Stated as an encoding rather than as a
+-- second literal so the version and the number cannot disagree silently — a transposed digit in a
+-- five-digit constant is invisible, and "1.15.9" is not.
+local function encode(major, minor, patch)
+    return major * 10000 + minor * 100 + patch
+end
+
+local INTERFACES = {
+    { toc = "Kitbag.toc",          product = "wow_classic_era", version = { 1, 15, 9 } },
+    { toc = "Kitbag_Mists.toc",    product = "wow_classic",     version = { 5, 5, 4 } },
+    { toc = "Kitbag_Mainline.toc", product = "wow",             version = { 12, 1, 0 } },
+    -- No Cataclysm Classic is installed here — the `wow_classic` product has moved on to Mists — so
+    -- this one is STILL a guess and is marked as such rather than being quietly asserted. 4.4.2 was
+    -- the last Cata Classic build before the Mists upgrade; it wants a reading if that flavour is
+    -- ever actually shipped.
+    { toc = "Kitbag_Cata.toc",     product = nil,               version = { 4, 4, 2 }, guessed = true },
+}
+
+for _, entry in ipairs(INTERFACES) do
+    local want = encode(entry.version[1], entry.version[2], entry.version[3])
+    local got = readInterface(entry.toc)
+    local how = entry.guessed and "(GUESSED — no client installed to read)" or
+        ("(read off .build.info, product " .. tostring(entry.product) .. ")")
+    H.eq(got, want, entry.toc .. " declares interface " .. want .. " " .. how)
+end
+
+-- ---------------------------------------------------------------------------
 -- Parity between the flavours
 -- ---------------------------------------------------------------------------
 --

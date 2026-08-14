@@ -1,4 +1,4 @@
-## Interface: 110100
+## Interface: 120100
 ## Title: |cff8fd3ffKitbag|r
 ## Notes: Gear sets that actually apply. Save what you're wearing, swap it back in one click, and let rules do it for you.
 ## Author: Honour Bound Game Studios Inc.
