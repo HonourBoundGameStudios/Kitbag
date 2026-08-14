@@ -250,6 +250,30 @@ H.eq(delta.slots[11], RING_B, "a slot that differs is kept")
 H.eq(delta.name, "Raid Fire", "the delta keeps its name")
 H.eq(C.Diff(full, nil).slots[1], HELM, "with no parent, a diff is the set unchanged")
 
+-- Which sets may legally become a given set's parent (UI-11). `/kit inherit` could ask the player to
+-- type a name and refuse the bad ones afterwards; a menu has to know the answer BEFORE it is drawn,
+-- or it offers a choice it will then reject. The illegal ones are exactly the ones that would close
+-- a cycle: the set itself, and anything already descended from it.
+H.eq(table.concat(C.ParentChoices(sets, "Raid"), ", "), "Loop, Loop2, Orphan",
+    "a set's own descendants are not offered as its parent, and it is not offered itself")
+H.eq(table.concat(C.ParentChoices(sets, "Raid Fire Solo"), ", "),
+    "Loop, Loop2, Orphan, Raid, Raid Bare, Raid Fire",
+    "…while its ancestors are, since re-parenting upward closes no cycle")
+H.eq(#C.ParentChoices(sets, "Nope"), 0, "a set that does not exist has no choices, and no error")
+-- A set already inside a hand-edited cycle still gets offered everything outside it — re-parenting
+-- it somewhere legal is the repair, so refusing to offer that would leave the cycle unfixable from
+-- the window. Only its own descendant, the other half of the cycle, drops out.
+H.eq(table.concat(C.ParentChoices(sets, "Loop"), ", "),
+    "Orphan, Raid, Raid Bare, Raid Fire, Raid Fire Solo",
+    "a set in a cycle can be pointed out of it, but not at the set that points back")
+
+-- The same walk `Sets.Inherit` guards with, named once so the menu and the command cannot disagree
+-- about what a loop is.
+H.ok(C.Descends(sets, "Raid Fire Solo", "Raid"), "a grandchild descends from its grandparent")
+H.ok(not C.Descends(sets, "Raid", "Raid Fire Solo"), "…and the grandparent does not descend from it")
+H.ok(not C.Descends(sets, "Raid", "Raid"), "a set does not descend from itself")
+H.ok(not C.Descends(sets, "Orphan", "Raid"), "a missing parent ends the walk rather than erroring")
+
 -- ---------------------------------------------------------------------------
 -- Action-bar macros (UI-8)
 -- ---------------------------------------------------------------------------

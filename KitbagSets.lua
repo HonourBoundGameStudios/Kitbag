@@ -155,21 +155,12 @@ function Sets.Inherit(name, parentName)
         return false
     end
 
-    -- Walk the prospective ancestry before committing. A cycle would be resolvable (Core.Resolve
-    -- terminates on one) but the outfit it produced would depend on where you started reading, which
-    -- is exactly the unpredictability inheritance is meant to remove.
-    -- Keyed by the table's own key, not by set.name: the two can drift apart (an import, a hand-
-    -- edited SavedVariables) and the key is what `parent` actually points at.
-    local cursor, hops = parentName, 0
-    while cursor and hops <= 64 do
-        if cursor == name then
-            say("|cffff8080that would make a loop|r — |cffffd100%s|r already inherits from " ..
-                "|cffffd100%s|r.", parentName, name)
-            return false
-        end
-        local set_ = char().sets[cursor]
-        cursor = set_ and set_.parent or nil
-        hops = hops + 1
+    -- Walk the prospective ancestry before committing. The same walk the window's menu filters with,
+    -- so the two doors into inheritance cannot disagree about what a loop is.
+    if Core.Descends(char().sets, parentName, name) then
+        say("|cffff8080that would make a loop|r — |cffffd100%s|r already inherits from " ..
+            "|cffffd100%s|r.", parentName, name)
+        return false
     end
 
     set.parent = parentName
@@ -211,6 +202,17 @@ function Sets.Names()
     for name in pairs(char().sets) do names[#names + 1] = name end
     table.sort(names)
     return names
+end
+
+--- Which set this one is a delta on, or nil.
+function Sets.ParentOf(name)
+    local set = char().sets[name]
+    return set and set.parent or nil
+end
+
+--- The sets the window may offer as this one's parent, sorted (UI-11).
+function Sets.ParentChoices(name)
+    return Core.ParentChoices(char().sets, name)
 end
 
 --- Bring this character's ItemRack sets across, if that addon left any behind.

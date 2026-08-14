@@ -29,6 +29,7 @@ local CELL = 34            -- a doll cell, big enough to read an icon at a glanc
 local CELL_GAP = 3
 local PITCH = CELL + CELL_GAP
 local PANEL_WIDTH = 300
+local PARENT_Y = -70       -- the inherit button, between the set's headline and the character model
 
 local frame, rows, status, scroll, doll
 local selected = nil       -- the set the inspector is showing
@@ -119,9 +120,9 @@ local function onRowEnter(self)
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     GameTooltip:AddLine(name, 1, 0.82, 0)
 
-    local stored = Kitbag.char.sets[name]
-    if stored and stored.parent then
-        GameTooltip:AddLine("inherits from " .. stored.parent, 0.6, 0.6, 0.6)
+    local inherits = Sets.ParentOf(name)
+    if inherits then
+        GameTooltip:AddLine("inherits from " .. inherits, 0.6, 0.6, 0.6)
     end
     if totals and totals.level then
         GameTooltip:AddLine(string.format("%d items, average item level %s%d",
@@ -354,6 +355,59 @@ local function lightModel(model)
     end
 end
 
+-- Which set this one is a delta on (UI-11).
+--
+-- Inheritance has existed since CORE-3, but `/kit inherit Raid Fire from Raid` was the only way to
+-- declare it and the row tooltip the only place it showed — so the feature was invisible to anyone
+-- who had not read the slash-command help. It belongs in the inspector because that is where the
+-- consequence is visible: the pieces coming from the parent are already drawn in the doll.
+--
+-- The list comes from Core.ParentChoices, so the menu never offers a set that Sets.Inherit would then
+-- refuse. A menu that has to apologise after the click is worse than a shorter menu.
+local function initParentMenu(self, level)
+    if not selected then return end
+
+    local current = Sets.ParentOf(selected)
+
+    local info = UIDropDownMenu_CreateInfo()
+    info.text = "Inherit from"
+    info.isTitle = true
+    info.notCheckable = true
+    UIDropDownMenu_AddButton(info, level)
+
+    info = UIDropDownMenu_CreateInfo()
+    info.text = "Nothing"
+    info.checked = current == nil
+    info.func = function()
+        -- Only when it would change something: Sets.Inherit(name, nil) on a set that inherits from
+        -- nothing prints a correction, and picking the option already ticked should be silent.
+        if current then Sets.Inherit(selected, nil) end
+        CloseDropDownMenus()
+    end
+    UIDropDownMenu_AddButton(info, level)
+
+    for _, name in ipairs(Sets.ParentChoices(selected)) do
+        info = UIDropDownMenu_CreateInfo()
+        info.text = name
+        info.checked = current == name
+        info.func = function()
+            if current ~= name then Sets.Inherit(selected, name) end
+            CloseDropDownMenus()
+        end
+        UIDropDownMenu_AddButton(info, level)
+    end
+end
+
+local function onParentEnter(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:AddLine("Inheritance", 1, 0.82, 0)
+    GameTooltip:AddLine("A set with a parent stores only what differs from it, so a shared piece " ..
+        "lives in one place and re-enchanting it updates every set that wears it.", 1, 1, 1, true)
+    GameTooltip:AddLine("A slot this set does not name is taken from its parent.", 0.6, 0.6, 0.6,
+        true)
+    GameTooltip:Show()
+end
+
 local function buildDoll(parent)
     local panel = CreateFrame("Frame", nil, parent)
     panel:SetPoint("TOPLEFT", parent, "TOPLEFT", 344, -34)
@@ -400,6 +454,33 @@ local function buildDoll(parent)
     panel.note:SetWidth(gapWidth)
     panel.note:SetJustifyH("CENTER")
 
+    -- The parent, and the way to change it (UI-11). Anchored to the panel at a fixed height rather
+    -- than under the note, because the note is one line or two depending on what the plan says and a
+    -- control that moves is a control you have to look for.
+    --
+    -- "MENU" is what makes UIDropDownMenuTemplate act as a bare pop-up menu: Blizzard's own
+    -- initialiser hides the template's dropdown art in that mode, so the frame is only a host for the
+    -- list and nothing of it is drawn in the panel.
+    local menu = CreateFrame("Frame", "KitbagParentMenu", panel, "UIDropDownMenuTemplate")
+    UIDropDownMenu_Initialize(menu, initParentMenu, "MENU")
+
+    panel.inherit = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    panel.inherit:SetSize(gapWidth, 20)
+    panel.inherit:SetPoint("TOP", panel, "TOP", 0, PARENT_Y)
+    panel.inherit:SetScript("OnClick", function(self)
+        ToggleDropDownMenu(1, nil, menu, self, 0, 0)
+    end)
+    panel.inherit:SetScript("OnEnter", onParentEnter)
+    panel.inherit:SetScript("OnLeave", onCellLeave)
+
+    -- A set name is as long as the player made it. With a width and no wrapping the client truncates
+    -- it for us; without them a long name runs out over the doll's icons on both sides.
+    local label = panel.inherit:GetFontString()
+    if label then
+        label:SetWidth(gapWidth - 12)
+        pcall(label.SetWordWrap, label, false)
+    end
+
     -- The character itself, filling what is left of the gap: the icons say WHICH items, the model
     -- says what wearing them looks like, and neither answer was available before without equipping
     -- the set to find out. It is a preview, so it dresses the player in the set's items over what
@@ -410,7 +491,7 @@ local function buildDoll(parent)
     --
     -- Guarded: `DressUpModel` and `TryOn` are ancient, but a flavour that lacks either would take
     -- the whole window down at build time, and the panel reads perfectly well without a model.
-    local modelTop = -70
+    local modelTop = PARENT_Y - 26
     -- Named, unlike every other frame here: a model that renders nothing looks identical to a model
     -- that was never created, and a name is the only way to tell the two apart from a `/run` line.
     local ok, model = pcall(CreateFrame, "DressUpModel", "KitbagPreviewModel", panel)
@@ -513,6 +594,17 @@ local function refreshDoll(name, plan, totals)
     -- last three load-time failures were described, and the old pair has existed since 1.0.
     if shown then doll.equip:Show() else doll.equip:Hide() end
     if shown then doll.delete:Show() else doll.delete:Hide() end
+
+    -- The inherit button appears only when it can do something: with one set saved there is nothing
+    -- to inherit from, and a permanently greyed control reading "inherits: nothing" is a puzzle
+    -- rather than an affordance.
+    local parentName = shown and Sets.ParentOf(name) or nil
+    if shown and (parentName or #Sets.ParentChoices(name) > 0) then
+        doll.inherit:SetText(parentName and ("Inherits: " .. parentName) or "Inherits: nothing")
+        doll.inherit:Show()
+    else
+        doll.inherit:Hide()
+    end
     if doll.model then
         if shown then doll.model:Show() else doll.model:Hide() end
     end
@@ -608,9 +700,14 @@ local function build()
     -- Esc closes it, like every other panel in the game.
     tinsert(UISpecialFrames, "KitbagFrame")
 
-    -- The slot picker belongs to this window and must not outlive it. OnHide rather than the Toggle
-    -- path, because Esc and the close button never go through Toggle.
-    frame:SetScript("OnHide", function() Kitbag.Picker.Close() end)
+    -- The slot picker and the inherit menu belong to this window and must not outlive it. OnHide
+    -- rather than the Toggle path, because Esc and the close button never go through Toggle. The
+    -- menu is Blizzard's own list frame rather than a child of ours, so hiding the window does not
+    -- take it with it — it would be left floating over the game with nothing behind it.
+    frame:SetScript("OnHide", function()
+        Kitbag.Picker.Close()
+        CloseDropDownMenus()
+    end)
 
     frame.title = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     frame.title:SetPoint("TOP", frame, "TOP", 0, -5)

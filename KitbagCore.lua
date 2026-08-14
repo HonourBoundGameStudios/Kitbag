@@ -181,6 +181,47 @@ function Core.Diff(set, parent)
     return { name = set.name, icon = set.icon, parent = set.parent, slots = slots }
 end
 
+-- How far up a chain is worth walking. `Resolve` terminates on a cycle by remembering what it has
+-- visited; these two walk by key rather than by table, since `parent` points at a key and the two can
+-- drift apart in hand-edited SavedVariables. A hop count is the cheaper guard for that.
+local MAX_HOPS = 64
+
+--- Does `name` inherit from `ancestor`, directly or through a chain?
+--
+-- The question a new parent has to answer before it is accepted: pointing a set at one of its own
+-- descendants closes a cycle. `Resolve` would survive that — it terminates — but the outfit it
+-- produced would depend on where you started reading, which is exactly the unpredictability
+-- inheritance exists to remove.
+function Core.Descends(sets, name, ancestor)
+    if type(sets) ~= "table" then return false end
+
+    local cursor, hops = sets[name], 0
+    while type(cursor) == "table" and cursor.parent and hops < MAX_HOPS do
+        if cursor.parent == ancestor then return true end
+        cursor = sets[cursor.parent]
+        hops = hops + 1
+    end
+    return false
+end
+
+--- The sets that may legally become `name`'s parent, sorted (UI-11).
+--
+-- A menu has to know this before it is drawn: offering a choice that will then be refused is worse
+-- than not offering it, because the refusal arrives after the click. The current parent is included
+-- so the menu can tick it.
+function Core.ParentChoices(sets, name)
+    local choices = {}
+    if type(sets) ~= "table" or type(sets[name]) ~= "table" then return choices end
+
+    for key in pairs(sets) do
+        if key ~= name and not Core.Descends(sets, key, name) then
+            choices[#choices + 1] = key
+        end
+    end
+    table.sort(choices)
+    return choices
+end
+
 --- Put one item in one slot of a set, or take the slot out of it entirely (UI-14).
 --
 -- The three states a slot can be in are the whole of this function, and the difference between the
