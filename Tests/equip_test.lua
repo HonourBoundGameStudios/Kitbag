@@ -169,6 +169,24 @@ H.eq(E.Reason({ kind = "unequip", to = 17 }, nil, false, "21610:0:0:0:0:0:0"),
     "stuck on Off hand (slot holds 21610:0:0:0:0:0:0, wanted nothing)",
     "an unequip wanted nothing, and says so rather than printing a nil")
 
+-- ---------------------------------------------------------------------------
+-- What the cursor did (BUG-12)
+-- ---------------------------------------------------------------------------
+--
+-- Pobble's off-hand unequip fails with everything ruled out: the plan is right, bag 4 has 11 free
+-- slots, nothing is blocking, and the client never complains. An unequip is three client calls —
+-- pick the item up, put it in a bag, drop whatever is left — and which of the three did nothing is
+-- the entire remaining question. The cursor answers it, and the driver was not asking.
+
+H.eq(E.Trace(nil), "", "no observation is no clause, rather than an empty pair of brackets")
+H.eq(E.Trace({ picked = false }), " [the item never reached the cursor]",
+    "a pickup the client ignored is the first suspect and says so")
+H.eq(E.Trace({ picked = true, stowed = false }), " [picked up, but no bag would take it]",
+    "a cursor that still holds the item means the bags refused it, whatever they reported free")
+H.eq(E.Trace({ picked = true, stowed = true }),
+    " [picked up and stowed, yet the slot still holds it]",
+    "the loud case: both calls worked and the client put it back anyway")
+
 -- WHERE the driver was reaching for it. Amoondi's second failure named two different item ids, so
 -- `satisfied` is exonerated — item 6584 simply never arrived, silently, three times. What separates
 -- the surviving explanations is the source: a carried bag that has moved under the plan, or a BANK

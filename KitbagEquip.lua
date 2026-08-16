@@ -54,8 +54,11 @@ local function finish(ok, failedAction, blocked, found)
     -- both live in this file, and a caller reassembling them is a second copy of the rule. Reason is
     -- defined below with the other pure decisions; it is read off the table when this runs, never at
     -- load, so no forward declaration is needed.
+    -- Composed rather than passed in, so Reason's signature stops growing and Trace stays a seam
+    -- that can be tested on its own.
     local reason = not ok
-        and Equip.Reason(failedAction, queue and queue.lastError, blocked, found) or nil
+        and (Equip.Reason(failedAction, queue and queue.lastError, blocked, found)
+             .. Equip.Trace(queue and queue.trace)) or nil
     queue = nil
     driver:SetScript("OnUpdate", nil)
     driver:UnregisterEvent("UI_ERROR_MESSAGE")
@@ -118,6 +121,20 @@ function Equip.Reason(failedAction, lastError, blocked, found)
     return where
 end
 
+--- What the cursor actually did, as a clause to hang off the failure. PURE.
+--
+-- An unequip is three client calls — pick the item up, put it in a bag, drop whatever is left — and
+-- when one of them quietly does nothing the outcome is identical from outside: the slot is unchanged
+-- and the client says not a word. Which of the three failed is the whole question (BUG-12), and the
+-- cursor is the only witness. Watching it costs two boolean reads.
+function Equip.Trace(t)
+    if not t then return "" end
+    if not t.picked then return " [the item never reached the cursor]" end
+    if not t.stowed then return " [picked up, but no bag would take it]" end
+    -- Both calls did what they were asked and the slot is still occupied, so the client undid it.
+    return " [picked up and stowed, yet the slot still holds it]"
+end
+
 --- Where the driver was reaching for the item, as a clause to hang off the failure. PURE.
 --
 -- A bank source is shouted rather than merely stated. The planner is supposed to refuse one while
@@ -167,11 +184,17 @@ local function stow()
     end
 end
 
+-- Returns what the cursor was seen doing, for the failure report only — never for the decision,
+-- which stays with `satisfied` re-reading the slot. Two boolean reads, and they are the difference
+-- between three indistinguishable silent failures (BUG-12).
 local function perform(action)
     if action.kind == "unequip" then
         PickupInventoryItem(action.to)
+        local picked = CursorHasItem() and true or false
         stow()
+        local stowed = not CursorHasItem()
         ClearCursor()
+        return { picked = picked, stowed = stowed }
     elseif action.from.equipped then
         PickupInventoryItem(action.from.equipped)
         PickupInventoryItem(action.to)
@@ -272,7 +295,9 @@ local function step(_, elapsed)
         Compat.ConfirmBind()
     elseif decision == "perform" then
         queue.tries, queue.waited = queue.tries + 1, 0
-        perform(action)
+        -- Overwritten each attempt on purpose: the last one is the one being reported, and three
+        -- identical traces would say nothing the first does not.
+        queue.trace = perform(action)
     end
     -- "wait": the client has not caught up yet. Doing nothing is the correct action.
 end
