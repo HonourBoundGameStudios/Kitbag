@@ -112,6 +112,14 @@ function Equip.Reason(failedAction, lastError, blocked, found)
     -- either would read as the addon having failed to look.
     -- Only when at least one side is known. With neither, "slot holds nothing, wanted nothing" is
     -- not a finding — it is the addon reporting that it did not look, dressed up as evidence.
+    -- An unequip's `key` is the item being REMOVED, so printing it under "wanted" says the opposite
+    -- of what is meant. It read as Kitbag trying to equip a shield it was in fact trying to take off,
+    -- and it misled the Admiral mid-diagnosis. The intent comes from the action kind, not the key.
+    if failedAction and failedAction.kind == "unequip" then
+        return where .. string.format(" (slot holds %s, should be empty)",
+            found and tostring(found) or "nothing")
+    end
+
     local wanted = failedAction and failedAction.key
     if found or wanted then
         where = where .. string.format(" (slot holds %s, wanted %s%s)",

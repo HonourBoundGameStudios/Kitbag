@@ -165,9 +165,17 @@ H.eq(E.Reason({ to = 5, key = "14175:0:0:0:0:0:174" }, nil, false, "14175:0:0:0:
 H.eq(E.Reason({ to = 5, key = "14175:0:0:0:0:0:174" }, nil, false, nil),
     "stuck on Chest (slot holds nothing, wanted 14175:0:0:0:0:0:174)",
     "an empty slot is stated as nothing rather than omitted — it means the pickup never landed")
-H.eq(E.Reason({ kind = "unequip", to = 17 }, nil, false, "21610:0:0:0:0:0:0"),
-    "stuck on Off hand (slot holds 21610:0:0:0:0:0:0, wanted nothing)",
-    "an unequip wanted nothing, and says so rather than printing a nil")
+-- An unequip action carries the key of the item being REMOVED, so printing it under "wanted" says
+-- the opposite of what is meant: the Admiral read "wanted 21610" as Kitbag trying to equip a shield
+-- it was in fact trying to take off, while helping debug BUG-12. A report that misleads the person
+-- reading it is worse than a short one.
+H.eq(E.Reason({ kind = "unequip", to = 17, key = "21610:463:0:0:0:0:0" }, nil, false,
+        "21610:463:0:0:0:0:0"),
+    "stuck on Off hand (slot holds 21610:463:0:0:0:0:0, should be empty)",
+    "an unequip says the slot should be EMPTY, never 'wanted' the item it is removing")
+H.eq(E.Reason({ kind = "unequip", to = 17 }, nil, false, nil),
+    "stuck on Off hand (slot holds nothing, should be empty)",
+    "…and says it even with no key recorded, since the intent comes from the action kind")
 
 -- ---------------------------------------------------------------------------
 -- What the cursor did (BUG-12)
