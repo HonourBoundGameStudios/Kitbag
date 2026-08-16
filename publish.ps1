@@ -27,7 +27,10 @@ $root = $PSScriptRoot
 $work = Join-Path $root ".publish"
 
 # THE WHITELIST. Everything the public repository may contain, and nothing else.
-$filePatterns = @("*.lua", "*.toc", "README.md", "LICENSE", ".gitignore", "deploy.ps1", "package.ps1")
+# `.gitattributes` goes with the source rather than staying behind: it is what pins the tree to LF,
+# and without it a contributor cloning the public repo on Windows re-line-ends every .lua on checkout.
+$filePatterns = @("*.lua", "*.toc", "README.md", "LICENSE", ".gitignore", ".gitattributes",
+                  "deploy.ps1", "package.ps1")
 $directories  = @("Tests", ".github")
 
 & pwsh -File (Join-Path $root "Tests\run-all.ps1")
@@ -60,7 +63,10 @@ foreach ($dir in $directories) {
 
 # Belt and braces. The whitelist above should make this impossible; if it ever fires, the whitelist
 # is wrong and publishing must stop rather than proceed and be discovered later.
-$forbidden = @("CLAUDE.md", "Process", "Research", "Design", ".claude")
+# `publish.ps1` is on this list rather than merely absent from the whitelist: it is workshop
+# machinery that describes the two-repo arrangement, and it means nothing in a checkout that has no
+# workshop to publish from. Saying so out loud is what stops a future `*.ps1` pattern taking it along.
+$forbidden = @("CLAUDE.md", "Process", "Research", "Design", ".claude", "publish.ps1")
 foreach ($name in $forbidden) {
     if (Test-Path (Join-Path $work $name)) {
         Write-Error "'$name' reached the publish tree. The whitelist in publish.ps1 is wrong; nothing pushed."
