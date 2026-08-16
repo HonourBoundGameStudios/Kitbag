@@ -399,4 +399,29 @@ H.eq(G.Kitbag.char.sets.Base.slots[1], "111:0:0:0:0:0:0",
 -- menu's "only when it would change something" guard correct rather than merely tidy.
 H.eq(Sets.Inherit("Child", nil), false, "a set that inherits from nothing cannot stop inheriting")
 
+-- The `/kit save` → refuse → `/kit resave` sequence (VERIFY-12). Worth stating plainly, because the
+-- backlog item assumed otherwise: the SLASH path never raises the confirmation popup. Only the
+-- window does. `/kit save` over a set that names gear you are not wearing REFUSES and says what it
+-- would have dropped, and `/kit resave` is that question already answered — a separate word rather
+-- than a flag, because a flag is indistinguishable from part of a set's name.
+--
+-- Nothing is equipped in the mock client, so every slot the stored set names counts as a loss, which
+-- is exactly the condition this branch exists for.
+G.Kitbag.char = { sets = { Tank = { slots = { [1] = "444:0:0:0:0:0:0" } } }, rules = {} }
+
+local saved, lost = Sets.Save("Tank")
+H.eq(saved, nil, "saving over a set that names gear you are not wearing is REFUSED")
+H.ok(type(lost) == "table" and #lost > 0, "…and it hands back what would have been dropped")
+H.ok(Sets.LossText(lost):find("Head") ~= nil,
+    "…named by SLOT, so the warning is readable when the item is not cached")
+
+-- The set on disk must be untouched by a refusal. A refusal that had already half-written is worse
+-- than no confirmation at all, since the popup would then be asking about something already done.
+H.eq(G.Kitbag.char.sets.Tank.slots[1], "444:0:0:0:0:0:0",
+    "a refused save changes nothing — the stored set is exactly as it was")
+
+H.ok(Sets.Save("Tank", true) ~= nil, "`/kit resave` is the same save with the question answered")
+H.eq(G.Kitbag.char.sets.Tank.slots[1], false,
+    "…and it really did overwrite: the slot is now 'deliberately empty', not the old item")
+
 H.done()
