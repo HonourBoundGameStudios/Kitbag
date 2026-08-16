@@ -86,6 +86,10 @@ local G = _G
 G.UIParent = newWidget("UIParent")
 G.WorldFrame = newWidget("WorldFrame")
 G.GameTooltip = newWidget("GameTooltip")
+-- Where the addon says things. Not needed by any module's LOAD path — it is here because exercising
+-- a function that reports to the player reaches it, and swallowing the line is right for a test: what
+-- matters is that saying it does not error, not what was said.
+G.DEFAULT_CHAT_FRAME = { AddMessage = function() end }
 G.UISpecialFrames = {}
 G.SlashCmdList = {}
 G.StaticPopupDialogs = {}
@@ -364,5 +368,35 @@ end
 H.eq(state.combat, false,
     "a condition this client cannot answer reads as false rather than erroring")
 H.eq(state.mounted, false, "…and one it can answer is answered — IsMounted is stubbed false")
+
+-- Sets.Inherit clearing a parent (VERIFY-13), exercised here for exactly the reason ActionState is:
+-- Sets reads the character bucket and the client, so the mock is the only place outside the game it
+-- can be called at all — and it had NO coverage, despite being a gear-loss path. "Nothing" on the
+-- inherit menu drops the parent, and the pieces that were arriving through it have to become the
+-- set's own. A plain `set.parent = nil` would be the obvious implementation and would silently empty
+-- half the set; the fix is to flatten the RESOLVED set back into it, and nothing was checking that.
+local Sets = G.Kitbag.Sets
+G.Kitbag.char = {
+    sets = {
+        Base  = { slots = { [1] = "111:0:0:0:0:0:0", [5] = "222:0:0:0:0:0:0" } },
+        Child = { slots = { [16] = "333:0:0:0:0:0:0" }, parent = "Base" },
+    },
+    rules = {},
+}
+
+H.eq(Sets.Inherit("Child", nil), true, "clearing a parent that exists succeeds")
+local child = G.Kitbag.char.sets.Child
+H.eq(child.parent, nil, "…and the set no longer inherits from anything")
+H.eq(child.slots[1], "111:0:0:0:0:0:0", "…the piece it was inheriting is now its OWN, not lost")
+H.eq(child.slots[5], "222:0:0:0:0:0:0", "…every one of them")
+H.eq(child.slots[16], "333:0:0:0:0:0:0", "…and what it already had is still there")
+
+-- The parent is untouched: flattening copies down, it does not move.
+H.eq(G.Kitbag.char.sets.Base.slots[1], "111:0:0:0:0:0:0",
+    "the parent keeps its own slots — a child leaving does not strip it")
+
+-- Asking again is refused rather than silently re-flattening. This is the branch that makes the
+-- menu's "only when it would change something" guard correct rather than merely tidy.
+H.eq(Sets.Inherit("Child", nil), false, "a set that inherits from nothing cannot stop inheriting")
 
 H.done()
