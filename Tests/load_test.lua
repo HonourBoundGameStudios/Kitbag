@@ -248,11 +248,37 @@ H.ok(type(G.Kitbag) == "table", "the Kitbag namespace exists after every module 
 -- fails arbitrarily — but "this check referenced something that does not exist" is not meaningless,
 -- and that is all this asserts.
 
+-- Given a character that has a failed swap on record, so the swap-record check has something real to
+-- report rather than falling straight into its "nothing attempted yet" branch. Set BEFORE the run,
+-- because the check reads it at call time.
+Kitbag.char = Kitbag.char or {}
+Kitbag.char.lastSwap = {
+    set = "FASTHOJ+TRAVEL", ok = false, reason = "stuck on Off hand",
+    when = "2026-08-16 12:04:31",
+    state = { combat = true, mounted = true, dead = false, casting = false },
+}
+
 G.print = function() end
 local verifyResults = Kitbag.Verify.Run()
 G.print = realPrint
 
 H.eq(#verifyResults, #Kitbag.Verify.CHECKS, "every registered check produced a result")
+
+-- The swap-record check has to be self-sufficient IN THE CLIENT. /kit verify is the instrument the
+-- Admiral runs without leaving the game, and a line naming the set and the reason but not the
+-- conditions sends them for a dump to learn the one fact that decides BUG-9 (b) — which is a whole
+-- extra reload to answer a question the check already had in its hand.
+local swapDetail
+for _, r in ipairs(verifyResults) do
+    if r.id == "swap-record" then swapDetail = tostring(r.detail or "") end
+end
+H.ok(swapDetail and swapDetail:find("FASTHOJ+TRAVEL", 1, true),
+    "the swap-record check names the set that was attempted")
+H.ok(swapDetail and swapDetail:find("stuck on Off hand", 1, true), "…and why it ended")
+H.ok(swapDetail and swapDetail:find("combat yes", 1, true),
+    "…and the conditions it ended in, so /kit verify alone can settle BUG-9")
+H.ok(swapDetail and swapDetail:find("dead no", 1, true),
+    "…including the ones that were false, which are what rule a suspect OUT")
 
 for _, r in ipairs(verifyResults) do
     local detail = tostring(r.detail or "")

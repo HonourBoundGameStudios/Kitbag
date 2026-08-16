@@ -421,9 +421,14 @@ Verify.CHECKS = {
             -- and "nothing attempted" is the honest answer at the start of a session.
             local last = Kitbag.char and Kitbag.char.lastSwap
             if not last then return true, "ready; nothing attempted yet this character" end
-            return true, string.format("last: %s %s%s", tostring(last.set),
+            -- The conditions come through too, and through Core.StateWords rather than a second copy
+            -- of the wording: this line is read in the client, and sending someone for a dump to
+            -- learn the one fact that decides BUG-9 costs a reload the check already had in hand.
+            local words = Kitbag.Core and Kitbag.Core.StateWords(last.state)
+            return true, string.format("last: %s %s%s%s", tostring(last.set),
                 last.ok and "succeeded" or "FAILED",
-                last.reason and (" — " .. tostring(last.reason)) or "")
+                last.reason and (" — " .. tostring(last.reason)) or "",
+                words and (" [" .. words .. "]") or "")
         end,
     },
 }

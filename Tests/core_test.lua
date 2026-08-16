@@ -485,6 +485,33 @@ H.eq(plan.blocked, nil, "with no bag count supplied, the plan proceeds rather th
 H.eq(plan.needsBagSlots, 1, "…but still says what it would need")
 
 -- ---------------------------------------------------------------------------
+-- ---------------------------------------------------------------------------
+-- StateWords — the conditions a failed swap failed in, as one line (BUG-9)
+-- ---------------------------------------------------------------------------
+--
+-- One vocabulary, because two readers ask this question: the dump prints it and /kit verify prints
+-- it, and a self-check whose wording has drifted from the dump's is a self-check nobody can quote.
+--
+-- Every condition is stated in BOTH directions. "combat no" is the line that RULES OUT the leading
+-- suspect for BUG-9, and a reader must never have to infer an absence from a word that is not there
+-- — which is exactly what a list of only the true ones would ask of them.
+
+H.eq(C.StateWords({ combat = true, mounted = true, dead = false, casting = false }),
+    "combat yes, mounted yes, dead no, casting no",
+    "every condition is named, in a fixed order, with a yes or a no against each")
+H.eq(C.StateWords({ combat = false, mounted = false, dead = false, casting = false }),
+    "combat no, mounted no, dead no, casting no",
+    "all-clear is stated in full rather than collapsing to 'nothing notable'")
+
+-- A record from an older build carries no state at all, and that is not the same claim as a build
+-- that looked and found nothing. Nil in, nil out; the callers omit the line entirely.
+H.eq(C.StateWords(nil), nil, "no state recorded is nil, not a line of four noes")
+
+-- Conditions this client could not answer arrive absent rather than false, and absent must read the
+-- same as false: an unasked question is not a yes.
+H.eq(C.StateWords({ combat = true }), "combat yes, mounted no, dead no, casting no",
+    "a condition the client could not answer reads as no rather than vanishing from the line")
+
 -- StowBags — which bags a removed item is offered to
 -- ---------------------------------------------------------------------------
 --

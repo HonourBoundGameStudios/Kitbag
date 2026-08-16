@@ -238,11 +238,8 @@ function Debug.Report(world)
         -- "combat no" is the line that RULES OUT the leading suspect and a missing word cannot do
         -- that job. Omitted entirely when the state was never captured, so a stale build cannot
         -- masquerade as one that looked and found nothing.
-        if swap.state then
-            add("  state: combat %s, mounted %s, dead %s, casting %s",
-                swap.state.combat and "yes" or "no", swap.state.mounted and "yes" or "no",
-                swap.state.dead and "yes" or "no", swap.state.casting and "yes" or "no")
-        end
+        local words = Core and Core.StateWords(swap.state)
+        if words then add("  state: %s", words) end
     end
 
     -- Sorted, so two dumps differ only where the world differed. pairs() order would make every

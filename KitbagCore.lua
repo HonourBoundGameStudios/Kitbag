@@ -778,6 +778,26 @@ function Core.StowBags(bags)
     return usable
 end
 
+--- The conditions a failed swap failed in, as one line. PURE.
+--
+-- One vocabulary because two readers ask the same question — the debug dump prints this and so does
+-- /kit verify — and a self-check whose wording has drifted from the dump's is one nobody can quote
+-- back. Stated in BOTH directions, always: "combat no" is the line that rules a suspect OUT (BUG-9),
+-- and a list of only the true conditions would ask the reader to infer an absence from a missing
+-- word. A condition the client could not answer arrives absent and reads as "no", because an unasked
+-- question is not a yes.
+--
+-- Returns nil for no state at all, which the callers turn into no line: a record from a build that
+-- never captured this must not read like one that looked and found nothing.
+function Core.StateWords(state)
+    if not state then return nil end
+    local words = {}
+    for _, key in ipairs({ "combat", "mounted", "dead", "casting" }) do
+        words[#words + 1] = key .. (state[key] and " yes" or " no")
+    end
+    return table.concat(words, ", ")
+end
+
 --- The row offset a scrolling list should actually draw at, given how much data it now holds.
 --
 -- Both scrolling lists read their offset out of Blizzard's FauxScrollFrame and then index the data
