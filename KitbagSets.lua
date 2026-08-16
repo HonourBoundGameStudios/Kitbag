@@ -431,13 +431,18 @@ end
 
 --- Equip a set. `silent` suppresses the chat report for rule-driven swaps, which would otherwise
 --- narrate every shapeshift.
-function Sets.Equip(name, silent)
+---
+--- `onDone(ok)` fires exactly once, on every path, including the ones that refuse before touching
+--- anything. The return value cannot carry that: equipping is asynchronous, so it says only whether
+--- the attempt started, and the rule engine needs to know whether the gear went ON (BUG-10).
+function Sets.Equip(name, silent, onDone)
     local set = resolved(name)
     if not set then
         say("no set called |cffffd100%s|r.", tostring(name))
+        if onDone then onDone(false) end
         return false
     end
-    return Sets.Apply(set, name, silent)
+    return Sets.Apply(set, name, silent, onDone)
 end
 
 --- Equip an outfit that is not necessarily a saved set.
@@ -445,7 +450,14 @@ end
 -- The restore points RULE-4 remembers are exactly this: a snapshot of what you happened to be
 -- wearing, which may match no saved set at all. Everything below used to live in Sets.Equip; it is
 -- split out rather than duplicated so there stays exactly one code path that equips anything.
-function Sets.Apply(set, label, silent)
+function Sets.Apply(set, label, silent, onDone)
+    -- Called on every return below, so a caller that needs the outcome never has to infer it from
+    -- the return value — which reports only whether the attempt STARTED.
+    local function done(ok)
+        if onDone then onDone(ok) end
+        return ok
+    end
+
     local equipped, where, meta = Inventory.Snapshot(set)
     local plan = Core.Plan(equipped, set, where, meta)
 
@@ -480,12 +492,14 @@ function Sets.Apply(set, label, silent)
             say("|cffffd100%s|r is empty — |cff808080click a slot in the window to fill it in.|r",
                 label)
         end
-        return true
+        -- Nothing to do counts as done. A set that names no slots can never "go on", and reporting
+        -- it as a failure would have the rule engine retry it on every event for ever.
+        return done(true)
     end
 
     if plan.empty then
         if not silent then say("already wearing |cffffd100%s|r.", label) end
-        return true
+        return done(true)
     end
 
     -- Refuse before moving anything. The alternative is the driver spending its full retry budget on
@@ -494,15 +508,15 @@ function Sets.Apply(set, label, silent)
     if plan.blocked == "bags" then
         say("|cffff8080your bags are full|r — |cffffd100%s|r needs %d free slot(s) to put what " ..
             "it takes off.", label, plan.needsBagSlots)
-        return false
+        return done(false)
     end
 
     if Equip.IsRunning() then
         say("|cffff8080busy|r — a swap is already in progress.")
-        return false
+        return done(false)
     end
 
-    return Equip.Run(plan, label, function(ok, failed, applied)
+    local started = Equip.Run(plan, label, function(ok, failed, applied)
         -- Only a real set becomes `lastSet`. A restore point is an outfit, not a set, and recording
         -- it would leave the rule engine comparing against a name no set list contains.
         if ok and char().sets[applied] then char().lastSet = applied end
@@ -514,7 +528,14 @@ function Sets.Apply(set, label, silent)
                 tostring(applied), s and s.label or "an unknown slot")
         end
         Kitbag.Refresh()
+        done(ok)
     end)
+
+    -- Run refuses if a plan is already in flight. IsRunning above catches that, so this is the
+    -- belt-and-braces path — but a `done` that fires on all paths except one is worse than none,
+    -- because the caller then has a memory it can never clear.
+    if not started then done(false) end
+    return started
 end
 
 Kitbag.Sets = Sets

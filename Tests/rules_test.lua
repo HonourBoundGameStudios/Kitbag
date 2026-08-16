@@ -258,4 +258,34 @@ H.eq(R.Next("Tank", nil, false).action, "none",
     "a rule with nothing saved leaves you in its set rather than guessing")
 H.eq(R.Next(nil, nil, false).action, "none", "no rule and nothing saved is the quiet case")
 
+-- ---------------------------------------------------------------------------
+-- What the engine is entitled to believe afterwards (BUG-10)
+-- ---------------------------------------------------------------------------
+--
+-- Next() decides from `activeSet`, so `activeSet` had better be true. The engine used to set it the
+-- instant it decided to swap, before the equip was attempted and without ever revisiting it — so a
+-- swap that FAILED left the engine believing that set was on, Next() answered "none" for as long as
+-- that rule kept winning, and the rule never fired again. Reported from the client as "I mounted and
+-- it did not trigger", the mount after a swap that had reported "stuck on Off hand". A /reload was
+-- the only cure, because `active` does not survive one.
+--
+--   Held(previous, step, ok) -> the set the engine may claim is on, or nil
+
+H.eq(R.Held(nil, { action = "equip", set = "Bear" }, true), "Bear",
+    "a swap that worked is held — that is what stops the rule firing again every event")
+H.eq(R.Held(nil, { action = "equip", set = "Bear" }, false), nil,
+    "a swap that FAILED is not held, or its rule is dead until the next reload")
+H.eq(R.Held("Tank", { action = "equip", set = "Bear" }, false), nil,
+    "…and the set before it is not held either: a half-applied plan left neither of them on")
+
+H.eq(R.Held("Bear", { action = "restore" }, true), nil,
+    "a restore puts back an outfit, not a set — there is no set left to hold")
+H.eq(R.Held("Bear", { action = "restore" }, false), nil,
+    "…and a restore that failed holds nothing either, since its restore point is already spent")
+
+H.eq(R.Held("Bear", { action = "none" }, true), "Bear",
+    "doing nothing changes nothing — the set that was on stays on")
+H.eq(R.Held("Bear", nil, false), "Bear",
+    "…and so does an attempt that was never made at all")
+
 H.done()

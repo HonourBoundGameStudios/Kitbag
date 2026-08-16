@@ -284,5 +284,29 @@ function Rules.Next(activeSet, winner, hasSaved)
     return { action = "none" }
 end
 
+--- What the engine may claim is on, once `step` has been attempted and answered `ok`.
+--
+--   previous : what it was holding before the attempt
+--   step     : the step Rules.Next returned, or nil if none was taken
+--   ok       : did that step actually happen?
+--
+-- Next() decides entirely from `activeSet`, so `activeSet` has to be earned. The engine used to set
+-- it the moment it decided to swap and never revisit it, which meant a swap that failed left the
+-- engine believing that set was on: Next() then answered "none" for as long as the rule kept
+-- winning, and the rule never fired again until a /reload cleared the memory (BUG-10).
+--
+-- A failed equip holds NOTHING, not the set before it. A plan that gave up part way through left
+-- neither outfit on the body, and claiming the older one would be a second guess on top of a known
+-- unknown. Holding nothing means the next event re-decides from scratch, which is the honest
+-- behaviour: if the reason it failed was a full bag, the swap should happen when that is fixed.
+function Rules.Held(previous, step, ok)
+    if not step then return previous end
+    if step.action == "equip" then return ok and step.set or nil end
+    -- A restore puts back an outfit rather than a set, and spends its restore point either way, so
+    -- there is nothing left for the engine to hold on to.
+    if step.action == "restore" then return nil end
+    return previous
+end
+
 Kitbag.Rules = Rules
 return Rules

@@ -87,8 +87,16 @@ local function perform(step)
         if step.remember then
             char.restorePoint = Core.CaptureSet(Inventory.Equipped(), "restore")
         end
+        -- Held before the attempt as well as after it: the swap takes several frames, and without a
+        -- claim in place every event arriving meanwhile would decide to equip the same set again.
+        -- The claim is then settled by the outcome — a set that did NOT go on must not be held, or
+        -- the rule that wants it never fires again (BUG-10).
         active = step.set
-        Sets.Equip(step.set, true)
+        Sets.Equip(step.set, true, function(ok)
+            -- Settle only our own claim. A swap takes frames, and if something else has taken over
+            -- in the meantime then this attempt's outcome is no longer what the engine is holding.
+            if active == step.set then active = Rules.Held(active, step, ok) end
+        end)
 
     elseif step.action == "restore" then
         local point = char.restorePoint
