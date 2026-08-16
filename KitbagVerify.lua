@@ -584,6 +584,80 @@ Verify.CHECKS = {
         end,
     },
     {
+        id = "import-button", item = "VERIFY-14", label = "Import button reads and fits",
+        -- The one control in the window whose ABSENCE is as load-bearing as its presence. Its count
+        -- is pinned against a real ItemRack file by Tests/import_test.lua, so a DIFFERENT number on
+        -- screen is the interesting failure: it means the window is reading a different world than
+        -- the tests are. The rest is clipping and clearance, which are measurements, not opinions.
+        run = function()
+            local Sets = Kitbag.Sets
+            if not Sets or not Sets.ImportOffer then return nil, "KitbagSets is not loaded" end
+            local button = _G.KitbagImportButton
+            if not button then
+                return nil, "the button is built with the main window — open /kit once, then run this"
+            end
+
+            local offer = Sets.ImportOffer()
+            local shown = button:IsShown()
+
+            -- Presence and absence must agree with the offer. Both directions matter: a button that
+            -- lingers after the import is done invites a second one, and a missing button on a
+            -- character with sets to bring across is a feature nobody can find.
+            if not offer then
+                if shown then
+                    return false, "there is nothing to import, but the button is still showing"
+                end
+                return nil, "nothing to import on this character — the button is correctly absent"
+            end
+            if not shown then
+                return false, string.format("%d set(s) to import, but the button is hidden", offer.count)
+            end
+
+            local faults = {}
+            local wanted = string.format("Import %d set%s from ItemRack",
+                offer.count, offer.count == 1 and "" or "s")
+            local text = button:GetText()
+            if text ~= wanted then
+                faults[#faults + 1] = string.format("label reads %q, expected %q",
+                    tostring(text), wanted)
+            end
+
+            -- Does it CLIP? UIPanelButtonTemplate does not shrink its text, it lets it run under the
+            -- button's own edge, so the string width against the button width is the whole question.
+            local label = button.GetFontString and button:GetFontString()
+            local strWidth = label and label.GetStringWidth and label:GetStringWidth()
+            local width = button:GetWidth()
+            if strWidth and width then
+                if strWidth > width - 8 then
+                    faults[#faults + 1] = string.format(
+                        "the label is %d wide in a %d button, so it clips",
+                        math.floor(strWidth + 0.5), math.floor(width + 0.5))
+                end
+            end
+
+            -- And does it clear its neighbours? It appears BETWEEN the status line and the name box,
+            -- and only on some characters — which is precisely the layout nobody looks at on the
+            -- characters where it never shows up.
+            local notes = {}
+            local status, nameBox = _G.KitbagStatusLine, _G.KitbagNameBox
+            if status and status:GetBottom() and button:GetTop() then
+                local gap = status:GetBottom() - button:GetTop()
+                notes[#notes + 1] = string.format("clears the status line by %d", gap)
+                if gap < 0 then faults[#faults + 1] = "it overlaps the status line above it" end
+            end
+            if nameBox and nameBox:GetTop() and button:GetBottom() then
+                local gap = button:GetBottom() - nameBox:GetTop()
+                notes[#notes + 1] = string.format("clears the name box by %d", gap)
+                if gap < 0 then faults[#faults + 1] = "it overlaps the name box below it" end
+            end
+
+            if #faults > 0 then return false, table.concat(faults, "; ") end
+            return true, string.format("%q, label %d wide in %d%s", wanted,
+                math.floor((strWidth or 0) + 0.5), math.floor(width + 0.5),
+                #notes > 0 and (", " .. table.concat(notes, ", ")) or "")
+        end,
+    },
+    {
         id = "scroll-clamp", item = "VERIFY-11", label = "A shrinking list cannot go blank",
         -- Pure arithmetic, but run HERE too: the pure test proves ScrollOffset is right, and this
         -- proves the client is running a build that contains it.

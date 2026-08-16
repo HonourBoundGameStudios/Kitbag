@@ -772,7 +772,10 @@ local function build()
         FauxScrollFrame_OnVerticalScroll(self, offset, ROW_HEIGHT, UI.Refresh)
     end)
 
-    status = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    -- Named so `/kit verify` can measure that the import button clears this line rather than sitting
+    -- on it (VERIFY-14). The button appears between the two and only on some characters, which is
+    -- exactly the layout nobody looks at on the characters where it is absent.
+    status = frame:CreateFontString("KitbagStatusLine", "OVERLAY", "GameFontDisableSmall")
     status:SetPoint("TOPLEFT", list, "BOTTOMLEFT", 0, -10)
     status:SetWidth(316)
     status:SetJustifyH("LEFT")
@@ -793,7 +796,7 @@ local function build()
 
     -- Narrower than it was, to buy the second button its room. An edit box scrolls, so a long set
     -- name still types fine; the button row is what has a hard limit.
-    local nameBox = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
+    local nameBox = CreateFrame("EditBox", "KitbagNameBox", frame, "InputBoxTemplate")
     nameBox:SetSize(150, 20)
     nameBox:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 20, 15)
     nameBox:SetAutoFocus(false)
@@ -891,7 +894,7 @@ local function build()
     -- ItemRack and disappears for good once the sets are across — this is a one-time migration, not
     -- a control anyone needs permanently. Same reasoning as the Inherits button (UI-11): a
     -- permanently dead control is a puzzle rather than an affordance.
-    importButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    importButton = CreateFrame("Button", "KitbagImportButton", frame, "UIPanelButtonTemplate")
     -- Wide enough for a two-digit count: "Import 12 sets from ItemRack" is the longest this says,
     -- and nothing else shares the row, so the room is free.
     importButton:SetSize(220, 22)

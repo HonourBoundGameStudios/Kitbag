@@ -164,4 +164,13 @@ H.ok(byId["inherit-menu-state"] ~= nil,
 H.eq(byId["inherit-menu-state"] and byId["inherit-menu-state"].item, "VERIFY-13",
     "…and it names the item it answers")
 
+-- VERIFY-14. The count is already pinned against Pobble's real ItemRack file by import_test, so the
+-- interesting failure is the button showing a DIFFERENT number — that would mean the window is
+-- reading a different world than the tests are. The rest is clipping and clearance, which are
+-- measurements rather than opinions.
+H.ok(byId["import-button"] ~= nil,
+    "a check reads the import button's own label and measures whether it fits")
+H.eq(byId["import-button"] and byId["import-button"].item, "VERIFY-14",
+    "…and it names the item it answers")
+
 H.done()
