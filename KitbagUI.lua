@@ -174,13 +174,34 @@ local function onRowLeave()
     GameTooltip:Hide()
 end
 
-local function onRowClick(self)
-    if not self.setName then return end
-    selected = self.setName
+--- Show `name` in the inspector. The one path by which anything CHOOSES a set.
+---
+--- Equip and Delete read `selected` rather than a set named on the row they sit in (UI-13 moved them
+--- out of the rows), so "which set is selected" decides what a destructive button destroys. That
+--- makes a second place that chooses a set a real hazard rather than a tidiness question, and it is
+--- why the row click, a freshly created set and `/kit verify` all come through here.
+---
+--- `UI.Refresh` also assigns `selected`, and deliberately does not come through here: it is repairing
+--- a selection whose set has been deleted or renamed, not choosing one, and routing a repair through
+--- a function that refreshes would recurse.
+function UI.Select(name)
+    if not name then return end
+    selected = name
     -- The picker is bound to one slot of one set. Leaving it open over a different set would offer
     -- a click that edits the set you just navigated away from.
     Kitbag.Picker.Close()
     UI.Refresh()
+end
+
+--- Which set the inspector is showing, or nil. Exposed so the addon can check itself (VERIFY-8):
+--- from outside, a file-local selection is indistinguishable from the buttons reading a stale one.
+function UI.Selected()
+    return selected
+end
+
+local function onRowClick(self)
+    if not self.setName then return end
+    UI.Select(self.setName)
 end
 
 local function createRow(parent, index)
@@ -413,7 +434,10 @@ local function buildDoll(parent)
     panel:SetPoint("TOPLEFT", parent, "TOPLEFT", 344, -34)
     panel:SetSize(PANEL_WIDTH, 392)
 
-    panel.title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    -- Named, unlike the panel's other strings, because it is the one piece of the inspector that says
+    -- WHICH set is being shown — so it is the evidence that the doll followed the selection rather
+    -- than merely that both exist (VERIFY-8).
+    panel.title = panel:CreateFontString("KitbagInspectorTitle", "OVERLAY", "GameFontNormalLarge")
     panel.title:SetPoint("TOP", panel, "TOP", 0, 0)
     panel.title:SetWidth(PANEL_WIDTH)
 
@@ -787,14 +811,13 @@ local function build()
         if not set then return end
         -- Show what was just made: it is the set the player is thinking about, and for a new empty
         -- one it is also the set they are about to start clicking slots on.
-        selected = set.name
         nameBox:SetText("")
         nameBox:ClearFocus()
-        -- And redraw, because the store already refreshed — before this line moved the selection.
-        -- Without this the inspector keeps showing the previous set until some unrelated event
-        -- refreshes the window, which on a live character is soon enough to hide the bug and not
-        -- soon enough to look deliberate.
-        UI.Refresh()
+        -- Through UI.Select, which redraws — the store already refreshed, but before the selection
+        -- moved. Without the redraw the inspector keeps showing the previous set until some unrelated
+        -- event refreshes the window, which on a live character is soon enough to hide the bug and
+        -- not soon enough to look deliberate.
+        UI.Select(set.name)
     end
 
     -- The one destructive thing this window does without a shift held (BUG-3). Delete gets away with

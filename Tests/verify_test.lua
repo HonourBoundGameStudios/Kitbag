@@ -134,4 +134,14 @@ H.ok(byId["swap-record"] ~= nil,
 H.eq(byId["swap-record"] and byId["swap-record"].item, "BUG-9",
     "…and it names the bug it is standing in for")
 
+-- VERIFY-8's remaining half. The window's Equip and Delete buttons moved out of the rows and now act
+-- on "the selected set", which is a file-local in KitbagUI — so from outside the addon there is no
+-- way to tell whether the selection the buttons read is the row the player actually clicked. That is
+-- the failure this check exists for, and it is a nasty one: acting on the wrong selection destroys
+-- the wrong set, silently, and looks exactly like the right thing until you look at what is left.
+H.ok(byId["selection"] ~= nil,
+    "a check proves the window's selection follows the row, so Equip/Delete act on what is shown")
+H.eq(byId["selection"] and byId["selection"].item, "VERIFY-8",
+    "…and it names the item it answers")
+
 H.done()

@@ -271,6 +271,47 @@ Verify.CHECKS = {
         end,
     },
     {
+        id = "selection", item = "VERIFY-8", label = "Inspector follows the selected set",
+        -- UI-13 moved Equip and Delete out of the rows, so they act on "the selected set" rather than
+        -- on a set named where they sit. Two things therefore have to hold and neither is visible
+        -- from outside the addon: that clicking a row moves the selection, and that the inspector
+        -- redraws for the set that is now selected. If they come apart, Delete removes a set other
+        -- than the one on screen — which looks correct right up until you count what is left.
+        run = function()
+            local UI, Sets = Kitbag.UI, Kitbag.Sets
+            if not UI or not Sets then return nil, "KitbagUI is not loaded" end
+            if not UI.Select then return false, "UI.Select is missing, so selection has no one path" end
+            if not Kitbag.char then return nil, "no character bucket yet — not logged in" end
+
+            -- Two sets, because selecting the set that is already selected proves nothing.
+            local names = Sets.Names() or {}
+            if #names < 2 then return nil, "needs two sets to prove the selection MOVED — make another" end
+
+            local restore = UI.Selected()
+            -- Whichever is not already showing, so the check always asks for a change.
+            local target = (restore == names[1]) and names[2] or names[1]
+
+            UI.Select(target)
+            local landed = UI.Selected()
+            local title = _G.KitbagInspectorTitle and _G.KitbagInspectorTitle:GetText()
+
+            if restore then UI.Select(restore) end
+
+            if landed ~= target then
+                return false, string.format("asked for %s, selection reads %s",
+                    tostring(target), tostring(landed))
+            end
+            if title ~= target then
+                -- The selection moved and the doll did not follow it. This is the dangerous half:
+                -- the buttons would act on `target` while the player is looking at `title`.
+                return false, string.format(
+                    "selection is %s but the inspector is headed %s — Equip/Delete would act on the "
+                    .. "set NOT on screen", tostring(target), tostring(title))
+            end
+            return true, string.format("selection moved to %s and the inspector followed", target)
+        end,
+    },
+    {
         id = "picker", item = "VERIFY-2", label = "Slot picker opens",
         run = function()
             local Picker, Sets = Kitbag.Picker, Kitbag.Sets
