@@ -154,4 +154,14 @@ H.ok(byId["picker-layout"] ~= nil,
 H.eq(byId["picker-layout"] and byId["picker-layout"].item, "VERIFY-10",
     "…and it names the item it answers")
 
+-- VERIFY-13's two remaining LIVE questions, both about a frame this addon does not own. The tick
+-- and the teardown are correct by construction in our code — but DropDownList1 is Blizzard's, so
+-- "we call CloseDropDownMenus in OnHide" is a statement about our intent and not about what is left
+-- on screen. The failure it guards is loud and orphaned: a menu floating over the game with the
+-- window it belonged to already gone.
+H.ok(byId["inherit-menu-state"] ~= nil,
+    "a check proves the inherit menu ticks the real parent and does not outlive the window")
+H.eq(byId["inherit-menu-state"] and byId["inherit-menu-state"].item, "VERIFY-13",
+    "…and it names the item it answers")
+
 H.done()

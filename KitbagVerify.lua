@@ -502,6 +502,88 @@ Verify.CHECKS = {
         end,
     },
     {
+        id = "inherit-menu-state", item = "VERIFY-13", label = "Inherit menu ticks right, and dies with the window",
+        -- Two questions our own code answers by construction and cannot actually settle. The tick is
+        -- `current == name`, so exactly one entry is ticked and it is the real parent — but that is a
+        -- claim about the info table we hand Blizzard, not about the list frame it builds from it.
+        -- And the window's OnHide calls CloseDropDownMenus, which is our INTENT; DropDownList1 is not
+        -- a child of ours, so whether it actually goes is Blizzard's answer to give. A menu that
+        -- outlives its window is left floating over the game with nothing behind it.
+        run = function()
+            local UI, Sets = Kitbag.UI, Kitbag.Sets
+            if not UI or not Sets then return nil, "KitbagUI is not loaded" end
+            local menu, window = _G.KitbagParentMenu, _G.KitbagFrame
+            if not menu or not window then
+                return nil, "the menu is built with the main window — open /kit once, then run this"
+            end
+            if not UI.Selected then return false, "UI.Selected is missing, so the parent is unreadable" end
+
+            local selected = UI.Selected()
+            if not selected then return nil, "no set is selected, so the menu has no parent to tick" end
+            local parent = Sets.ParentOf(selected)
+
+            local wasShown = window:IsShown()
+            if not wasShown then window:Show() end
+
+            _G.ToggleDropDownMenu(1, nil, menu, window, 0, 0)
+            local list = _G.DropDownList1
+            if not list or not list:IsShown() then
+                _G.CloseDropDownMenus()
+                if not wasShown then window:Hide() end
+                return nil, "the menu did not open — this set may have nothing it can inherit from"
+            end
+
+            -- Exactly one tick, and on the right entry. "Nothing" carries it when there is no parent,
+            -- which is the case most likely to be got wrong: a set inheriting from nothing still has
+            -- a current parent, and it is spelled nil.
+            local wanted = parent or "Nothing"
+            local ticked, checkedCount = nil, 0
+            for i = 1, (_G.UIDROPDOWNMENU_MAXBUTTONS or 8) do
+                local button = _G["DropDownList1Button" .. i]
+                if button and button:IsShown() then
+                    local check = _G["DropDownList1Button" .. i .. "Check"]
+                    -- notCheckable entries (the "Inherit from" title) hide their check texture.
+                    if check and check:IsShown() then
+                        checkedCount = checkedCount + 1
+                        ticked = button:GetText()
+                    end
+                end
+            end
+
+            _G.CloseDropDownMenus()
+
+            -- The teardown, which is the half that has actually never been observed: hide the window
+            -- and the menu must go with it. Reopened first, because CloseDropDownMenus above would
+            -- otherwise make this pass for the wrong reason.
+            _G.ToggleDropDownMenu(1, nil, menu, window, 0, 0)
+            local reopened = list:IsShown()
+            window:Hide()
+            local orphaned = reopened and list:IsShown()
+            -- Put the window back the way it was found, and REFRESH it: Show alone is not the inverse
+            -- of Hide here, because the window is normally raised through UI.Toggle, which redraws.
+            -- A check that leaves the window showing a stale list has caused the next bug report.
+            if wasShown then
+                window:Show()
+                if UI.Refresh then UI.Refresh() end
+            end
+
+            local faults = {}
+            if checkedCount ~= 1 then
+                faults[#faults + 1] = string.format("%d entries ticked, expected exactly 1", checkedCount)
+            elseif ticked ~= wanted then
+                faults[#faults + 1] = string.format("the tick is on %q but the parent is %q",
+                    tostring(ticked), tostring(wanted))
+            end
+            if orphaned then
+                faults[#faults + 1] = "the menu outlived the window — it is left floating over the game"
+            end
+
+            if #faults > 0 then return false, table.concat(faults, "; ") end
+            return true, string.format("tick on %q (parent %s); the menu closes with the window",
+                tostring(ticked), parent and ("\"" .. parent .. "\"") or "none")
+        end,
+    },
+    {
         id = "scroll-clamp", item = "VERIFY-11", label = "A shrinking list cannot go blank",
         -- Pure arithmetic, but run HERE too: the pure test proves ScrollOffset is right, and this
         -- proves the client is running a build that contains it.
