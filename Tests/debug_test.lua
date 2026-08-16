@@ -153,6 +153,77 @@ has(rtext, "no: disabled", "…with a disabled rule distinguished from one whose
 -- "in form 3" in a rule the player wrote as "Cat Form" is a bug report on its own.
 has(rtext, "in Bear Form", "a form condition is described with the label the client gave")
 
+-- ---------------------------------------------------------------------------
+-- The engine's own memory, and whether its events exist (BUG-9)
+-- ---------------------------------------------------------------------------
+--
+-- "I mounted and nothing happened" is a report the dump above cannot answer. Every section of it
+-- describes the world; none describes the ENGINE, and the two ways a rule silently does nothing both
+-- live there:
+--
+--   * The engine already believes it put that set on. `active` is set before the equip is attempted
+--     and is not cleared when the equip fails, so a swap that failed once looks, to Rules.Next, like
+--     a swap that is still on — and the rule never fires again.
+--   * The event never arrived. Events.Enable() registers inside pcall because not every flavour has
+--     every event, which means a missing PLAYER_MOUNT_DISPLAY_CHANGED is indistinguishable from a
+--     rule that simply did not match. Bugs.md has carried that caveat as an unknown since it was
+--     written; a dump that states it turns the unknown into a line of text.
+
+local engine = {
+    when = "2026-08-16 09:00:00",
+    sets = {},
+    engine = {
+        autoSwap = true,
+        active = "FASTHOJ+TRAVEL",
+        deferred = "Tanky-Heal-PVP",
+        restorePoint = true,
+        events = {
+            { name = "PLAYER_ENTERING_WORLD", registered = true },
+            { name = "PLAYER_MOUNT_DISPLAY_CHANGED", registered = false },
+        },
+    },
+}
+local etext = report(engine)
+
+has(etext, "ENGINE", "what the rule engine remembers is a section of its own")
+has(etext, "auto-swap: true", "…starting with the switch that turns every rule off at once")
+has(etext, "holding: FASTHOJ+TRAVEL",
+    "the set the engine believes is on is named — no rule can re-fire while it is held")
+has(etext, "deferred: Tanky-Heal-PVP", "…and a step waiting for combat to end, which looks identical")
+has(etext, "restore point: held", "…and whether there is gear to come back to")
+
+has(etext, "EVENTS", "whether each watched event registered is a section of its own")
+has(etext, "PLAYER_ENTERING_WORLD", "…naming every event the engine asked for")
+-- On the same LINE as its event, not merely somewhere in the section: two events and two verdicts
+-- in a section is not an answer to which of them is missing.
+H.ok(etext:find("PLAYER_MOUNT_DISPLAY_CHANGED%s+NOT REGISTERED") ~= nil,
+    "…and shouting about the one this flavour does not have, since pcall swallowed it silently")
+H.ok(etext:find("PLAYER_ENTERING_WORLD%s+registered") ~= nil,
+    "…while the ones that took are quietly marked, so the missing one stands out")
+
+-- The absences again. An engine holding nothing is the normal case and must not read like an
+-- unread one: "no set is held" is the fact that clears the stale-`active` suspicion outright.
+local idle = report({ when = "now", sets = {}, engine = {
+    autoSwap = false, active = nil, deferred = nil, restorePoint = false, events = {} } })
+has(idle, "auto-swap: false", "auto-swap being off is stated — it is a whole-addon explanation")
+has(idle, "holding: (nothing)", "an engine holding no set says so rather than omitting the line")
+has(idle, "deferred: (nothing)", "…and so does an empty deferral")
+has(idle, "restore point: (none)", "…and so does an absent restore point")
+has(idle, "(no events registered)",
+    "an engine that registered nothing says so — it is why every rule would be dead")
+
+-- An engine that could not be read at all is a third state, and not the same as an idle one: the
+-- first says nothing is known, the second says nothing is held.
+local unread = report({ when = "now", sets = {} })
+local section = unread:match("ENGINE\n(.-)\n\n") or ""
+has(section, "(not read)", "an unreadable engine says so rather than reading as idle")
+
+-- And an engine that threw while being read says THAT, rather than reporting as unread. The dump is
+-- asked for when something is already wrong, so its own failure has to survive into the text.
+has(report({ when = "now", sets = {}, engine = { failed = "attempt to index a nil value" } }),
+    "could not be read: attempt to index a nil value",
+    "an engine read that errored reports the error instead of hiding behind '(not read)'")
+
 -- The empty cases, stated rather than omitted. "No rules" is the single most likely explanation for
 -- "it never swapped", and a dump that simply has no RULES section cannot distinguish it from a dump
 -- taken before rules were read.

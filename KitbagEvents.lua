@@ -52,6 +52,11 @@ local pending = nil   -- a Rules.Next step deferred until combat ends
 -- means the player never gets their own gear back.
 local active = nil
 
+-- Which of WATCHED the client actually accepted, in order: { { name =, registered = }, … }.
+-- Kept because Enable() registers inside pcall, which turns "this flavour has no such event" into
+-- silence — and silence is indistinguishable from a rule that never matched (BUG-9).
+local registered = {}
+
 --- A flat snapshot of everything a rule may condition on. Flat on purpose: the rule engine compares
 --- state[k] to when[k] and needs no knowledge of what any key means.
 function Events.State()
@@ -186,11 +191,26 @@ function frame:OnEvent(event, unit, ...)
 end
 
 function Events.Enable()
-    for _, e in ipairs(WATCHED) do
+    for i, e in ipairs(WATCHED) do
         -- Not every event exists on every flavour; registering an unknown one is a hard error.
-        pcall(frame.RegisterEvent, frame, e)
+        local ok = pcall(frame.RegisterEvent, frame, e)
+        -- Asked of the frame afterwards rather than inferred from that pcall: the question is
+        -- whether the client is going to SEND the event, and only the frame can answer it. Both
+        -- results are kept apart on purpose — a pcall that itself failed must not read as a yes.
+        local asked, on = pcall(frame.IsEventRegistered, frame, e)
+        registered[i] = { name = e, registered = (ok and asked and on) and true or false }
     end
     frame:SetScript("OnEvent", frame.OnEvent)
+end
+
+--- What the engine is holding, for the dump (BUG-9). Nothing here is readable any other way: both
+--- of these states make a MATCHED rule do nothing at all, and look exactly like it never matched.
+function Events.Diagnostics()
+    return {
+        active = active,
+        deferred = pending and pending.set or nil,
+        events = registered,
+    }
 end
 
 --- Why is the current state producing the set it is? Backs `/kit why`.

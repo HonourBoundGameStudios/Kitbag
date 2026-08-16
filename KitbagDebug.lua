@@ -172,6 +172,45 @@ function Debug.Report(world)
         end
     end
 
+    -- What the ENGINE remembers, which is a different question from what the world holds and the
+    -- only one that can explain a swap that never happened at all. Two states in here are invisible
+    -- everywhere else: a set the engine believes it already put on (no rule re-fires while it is
+    -- held) and a step parked until combat ends. Both look exactly like "the rule didn't match",
+    -- and the RULES section above will cheerfully say MATCHED while nothing moves.
+    local engine = world.engine
+    add("")
+    add("ENGINE")
+    if not engine then
+        add("  (not read)")
+    elseif engine.failed then
+        -- Reported, not swallowed: a debug tool that hides its own failure hides the bug behind it.
+        add("  (could not be read: %s)", tostring(engine.failed))
+    else
+        -- First, because it is the one switch that turns every rule off at once.
+        add("  auto-swap: %s", tostring(engine.autoSwap))
+        add("  holding: %s", engine.active and tostring(engine.active) or "(nothing)")
+        add("  deferred: %s", engine.deferred and tostring(engine.deferred) or "(nothing)")
+        add("  restore point: %s", engine.restorePoint and "held" or "(none)")
+    end
+
+    -- Whether each event actually registered. Events.Enable() registers inside pcall because no
+    -- flavour has every event, and the cost of that is silence: an event this flavour does not have
+    -- is indistinguishable from a rule that never matched. Stating it is the whole point — the
+    -- absent one is shouted rather than merely listed, because a reader scanning fifteen "ok" lines
+    -- for one missing word will not find it.
+    add("")
+    add("EVENTS")
+    local events = engine and engine.events
+    if not events then
+        add("  (not read)")
+    elseif #events == 0 then
+        add("  (no events registered)")
+    else
+        for _, e in ipairs(events) do
+            add("  %-32s %s", tostring(e.name), e.registered and "registered" or "NOT REGISTERED")
+        end
+    end
+
     -- Sorted, so two dumps differ only where the world differed. pairs() order would make every
     -- line look changed and hide the one that did.
     local sets = {}
@@ -271,6 +310,16 @@ function Debug.Capture()
             and attempt(Rules.Explain, rules, state) or nil,
         sets = {},
     }
+
+    -- The engine's own memory, and whether its events exist at all. Read here rather than inside
+    -- Events so the two facts that only the DB knows — the master switch and the restore point —
+    -- arrive in the same table as the two only Events knows, and the section cannot half-answer.
+    local engine = Events and attempt(Events.Diagnostics)
+    if engine and not failed(engine) then
+        engine.autoSwap = Kitbag.db and Kitbag.db.options and Kitbag.db.options.autoSwap
+        engine.restorePoint = Kitbag.char and Kitbag.char.restorePoint ~= nil
+    end
+    world.engine = engine
 
     for _, name in ipairs(Sets and Sets.Names() or {}) do
         local plan, set = Sets.Preview(name)
