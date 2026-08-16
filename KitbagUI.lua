@@ -59,23 +59,56 @@ local SLOT_ART = {
     TABARD = "Tabard",
 }
 
-local function rowReadiness(plan)
-    if not plan then return "|cff808080—|r" end
-    -- Before "worn", because a blank set also has nothing to do and painting that green would read
-    -- as "you are wearing this" about a set that says nothing at all (UI-16).
-    if plan.nothing then return "|cff808080empty|r" end
-    if plan.empty then return "|cff40ff40worn|r" end
-    -- Ahead of "missing": a full bag stops the whole swap, so it is the thing to fix first.
-    if plan.blocked == "bags" then return "|cffff8080bags full|r" end
-    if #plan.missing > 0 then
-        -- Say "at bank" only when the bank explains ALL of it. A set that is part banked and part
-        -- genuinely lost would otherwise send the player on a trip that cannot finish the set.
-        if plan.atBank == #plan.missing then
-            return string.format("|cffffd100%d at bank|r", plan.atBank)
-        end
-        return string.format("|cffff8080%d missing|r", #plan.missing)
+-- The three lines the window uses to say how ready a set is, each keyed on the ONE verdict in
+-- `Core.Readiness`. The precedence lives there — most sharply that a blank set is asked about before
+-- "already worn", since both have nothing to do and only one of them is green (UI-16). What stays
+-- here is the phrasing, which is deliberately different in each: a row column has room for a word, a
+-- tooltip for a sentence, and the note under the doll for a sentence that says what to do next.
+--
+-- Module functions rather than file-locals so they can be exercised outside the game: the wording is
+-- the whole of what these are, and a wrong word here is not a broken window — it is a confident
+-- sentence about the wrong thing, which is exactly the failure nobody reports.
+
+--- The readiness column on a set's row.
+function UI.RowText(plan)
+    local verdict = Core.Readiness(plan)
+    local state, count = verdict.state, verdict.count
+
+    if state == "unknown" then return "|cff808080—|r" end
+    if state == "blank"   then return "|cff808080empty|r" end
+    if state == "worn"    then return "|cff40ff40worn|r" end
+    if state == "bags"    then return "|cffff8080bags full|r" end
+    if state == "bank"    then return string.format("|cffffd100%d at bank|r", count) end
+    if state == "missing" then return string.format("|cffff8080%d missing|r", count) end
+    return string.format("|cffffd100%d swap%s|r", count, count == 1 and "" or "s")
+end
+
+--- The line the row tooltip falls back to when the plan has no moves to list.
+---
+--- Only ever reached when `Core.Explain` produced nothing, which is the case for all three no-op
+--- states at once — and they are three different answers.
+function UI.TooltipNote(plan)
+    local state = Core.Readiness(plan).state
+    if state == "blank" then return "Empty — nothing in it yet.", 0.6, 0.6, 0.6 end
+    if state == "worn"  then return "Already worn.", 0.4, 1, 0.4 end
+    return "Nothing to do.", 0.4, 1, 0.4
+end
+
+--- One line under the inspector's doll for what stands between you and wearing this.
+function UI.InspectorNote(plan)
+    local verdict = Core.Readiness(plan)
+    local state, count = verdict.state, verdict.count
+
+    if state == "unknown" then return "" end
+    if state == "blank"   then return "|cff808080Empty — click a slot to say what goes there.|r" end
+    if state == "worn"    then return "|cff40ff40You are wearing this.|r" end
+    if state == "bags" then
+        return string.format("|cffff5050Bags full — needs %d free slot(s).|r", count)
     end
-    return string.format("|cffffd100%d swap%s|r", #plan.actions, #plan.actions == 1 and "" or "s")
+    if state == "bank" or state == "missing" then
+        return string.format("|cffff8080%d piece%s not to hand.|r", count, count == 1 and "" or "s")
+    end
+    return string.format("%d swap%s to go.", count, count == 1 and "" or "s")
 end
 
 -- Item level and the weakest piece, in the little space a row has (CORE-4).
@@ -132,12 +165,7 @@ local function onRowEnter(self)
 
     local lines = Core.Explain(plan)
     if #lines == 0 then
-        if plan and plan.nothing then
-            GameTooltip:AddLine("Empty — nothing in it yet.", 0.6, 0.6, 0.6)
-        else
-            GameTooltip:AddLine(plan and plan.empty and "Already worn." or "Nothing to do.",
-                0.4, 1, 0.4)
-        end
+        GameTooltip:AddLine(UI.TooltipNote(plan))
     else
         GameTooltip:AddLine(" ")
         for _, line in ipairs(lines) do
@@ -692,23 +720,8 @@ local function refreshDoll(name, plan, totals)
         doll.summary:SetText("")
     end
 
-    -- One line for what stands between you and wearing this, in the words the row uses.
-    if plan and plan.nothing then
-        doll.note:SetText("|cff808080Empty — click a slot to say what goes there.|r")
-    elseif plan and plan.blocked == "bags" then
-        doll.note:SetText(string.format("|cffff5050Bags full — needs %d free slot(s).|r",
-            plan.needsBagSlots))
-    elseif plan and plan.empty then
-        doll.note:SetText("|cff40ff40You are wearing this.|r")
-    elseif plan and #plan.missing > 0 then
-        doll.note:SetText(string.format("|cffff8080%d piece%s not to hand.|r",
-            #plan.missing, #plan.missing == 1 and "" or "s"))
-    elseif plan then
-        doll.note:SetText(string.format("%d swap%s to go.",
-            #plan.actions, #plan.actions == 1 and "" or "s"))
-    else
-        doll.note:SetText("")
-    end
+    -- One line for what stands between you and wearing this, through the verdict the row uses.
+    doll.note:SetText(UI.InspectorNote(plan))
 end
 
 -- ---------------------------------------------------------------------------
@@ -946,7 +959,7 @@ function UI.Refresh()
             row.data.plan, row.data.totals = entry.plan, entry.totals
             row.icon.texture:SetTexture(Sets.Icon(name))
             row.name:SetText(name)
-            row.state:SetText(rowReadiness(entry.plan))
+            row.state:SetText(UI.RowText(entry.plan))
             row.totals:SetText(rowTotals(entry.totals))
             if name == selected then row.selection:Show() else row.selection:Hide() end
             row:Show()

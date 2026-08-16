@@ -761,6 +761,47 @@ function Core.Plan(equipped, set, where, meta)
     }
 end
 
+--- What stands between the player and wearing this set: { state = <word>, count = n }.
+---
+--- The window answers that question in three places — the list row, the row tooltip and the
+--- inspector's note — and each used to walk this chain itself. Three copies of one precedence is
+--- three chances to get it wrong in isolation, and the wrong answer is not a visibly broken window:
+--- it is a confident sentence about the wrong thing.
+---
+--- `/kit equip` asks the same question and deliberately does NOT come through here: it reports what
+--- is missing before it decides anything, because half a set is a legitimate outcome that must not be
+--- silent, and it has to turn its answer into a success or a failure as well as a sentence. It shares
+--- the one part that matters — blank before worn — by testing `plan.nothing` first, and both are
+--- covered.
+---
+--- The order carries the meaning:
+---   blank   the set names no slots — asked FIRST, because `empty` is true for this too
+---   worn    nothing to do, and nothing it could not do
+---   bags    a full bag stops the whole swap, so it outranks anything missing: telling someone
+---           "2 missing" sends them looking for gear they are already carrying
+---   bank    everything missing is at the bank — a walk, not a loss
+---   missing something is genuinely nowhere; said even when part of it IS at the bank, because a
+---           bank trip that cannot finish the set is a wasted one
+---   swaps   there is work, and it can all be done
+---   unknown there is no plan yet, so there is no verdict
+---
+--- A word rather than a sentence. The four surfaces phrase it differently on purpose — a row column
+--- has six characters, the note under the doll has a line — and what they must share is which
+--- question won, not the words that answer it.
+function Core.Readiness(plan)
+    if not plan then return { state = "unknown" } end
+    if plan.nothing then return { state = "blank" } end
+    if plan.empty then return { state = "worn" } end
+    if plan.blocked == "bags" then return { state = "bags", count = plan.needsBagSlots or 0 } end
+
+    local missing = #(plan.missing or {})
+    if missing > 0 then
+        if (plan.atBank or 0) == missing then return { state = "bank", count = plan.atBank } end
+        return { state = "missing", count = missing }
+    end
+    return { state = "swaps", count = #(plan.actions or {}) }
+end
+
 --- Of the bags read off the client, the ones a removed piece of gear can actually go into, in order.
 --
 -- One rule, named once, because two consumers have to agree about it: the planner counts these slots

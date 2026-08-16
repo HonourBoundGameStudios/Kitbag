@@ -762,6 +762,59 @@ H.eq(plan.nothing, false,
     "a set whose own delta is empty is NOT blank when it inherits — it is fully specified")
 
 -- ---------------------------------------------------------------------------
+-- Readiness — one verdict, read by every surface that says how ready a set is (VERIFY-10)
+-- ---------------------------------------------------------------------------
+--
+-- Four places answer "what stands between you and wearing this": the list row, the row tooltip, the
+-- inspector's note and `/kit equip`. Each used to walk its own `if plan.nothing then … elseif
+-- plan.empty then …` chain, which means the precedence existed four times and was tested nowhere.
+--
+-- The order is the whole of it, and one pair in particular: `nothing` MUST be asked before `empty`.
+-- A blank set and a set you are already wearing both have no actions and nothing missing, so `empty`
+-- is true for both — and getting the order wrong paints a set that says nothing at all green and
+-- calls it worn, which is how a half-built set looks finished. That is UI-16's original bug, and
+-- with the chain written out four times it could come back in any one of them alone.
+--
+-- The verdict is a WORD, not a sentence: the four surfaces phrase it differently on purpose ("empty"
+-- in a column six characters wide, "Empty — click a slot to say what goes there." under the doll),
+-- and pushing the phrasing in here would force them to share wording they have no business sharing.
+-- What they must share is which question won.
+
+H.eq(C.Readiness(nil).state, "unknown",
+    "no plan yet is its own answer — every other state would be a guess")
+
+H.eq(C.Readiness(C.Plan({ [1] = HELM }, { slots = {} }, {})).state, "blank",
+    "a set that names nothing reads as BLANK, not as worn — this is UI-16's whole point")
+
+H.eq(C.Readiness(C.Plan({ [1] = HELM }, { slots = { [1] = HELM } }, {})).state, "worn",
+    "…while a set you are already in reads as worn")
+
+-- Bags before missing: a full bag stops the entire swap, so it is the thing to fix first, and a
+-- reader told "2 missing" would go looking for gear they are standing on.
+local blockedPlan = C.Plan({ [1] = HELM, [5] = "999:0:0:0:0:0:0" },
+    { slots = { [1] = false, [5] = false } }, {}, { freeBagSlots = 0 })
+local blockedVerdict = C.Readiness(blockedPlan)
+H.eq(blockedVerdict.state, "bags", "a plan the bags cannot absorb reads as bags first")
+H.eq(blockedVerdict.count, blockedPlan.needsBagSlots,
+    "…counting the slots it needs, since 'bags full' alone does not say how many to free")
+
+-- "At bank" only when the bank explains ALL of it. A set that is part banked and part genuinely lost
+-- must not send the player on a trip that cannot finish the set.
+local banked = C.Readiness({ actions = {}, missing = { { slot = 1 }, { slot = 5 } }, atBank = 2 })
+H.eq(banked.state, "bank", "everything missing being at the bank is a walk, not a loss")
+H.eq(banked.count, 2, "…and the count is what to expect to find there")
+
+local partly = C.Readiness({ actions = {}, missing = { { slot = 1 }, { slot = 5 } }, atBank = 1 })
+H.eq(partly.state, "missing",
+    "one piece at the bank and one nowhere is MISSING — a bank trip would not finish the set")
+H.eq(partly.count, 2, "…counting everything not to hand, not just the lost half")
+
+local work = C.Readiness(C.Plan({}, { slots = { [1] = HELM } }, { [HELM] = { bag = 0, slot = 1 } },
+    { freeBagSlots = 4 }))
+H.eq(work.state, "swaps", "a plan with moves in it reads as swaps")
+H.eq(work.count, 1, "…counting the moves, which is what the row shows")
+
+-- ---------------------------------------------------------------------------
 -- CleanName — the name a set is actually stored under (UI-16)
 -- ---------------------------------------------------------------------------
 --

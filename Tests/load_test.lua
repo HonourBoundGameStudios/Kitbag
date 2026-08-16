@@ -424,4 +424,56 @@ H.ok(Sets.Save("Tank", true) ~= nil, "`/kit resave` is the same save with the qu
 H.eq(G.Kitbag.char.sets.Tank.slots[1], false,
     "…and it really did overwrite: the slot is now 'deliberately empty', not the old item")
 
+-- A blank set reads as EMPTY on every surface that describes it (VERIFY-10, UI-16).
+--
+-- Four places say how ready a set is, and `Core.Readiness` is now the one chain they agree through —
+-- but agreeing on a verdict is not the same as SPELLING it right, and the spelling is per-surface by
+-- design. So each is asked directly. The failure this guards against is specific and quiet: a blank
+-- set has no actions and nothing missing, so it satisfies `plan.empty` exactly as a set you are
+-- already wearing does, and any surface that reaches for green first announces "you are wearing this"
+-- about a set that names nothing at all. A half-built set then looks finished, and the slot picker —
+-- the entire reason an empty set exists — never gets opened.
+--
+-- Exercised here rather than in core_test because these are the window's own words, and KitbagUI only
+-- loads against a client.
+local UI = G.Kitbag.UI
+local blank = G.Kitbag.Core.Plan({ [1] = "444:0:0:0:0:0:0" }, { slots = {} }, {})
+local wearing = G.Kitbag.Core.Plan({ [1] = "444:0:0:0:0:0:0" },
+    { slots = { [1] = "444:0:0:0:0:0:0" } }, {})
+
+local SURFACES = {
+    { name = "the list row",        fn = "RowText" },
+    { name = "the row tooltip",     fn = "TooltipNote" },
+    { name = "the inspector note",  fn = "InspectorNote" },
+}
+
+-- Both spellings, because the three surfaces do not agree on one: the row says "worn", the inspector
+-- says "You are wearing this." A probe that knew only the first passed the inspector for the wrong
+-- reason — it was not that the sentence was absent, it was that the test could not see it.
+local function claimsWorn(text)
+    local lower = text:lower()
+    return lower:find("worn", 1, true) ~= nil or lower:find("wearing", 1, true) ~= nil
+end
+
+for _, s in ipairs(SURFACES) do
+    local text = UI[s.fn](blank)
+    H.ok(text:lower():find("empty", 1, true) ~= nil,
+        s.name .. " calls a blank set empty")
+    H.ok(not claimsWorn(text),
+        "…and never says worn or wearing about it, which is UI-16's original bug")
+
+    -- The other half of the pair, so the assertion above cannot be satisfied by a surface that has
+    -- simply stopped saying "worn" at all.
+    H.ok(claimsWorn(UI[s.fn](wearing)),
+        "…while " .. s.name .. " still says worn about a set you are actually in")
+end
+
+-- `/kit equip` is the fourth surface, and the only one that also has to decide an OUTCOME. A blank
+-- set can never "go on", so reporting it as a failure would have the rule engine retry it on every
+-- qualifying event for ever — it counts as done, with a reason that says which kind of done.
+G.Kitbag.char = { sets = { Blank = { slots = {} } }, rules = {}, swaps = {} }
+H.eq(Sets.Equip("Blank"), true, "equipping a blank set succeeds — there is nothing it failed to do")
+H.eq(G.Kitbag.char.swaps[1].reason, "the set names no slots",
+    "…and it is recorded as blank, not as 'already wearing it' — opposite answers, same no-op")
+
 H.done()
