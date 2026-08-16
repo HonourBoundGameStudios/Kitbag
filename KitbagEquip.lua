@@ -145,7 +145,28 @@ function Equip.Trace(t)
     -- NOT "no bag would take it". A bag move is a server round trip, so a cursor that still holds the
     -- item one instruction later is a move in flight, not a refusal — reading it as a refusal is what
     -- made BUG-12 look like a full-bags problem for an entire session.
-    if not t.stowed then return " [picked up, but the bag move had not completed]" end
+    if not t.stowed then
+        -- BUG-13's third round. `room = 13, need = 1` killed "your bags are full", and what was left
+        -- is invisible from outside: which bags the driver actually OFFERED the item to. An empty
+        -- list is a fault of its own and reads nothing like the sentence it used to produce — the
+        -- driver reporting that a move did not complete when it never issued one. A free-slot count
+        -- cannot catch that, because it is summed from the very same list.
+        if t.offered and #t.offered == 0 then
+            return " [picked up, but NO bag was offered it — the driver had nowhere to put it]"
+        end
+        if t.offered then
+            local bags = {}
+            for _, bag in ipairs(t.offered) do
+                bags[#bags + 1] = string.format("bag %s (%s free)",
+                    tostring(bag.bag), tostring(bag.free))
+            end
+            return " [picked up, but the bag move had not completed — offered to "
+                .. table.concat(bags, ", ") .. "]"
+        end
+        -- No list at all is a build that never watched, which must not read as one that watched and
+        -- saw none — the same rule the state line is built on.
+        return " [picked up, but the bag move had not completed]"
+    end
     -- Both calls did what they were asked and the slot is still occupied, so the client undid it.
     return " [picked up and stowed, yet the slot still holds it]"
 end
@@ -187,16 +208,23 @@ end)
 -- item is not a free miss, it is a "That bag is full" in the chat frame. A swap that worked
 -- perfectly still read as a string of errors, one per bag passed on the way to the one with room —
 -- and nothing distinguished that spam from a swap that genuinely failed.
+-- Returns the bags it actually offered the item to, in order, for the failure report. An empty list
+-- is the finding this was added for (BUG-13): "the bag move had not completed" is what the driver
+-- says when the cursor is still holding the item, and it says it identically whether five bags
+-- refused the item or whether no put was ever issued at all.
 local function stow()
+    local offered = {}
     for _, bag in ipairs(Core.StowBags(Inventory.Bags())) do
+        offered[#offered + 1] = { bag = bag.id, free = bag.free }
         -- The backpack has no inventory id to hand PutItemInBag; it has its own call.
         if bag.id == 0 then
             PutItemInBackpack()
         else
             PutItemInBag(Compat.ContainerToInventory(bag.id))
         end
-        if not CursorHasItem() then return end
+        if not CursorHasItem() then return offered end
     end
+    return offered
 end
 
 -- Returns what the cursor was seen doing, for the failure report only — never for the decision,
@@ -211,14 +239,14 @@ local function perform(action)
     if action.kind == "unequip" then
         PickupInventoryItem(action.to)
         local picked = CursorHasItem() and true or false
-        stow()
+        local offered = stow()
         -- Deliberately NO ClearCursor here. Putting an item in a bag is a server round trip — the
         -- premise this whole file is built on — so the cursor is still holding it one instruction
         -- later even when the move is perfectly fine. ClearCursor at that moment does not tidy up
         -- after a failure, it CANCELS a success and puts the shield straight back on the player's
         -- arm. Nothing moved, no error, three times over: BUG-12, and it was ours all along.
         -- The next frame's `satisfied` re-read is what decides, which is what it is for.
-        return { picked = picked, stowed = not CursorHasItem() }
+        return { picked = picked, stowed = not CursorHasItem(), offered = offered }
     elseif action.from.equipped then
         PickupInventoryItem(action.from.equipped)
         PickupInventoryItem(action.to)

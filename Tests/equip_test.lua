@@ -200,6 +200,32 @@ H.eq(E.Trace({ picked = true, stowed = true }),
     " [picked up and stowed, yet the slot still holds it]",
     "the loud case: both calls worked and the client put it back anyway")
 
+-- BUG-13, third round. The record now says there were 13 free bag slots and 1 was needed, so "your
+-- bags are full" is dead — and what is left is invisible from outside: WHICH bags the driver actually
+-- offered the item to. Two very different faults produce the identical sentence above.
+--
+-- The first is the one nothing can currently see: `stow` walks Core.StowBags, and if that list comes
+-- back EMPTY it calls nothing at all — no put is ever issued, the cursor is still holding the item,
+-- and the driver reports "the bag move had not completed" about a move it never attempted. A count
+-- of free slots taken from the same function cannot catch this, because both would agree.
+H.eq(E.Trace({ picked = true, stowed = false, offered = {} }),
+    " [picked up, but NO bag was offered it — the driver had nowhere to put it]",
+    "a stow that tried no bags at all is a different fault from one that tried and was refused")
+
+-- The second: bags WERE offered it and the item stayed on the cursor. That is a refusal or a move in
+-- flight, and naming the bags with their free counts is what tells the two apart on the next read —
+-- a bag reporting free slots that will not take an off-hand item is a specialty bag our family check
+-- let through.
+H.eq(E.Trace({ picked = true, stowed = false, offered = { { bag = 0, free = 5 }, { bag = 2, free = 8 } } }),
+    " [picked up, but the bag move had not completed — offered to bag 0 (5 free), bag 2 (8 free)]",
+    "the bags the item was offered to are named, with the room each claimed to have")
+
+-- Unchanged when nothing was recorded, because a build that never watched the bags must not read as
+-- one that watched and saw none — the same rule the state line is built on.
+H.eq(E.Trace({ picked = true, stowed = false }),
+    " [picked up, but the bag move had not completed]",
+    "a record from a build that never watched the bags says nothing about them")
+
 -- WHERE the driver was reaching for it. Amoondi's second failure named two different item ids, so
 -- `satisfied` is exonerated — item 6584 simply never arrived, silently, three times. What separates
 -- the surviving explanations is the source: a carried bag that has moved under the plan, or a BANK
