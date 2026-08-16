@@ -476,4 +476,47 @@ H.eq(Sets.Equip("Blank"), true, "equipping a blank set succeeds — there is not
 H.eq(G.Kitbag.char.swaps[1].reason, "the set names no slots",
     "…and it is recorded as blank, not as 'already wearing it' — opposite answers, same no-op")
 
+-- ---------------------------------------------------------------------------
+-- A failed swap records how much bag room there was (BUG-13)
+-- ---------------------------------------------------------------------------
+--
+-- Two instances of BUG-13 now read "picked up, but the bag move had not completed", and the number
+-- that separates its two candidate causes was never written down: the room at the moment it failed.
+-- The planner counts free slots before it starts and refuses outright when there are too few, so a
+-- failure that got as far as picking the item up is one the planner BELIEVED it had room for —
+-- either the bags filled underneath it, or the room it counted was not room that item could use.
+--
+-- Run here rather than in core_test because it is the wiring that was missing, not the arithmetic:
+-- Core.StateWords could render the number for a year without anything ever putting one in the
+-- record. This harness stubs the client at zero free slots, which is what lets an unequip fail on a
+-- real code path rather than a mocked one.
+-- Something has to BE on your head for taking it off to need a bag slot. The harness wears nothing
+-- by default, and against an empty head the set below is a no-op that reports "already wearing it" —
+-- which is the same `true` a real success returns and would have made this test pass by not running.
+local worn = G.GetInventoryItemLink
+G.GetInventoryItemLink = function(_, slotId)
+    return slotId == 1 and "|cffffffff|Hitem:444:0:0:0:0:0:0|h[Helm]|h|r" or nil
+end
+
+G.Kitbag.char = { sets = { Bare = { slots = { [1] = false } } }, rules = {}, swaps = {} }
+H.eq(Sets.Equip("Bare"), false, "taking the helmet off with no bag room fails rather than half-acting")
+
+local failed = G.Kitbag.char.swaps[1]
+H.ok(failed and failed.state ~= nil, "a failed swap records the conditions it failed in")
+H.eq(failed.state and failed.state.room, 0, "…including how much bag room there was at the time")
+H.eq(failed.state and failed.state.need, 1, "…and how much the plan needed, which is what makes 0 mean anything")
+
+-- The line a human actually reads, through the one vocabulary both the dump and /kit verify use.
+-- Pinned end to end: the record and the rendering have to agree, and they are written in different
+-- files by different modules.
+H.eq(G.Kitbag.Core.StateWords(failed.state),
+    "combat no, mounted no, dead no, casting no, bag room 0 of 1 needed",
+    "…and it reaches the reader as one line, in the vocabulary the dump and /kit verify share")
+
+-- The other direction, and the reason `state` is only captured on failure: a successful swap's
+-- conditions explain nothing and would double the size of the record for every ordinary equip.
+G.GetInventoryItemLink = worn
+H.eq(G.Kitbag.char.swaps[2] and G.Kitbag.char.swaps[2].state, nil,
+    "a swap that succeeded records no conditions at all")
+
 H.done()

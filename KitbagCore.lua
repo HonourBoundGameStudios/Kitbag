@@ -859,6 +859,20 @@ function Core.StateWords(state)
     for _, key in ipairs({ "combat", "mounted", "dead", "casting" }) do
         words[#words + 1] = key .. (state[key] and " yes" or " no")
     end
+
+    -- BUG-13's discriminator. "Picked up, but the bag move had not completed" has two candidate
+    -- causes that want opposite fixes: the bags filled underneath a plan that had counted room, or
+    -- the room counted was not room this item could actually use. The number that separates them is
+    -- how much room there was AT THE MOMENT IT FAILED, and it was never written down.
+    --
+    -- Against what the plan needed, because the room alone is ambiguous in the direction that
+    -- matters: "bag room 0" reads as the answer, and "bag room 0 of 0 needed" is a swap that wanted
+    -- no bag room at all — which is a different bug wearing the same words.
+    if state.room then
+        words[#words + 1] = "bag room " .. state.room
+            .. (state.need and (" of " .. state.need .. " needed") or "")
+    end
+
     return table.concat(words, ", ")
 end
 

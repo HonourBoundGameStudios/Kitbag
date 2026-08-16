@@ -512,6 +512,32 @@ H.eq(C.StateWords(nil), nil, "no state recorded is nil, not a line of four noes"
 H.eq(C.StateWords({ combat = true }), "combat yes, mounted no, dead no, casting no",
     "a condition the client could not answer reads as no rather than vanishing from the line")
 
+-- BUG-13's discriminator. Two instances now say "picked up, but the bag move had not completed",
+-- and the one number that would separate the two candidate causes was never recorded: how much bag
+-- room there was AT THE MOMENT IT FAILED. The planner counts free slots before it starts
+-- (`meta.freeBagSlots`) and refuses outright when there are too few — so a failure that got as far
+-- as picking the item up is one the planner believed it had room for, and either the bags filled
+-- underneath it or the room it counted was not room this item could use. Those want opposite fixes
+-- and no amount of re-reading the driver distinguishes them.
+--
+-- Reported against what the plan NEEDED, not alone: "bag room 0" is alarming and "bag room 0 of 0
+-- needed" is a swap that wanted no room at all, which is a different bug entirely.
+H.eq(C.StateWords({ room = 3, need = 1 }),
+    "combat no, mounted no, dead no, casting no, bag room 3 of 1 needed",
+    "the bag room at the moment of failure is on the line, against what the plan needed")
+H.eq(C.StateWords({ room = 0, need = 1 }),
+    "combat no, mounted no, dead no, casting no, bag room 0 of 1 needed",
+    "…and no room at all is stated as a number rather than by its absence")
+
+-- The same rule the whole function is built on, applied to the new pair: a build that never captured
+-- this must not read like one that looked and found none. Zero and unknown are opposite findings
+-- here — zero would explain BUG-13 outright, and unknown explains nothing.
+H.eq(C.StateWords({ combat = true, room = 0 }),
+    "combat yes, mounted no, dead no, casting no, bag room 0",
+    "room with no plan figure to compare against still reports the room")
+H.eq(C.StateWords({ combat = true }), "combat yes, mounted no, dead no, casting no",
+    "a record from a build that never counted bag room says nothing about it, rather than 0")
+
 -- ---------------------------------------------------------------------------
 -- PushSwap — a rolling history of attempts, not just the last one
 -- ---------------------------------------------------------------------------

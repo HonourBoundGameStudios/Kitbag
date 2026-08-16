@@ -980,6 +980,17 @@ Verify.CHECKS = {
             if not Equip.BUSY_LIMIT then
                 return false, "Equip.BUSY_LIMIT is missing — this build can still wedge (BUG-11)"
             end
+            -- BUG-13. Two instances have now said "picked up, but the bag move had not completed",
+            -- and the number that separates its candidate causes is the bag room at the moment it
+            -- failed. Asked of the RUNNING build, because a session spent reproducing BUG-13 against
+            -- a build that cannot record the answer reads exactly like the fault not reproducing —
+            -- UI-15's blank panel was that lesson the expensive way, and it was a stale deploy.
+            local Core = Kitbag.Core
+            local words = Core and Core.StateWords({ room = 0, need = 1 })
+            if not (words and words:find("bag room 0 of 1 needed", 1, true)) then
+                return false, "this build does not record bag room — a BUG-13 repro against it "
+                    .. "cannot answer the question it is being run for"
+            end
             -- Reported, not judged: whether an attempt has happened yet is the reader's business,
             -- and "nothing attempted" is the honest answer at the start of a session.
             local swaps = (Kitbag.char and Kitbag.char.swaps) or {}

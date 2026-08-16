@@ -451,6 +451,12 @@ end
 -- wearing, which may match no saved set at all. Everything below used to live in Sets.Equip; it is
 -- split out rather than duplicated so there stays exactly one code path that equips anything.
 function Sets.Apply(set, label, silent, onDone)
+    -- Assigned further down, declared here because `conditions` below closes over it. A local
+    -- declared AFTER a closure is a different name entirely — the closure reads a global and finds
+    -- nil — and the failure would be silent: every failed swap simply missing its bag figures, which
+    -- is indistinguishable from a build that never captured them.
+    local plan
+
     -- Called on every return below, so a caller that needs the outcome never has to infer it from
     -- the return value — which reports only whether the attempt STARTED.
     --
@@ -460,15 +466,30 @@ function Sets.Apply(set, label, silent, onDone)
     -- a path added later cannot forget to; recording it in the character's saved bucket rather than
     -- in memory means a /reload — the very thing that clears the symptom — does not clear the
     -- evidence with it.
+
+    -- Only on a failure. A successful swap's conditions explain nothing and would double the size of
+    -- the record for every ordinary equip.
+    local function conditions()
+        local state = Compat.ActionState()
+        -- BUG-13. Read FRESH rather than taken from the plan: the plan's count was made before the
+        -- attempt started, and the whole question is what the room was when it failed. If those two
+        -- numbers ever disagree, that disagreement IS the bug — the bags emptied or filled under a
+        -- plan that had already counted them.
+        if Inventory.FreeBagSlots then state.room = Inventory.FreeBagSlots() end
+        -- What the plan believed it needed, so the room means something. "Bag room 0" is alarming;
+        -- "bag room 0 of 0 needed" is a swap that wanted no room at all and failed for some other
+        -- reason entirely, and the two are one number apart.
+        state.need = plan and plan.needsBagSlots
+        return state
+    end
+
     local function done(ok, reason)
         -- Stamped the same way the dump's own header is, so the two can be read against each other:
         -- a swap from a previous session is otherwise indistinguishable from the one just attempted.
         local c = char()
         c.swaps = Core.PushSwap(c.swaps, {
             set = label, ok = ok, reason = reason, when = date("%Y-%m-%d %H:%M:%S"),
-            -- Only on a failure. A successful swap's conditions explain nothing and would double the
-            -- size of the record for every ordinary equip.
-            state = not ok and Compat.ActionState() or nil,
+            state = not ok and conditions() or nil,
         })
         -- Superseded by the history above. Cleared rather than left behind, because a stale key that
         -- still looks like an answer is how someone reads a swap from an hour ago as the current one.
@@ -478,7 +499,7 @@ function Sets.Apply(set, label, silent, onDone)
     end
 
     local equipped, where, meta = Inventory.Snapshot(set)
-    local plan = Core.Plan(equipped, set, where, meta)
+    plan = Core.Plan(equipped, set, where, meta)
 
     -- Report what can't be done BEFORE doing the rest. Half a set is a legitimate outcome — the
     -- other half may be in the bank — but it must never be a silent one.

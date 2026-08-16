@@ -235,6 +235,14 @@ H.ok(source:find(":Click()", 1, true) ~= nil,
 H.ok(source:find("added", 1, true) ~= nil,
     "the new-set check deletes whatever set actually appeared, not the name it hoped for")
 
+-- BUG-13's discriminator, guarded the way BUG-9's and BUG-11's are: the check proves the RUNNING
+-- build can record bag room, not merely that this repo can. The failure it prevents is one this ship
+-- has already paid for once (UI-15's blank panel was the previous build still on disk) — a session
+-- spent reproducing BUG-13 against a build that cannot answer the one question it is being
+-- reproduced for reads exactly like the fault refusing to appear.
+H.ok(source:find("bag room", 1, true) ~= nil,
+    "a check proves the running build records bag room, so a BUG-13 repro cannot be wasted on a stale deploy")
+
 H.ok(source:find("no `restore` rule", 1, true) ~= nil,
     "the restore-point skip distinguishes 'no rule exists' from 'a rule has not fired yet'")
 
