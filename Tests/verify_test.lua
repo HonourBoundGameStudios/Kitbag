@@ -226,6 +226,15 @@ H.ok(source:find("LossText", 1, true) ~= nil,
 H.ok(source:find(":Click()", 1, true) ~= nil,
     "the new-set check clicks a button, rather than calling the store the button would have called")
 
+-- And it must clean up what APPEARED, not what it hoped would appear. The check types a name into a
+-- real edit box and presses a real button, so the set it creates is named by the client and not by
+-- the check — an edit box with a letter limit, or any future tidying of the typed name, would make a
+-- set under a name the check is not holding. Deleting "the name I asked for" then removes nothing
+-- and leaves a scratch set in someone's SavedVariables for good, which is the one outcome a
+-- verification run must never produce: a check whose failure mode is permanent litter.
+H.ok(source:find("added", 1, true) ~= nil,
+    "the new-set check deletes whatever set actually appeared, not the name it hoped for")
+
 H.ok(source:find("no `restore` rule", 1, true) ~= nil,
     "the restore-point skip distinguishes 'no rule exists' from 'a rule has not fired yet'")
 

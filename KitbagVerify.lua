@@ -573,17 +573,31 @@ Verify.CHECKS = {
             end
 
             local restore, typed = UI.Selected(), box:GetText()
+
+            -- What existed BEFORE, so the cleanup can delete what appeared rather than what this
+            -- check hoped would appear. The set is named by the client, not by us: the name goes
+            -- through a real edit box and Core.CleanName, so an edit box letter limit or any future
+            -- tidying of the typed name would produce a set under a name we are not holding.
+            -- Deleting `scratch` would then delete nothing and leave litter in someone's
+            -- SavedVariables permanently, which is the one failure a verification run must not have.
+            local before = {}
+            for name in pairs(Kitbag.char.sets or {}) do before[name] = true end
+
             box:SetText(scratch)
 
             -- Guarded so the cleanup below runs even if the click raises. Verify.Run would catch the
             -- error, but by then the scratch set is in SavedVariables for good.
             local clicked, err = pcall(function() button:Click() end)
 
-            local made   = (Kitbag.char.sets or {})[scratch] ~= nil
+            local added = {}
+            for name in pairs(Kitbag.char.sets or {}) do
+                if not before[name] then added[#added + 1] = name end
+            end
             local landed = UI.Selected()
             local title  = _G.KitbagInspectorTitle and _G.KitbagInspectorTitle:GetText()
 
-            if made then Sets.Delete(scratch) end
+            for _, name in ipairs(added) do Sets.Delete(name) end
+            local made = added[1]
             box:SetText(typed or "")
             box:ClearFocus()
             if restore then UI.Select(restore) end
@@ -593,20 +607,29 @@ Verify.CHECKS = {
             if not made then
                 return false, "pressing New set with a name typed in the box made no set at all"
             end
-            if landed ~= scratch then
+            if #added > 1 then
+                return false, "one click made " .. #added .. " sets: " .. table.concat(added, ", ")
+            end
+            -- Reported rather than judged. The set is the one that appeared either way, so the
+            -- check still answers its question — but a name that came back different means the box
+            -- or CleanName is altering what the player typed, which is worth knowing on its own.
+            local renamed = (made ~= scratch)
+                and string.format(" (typed %q, stored as %q)", scratch, made) or ""
+            if landed ~= made then
                 return false, string.format(
                     "the set was made but the selection stayed on %s — the next slot clicked would "
-                    .. "land on the wrong set", tostring(landed))
+                    .. "land on the wrong set%s", tostring(landed), renamed)
             end
-            if title ~= scratch then
+            if title ~= made then
                 return false, string.format(
-                    "the selection moved to %s but the inspector is still headed %s",
-                    scratch, tostring(title))
+                    "the selection moved to %s but the inspector is still headed %s%s",
+                    made, tostring(title), renamed)
             end
             -- Said plainly, because the check's own two chat lines arrive with it and otherwise read
             -- as something having happened to the character's sets.
-            return true, "made, selected and drawn at once; the scratch set was deleted again "
-                .. "(the two set messages above are this check's)"
+            return true, string.format(
+                "made, selected and drawn at once; the scratch set was deleted again%s "
+                .. "(the two set messages above are this check's)", renamed)
         end,
     },
     {
