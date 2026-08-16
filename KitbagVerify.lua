@@ -443,18 +443,49 @@ Verify.CHECKS = {
             if not _G.StaticPopupDialogs or not _G.StaticPopupDialogs["KITBAG_OVERWRITE"] then
                 return nil, "the popup is only registered once the main window has been built"
             end
+            local Core, Sets, Inventory = Kitbag.Core, Kitbag.Sets, Kitbag.Inventory
+            if not (Core and Sets and Inventory) then return nil, "the set modules are not loaded" end
+            if not Kitbag.char then return nil, "no character bucket yet — not logged in" end
 
-            local popup = _G.StaticPopup_Show("KITBAG_OVERWRITE", "TestSet",
-                "Head, Chest (this is a verification run)", "TestSet")
+            -- Derived, never fabricated. The old version of this check handed the popup a sentence
+            -- written by hand, which proved the popup DRAWS and said nothing at all about VERIFY-12's
+            -- actual question — whether it names the right slots. A check that feeds its subject the
+            -- answer can only confirm that the subject can echo.
+            local equipped = Inventory.Equipped()
+            local name, lost
+            for _, candidate in ipairs(Sets.Names() or {}) do
+                local dropped = Core.SaveLoss(Sets.Resolve(candidate), equipped)
+                if dropped and #dropped > 0 then
+                    name, lost = candidate, dropped
+                    break
+                end
+            end
+            if not name then
+                return nil, "every set matches what you are wearing, so no save would drop anything"
+            end
+
+            local text = Sets.LossText(lost)
+            local popup = _G.StaticPopup_Show("KITBAG_OVERWRITE", name, text, name)
             if not popup then return false, "StaticPopup_Show returned nothing" end
 
+            -- What the player actually reads. The slot names come from Sets.LossText, which is pure
+            -- and covered; this is the join nobody had checked — that the rendered dialog contains
+            -- them rather than a truncated or differently-formatted line.
+            local rendered = _G.StaticPopup1Text and _G.StaticPopup1Text:GetText()
             local window = _G.KitbagFrame
-            local detail = string.format("%s strata %s; KitbagFrame strata %s",
+            local strata = string.format("%s strata %s; KitbagFrame strata %s",
                 popup:GetName() or "popup", tostring(popup:GetFrameStrata()),
                 window and tostring(window:GetFrameStrata()) or "(window not built)")
             _G.StaticPopup_Hide("KITBAG_OVERWRITE")
 
-            return true, detail
+            if rendered and not rendered:find(text, 1, true) then
+                return false, string.format(
+                    "the popup does not show the slots it should: wanted %q in the dialog", text)
+            end
+            if rendered and not rendered:find(name, 1, true) then
+                return false, string.format("the popup does not name the set %q it would overwrite", name)
+            end
+            return true, string.format("%s names %q losing: %s", strata, name, text)
         end,
     },
     {

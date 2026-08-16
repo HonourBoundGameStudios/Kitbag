@@ -181,4 +181,15 @@ H.ok(byId["rule-list-layout"] ~= nil,
 H.eq(byId["rule-list-layout"] and byId["rule-list-layout"].item, "VERIFY-11",
     "…and it names the item it answers")
 
+-- SHIP-6's lesson applied to a check rather than to a whitelist: an instrument must DERIVE what it
+-- shows, not restate it. The overwrite check used to hand StaticPopup a sentence written by hand,
+-- which proves the popup draws and says nothing whatever about VERIFY-12's actual question — whether
+-- the text names the RIGHT SLOTS. A check that feeds its subject a fabricated answer can only ever
+-- confirm that the subject can echo.
+local source = assert(io.open("KitbagVerify.lua")):read("*a")
+H.ok(not source:find("this is a verification run", 1, true),
+    "the overwrite check does not fabricate the text it is supposed to be verifying")
+H.ok(source:find("LossText", 1, true) ~= nil,
+    "…it goes through Sets.LossText, the same pure function the window uses")
+
 H.done()
