@@ -39,13 +39,14 @@ Equip.BUSY_LIMIT = BUSY_LIMIT
 local queue = nil
 local driver = CreateFrame("Frame")
 
-local function finish(ok, failedAction, stalled)
+local function finish(ok, failedAction, stalled, found)
     local done, label = queue and queue.onDone, queue and queue.label
     -- Built here rather than by the caller: the client's wording and the reason the driver gave up
     -- both live in this file, and a caller reassembling them is a second copy of the rule. Reason is
     -- defined below with the other pure decisions; it is read off the table when this runs, never at
     -- load, so no forward declaration is needed.
-    local reason = not ok and Equip.Reason(failedAction, queue and queue.lastError, stalled) or nil
+    local reason = not ok
+        and Equip.Reason(failedAction, queue and queue.lastError, stalled, found) or nil
     queue = nil
     driver:SetScript("OnUpdate", nil)
     driver:UnregisterEvent("UI_ERROR_MESSAGE")
@@ -73,15 +74,34 @@ end
 -- different report with a different fix from three attempts the client refused. Naming that state is
 -- our own reading of our own IsBusy rather than a guess at the client's meaning, so it is the one
 -- interpretation this function is entitled to make — and the client's own words still win over it.
-function Equip.Reason(failedAction, lastError, stalled)
+-- `found` is what the destination slot actually held at the moment the driver gave up, and it is the
+-- one fact that separates the two mechanisms a silent failure leaves behind: the item never arrived,
+-- or it arrived and `satisfied` refused to recognise it. Those want opposite fixes and are one
+-- string apart, and the driver had that string in its hand and dropped it (BUG-9, Amoondi's "stuck
+-- on Chest" with nothing blocking and no client message at all).
+function Equip.Reason(failedAction, lastError, stalled, found)
     local slot = failedAction and Core.SlotById(failedAction.to)
     local where = "stuck on " .. (slot and slot.label or "an unknown slot")
+
     -- The message arrives as an event payload, so blank is a real possibility — and "the game said:"
     -- with nothing after it reads as the addon losing the answer, which is worse than not asking.
     if type(lastError) == "string" and not lastError:match("^%s*$") then
-        return where .. " — the game said: " .. lastError
+        where = where .. " — the game said: " .. lastError
+    elseif stalled then
+        where = where .. " — you were dead or casting the whole time"
     end
-    if stalled then return where .. " — you were dead or casting the whole time" end
+
+    -- Kept alongside the client's message rather than instead of it: the message explains, the keys
+    -- describe, and a silent refusal has only the keys. Both sides are stated even when one is empty
+    -- — an unequip wanted nothing, and an untouched slot holds nothing, and printing a nil for
+    -- either would read as the addon having failed to look.
+    -- Only when at least one side is known. With neither, "slot holds nothing, wanted nothing" is
+    -- not a finding — it is the addon reporting that it did not look, dressed up as evidence.
+    local wanted = failedAction and failedAction.key
+    if found or wanted then
+        where = where .. string.format(" (slot holds %s, wanted %s)",
+            found and tostring(found) or "nothing", wanted and tostring(wanted) or "nothing")
+    end
     return where
 end
 
@@ -187,7 +207,11 @@ local function step(_, elapsed)
         -- message must not follow the queue to a later slot and be reported against it.
         queue.lastError = nil
     elseif decision == "fail" then
-        return finish(false, action, busy)
+        -- Read the slot one last time, for the report rather than for the decision. `satisfied` has
+        -- already said no; what it does not say is WHAT is in there, and that is the whole difference
+        -- between "the item never arrived" and "it arrived and we did not recognise it".
+        return finish(false, action, busy,
+            Core.ItemKey(GetInventoryItemLink("player", action.to)))
     elseif decision == "perform" then
         queue.tries, queue.waited = queue.tries + 1, 0
         perform(action)

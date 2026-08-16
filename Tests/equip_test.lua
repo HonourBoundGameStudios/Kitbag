@@ -151,6 +151,29 @@ H.eq(E.Reason({ to = 8 }, "   "), "stuck on Feet",
 H.eq(E.Reason({ to = 99 }, nil), "stuck on an unknown slot",
     "an unrecognised slot id degrades to the honest phrase rather than erroring")
 
+-- What the slot actually held when the driver gave up. Amoondi's "stuck on Chest" arrived with no
+-- client message and nothing blocking — combat, mounted, dead and casting all false — which rules
+-- out both of BUG-9's candidates and leaves two mechanisms that need opposite fixes: the item never
+-- arrived, or it arrived and `satisfied` refused to recognise it. Those are one string apart and the
+-- driver was throwing that string away, so the question cost a dump every time it was asked.
+H.eq(E.Reason({ to = 5, key = "14175:0:0:0:0:0:174" }, nil, false, "6569:0:0:0:0:0:1808"),
+    "stuck on Chest (slot holds 6569:0:0:0:0:0:1808, wanted 14175:0:0:0:0:0:174)",
+    "the failure names what the slot holds against what was asked — the two mechanisms differ here")
+H.eq(E.Reason({ to = 5, key = "14175:0:0:0:0:0:174" }, nil, false, "14175:0:0:0:0:0:174"),
+    "stuck on Chest (slot holds 14175:0:0:0:0:0:174, wanted 14175:0:0:0:0:0:174)",
+    "…and an equal pair is the LOUD case: the item is on and the check refused to see it")
+H.eq(E.Reason({ to = 5, key = "14175:0:0:0:0:0:174" }, nil, false, nil),
+    "stuck on Chest (slot holds nothing, wanted 14175:0:0:0:0:0:174)",
+    "an empty slot is stated as nothing rather than omitted — it means the pickup never landed")
+H.eq(E.Reason({ kind = "unequip", to = 17 }, nil, false, "21610:0:0:0:0:0:0"),
+    "stuck on Off hand (slot holds 21610:0:0:0:0:0:0, wanted nothing)",
+    "an unequip wanted nothing, and says so rather than printing a nil")
+
+-- The client's words still come first when there are any: they explain, where the keys only describe.
+H.eq(E.Reason({ to = 5, key = "14175:0:0:0:0:0:174" }, "You are mounted.", false, "6569:0:0:0:0:0:1808"),
+    "stuck on Chest — the game said: You are mounted. (slot holds 6569:0:0:0:0:0:1808, wanted 14175:0:0:0:0:0:174)",
+    "the client's message and the slot evidence are both kept — they answer different questions")
+
 -- Giving up because the client never let the driver act at all is a different report from giving up
 -- after three refused attempts, and it has a different fix. Saying so is our own reading of our own
 -- IsBusy, not a guess at what the client meant — the one thing this seam refuses to invent (BUG-11).
