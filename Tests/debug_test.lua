@@ -264,6 +264,26 @@ has(noop, "already wearing it",
 has(report({ when = "now", sets = {} }), "(nothing attempted",
     "no swap since login says so rather than the section going missing")
 
+-- The world at the moment it failed, which is the belt to UI_ERROR_MESSAGE's braces. The client is
+-- not obliged to say anything at all when it refuses an action, and a bare "stuck on Off hand" would
+-- leave BUG-9 exactly where it started. Every condition is stated in BOTH directions: "not in
+-- combat" is the line that RULES OUT the leading suspect, and a reader must never have to infer an
+-- absence from a missing word.
+local stated = report({ when = "now", sets = {}, lastSwap = {
+    set = "FASTHOJ+TRAVEL", ok = false, reason = "stuck on Off hand", when = "12:04:31",
+    state = { combat = true, mounted = true, dead = false, casting = false } } })
+has(stated, "combat yes", "being in combat at the moment of failure is stated")
+has(stated, "mounted yes", "…and being mounted, which is what triggered this swap in the first place")
+has(stated, "dead no", "…and the conditions that were NOT true are stated too, not left out")
+has(stated, "casting no", "…all four, so absence is never something the reader has to infer")
+
+-- A record from a build that did not capture the state must not read as a build that captured it
+-- and found nothing. That distinction is the whole of what a stale deploy costs.
+local unstated = report({ when = "now", sets = {}, lastSwap = {
+    set = "X", ok = false, reason = "stuck on Off hand", when = "12:06:00" } })
+H.ok(not unstated:find("combat", 1, true),
+    "a record with no state does not manufacture one")
+
 -- A failure the client said nothing about must not invent a reason. That case is itself evidence:
 -- it means the action was refused with no message, which is a different suspect list.
 local quiet = report({ when = "now", sets = {}, lastSwap = {

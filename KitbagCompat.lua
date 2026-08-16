@@ -218,6 +218,26 @@ function Compat.CharacterKey()
     return name .. " - " .. realm
 end
 
+--- The conditions that plausibly explain the client refusing an equip, read all at once.
+--
+-- Deliberately NOT the same question as IsBusy: this one reports, it does not decide. Combat and
+-- mounted are in here precisely BECAUSE we do not yet know whether they block a swap — ItemRack
+-- queues every slot while `UnitAffectingCombat` is true, which is suggestive and is not proof, and
+-- guessing wrong in IsBusy would refuse swaps the client would have accepted. Recording them costs
+-- nothing and settles the question the next time a swap fails (BUG-9).
+--
+-- Feature-detected rather than branched on flavour: a condition this client cannot answer comes back
+-- nil, which the dump renders as "no" — the honest reading, since an unasked question is not a yes.
+function Compat.ActionState()
+    return {
+        combat = _G.UnitAffectingCombat and _G.UnitAffectingCombat("player") or false,
+        mounted = _G.IsMounted and _G.IsMounted() or false,
+        dead = _G.UnitIsDeadOrGhost and _G.UnitIsDeadOrGhost("player") or false,
+        casting = (_G.UnitCastingInfo and _G.UnitCastingInfo("player")) ~= nil
+            or (_G.UnitChannelInfo and _G.UnitChannelInfo("player")) ~= nil,
+    }
+end
+
 --- Is the player currently in a state where swapping gear will be refused or wasted?
 -- Casting is the one people notice: a swap mid-cast cancels it.
 function Compat.IsBusy()

@@ -465,6 +465,9 @@ function Sets.Apply(set, label, silent, onDone)
         -- a swap from a previous session is otherwise indistinguishable from the one just attempted.
         char().lastSwap = {
             set = label, ok = ok, reason = reason, when = date("%Y-%m-%d %H:%M:%S"),
+            -- Only on a failure. A successful swap's conditions explain nothing and would double the
+            -- size of the record for every ordinary equip.
+            state = not ok and Compat.ActionState() or nil,
         }
         if onDone then onDone(ok) end
         return ok

@@ -232,6 +232,17 @@ function Debug.Report(world)
         elseif not swap.ok then
             add("  reason: (not recorded)")
         end
+        -- The world at the moment it ended. The client is not obliged to say anything when it
+        -- refuses an action, so a bare "stuck on Off hand" would leave BUG-9 where it started; this
+        -- is the second, independent answer. Every condition is stated in both directions, because
+        -- "combat no" is the line that RULES OUT the leading suspect and a missing word cannot do
+        -- that job. Omitted entirely when the state was never captured, so a stale build cannot
+        -- masquerade as one that looked and found nothing.
+        if swap.state then
+            add("  state: combat %s, mounted %s, dead %s, casting %s",
+                swap.state.combat and "yes" or "no", swap.state.mounted and "yes" or "no",
+                swap.state.dead and "yes" or "no", swap.state.casting and "yes" or "no")
+        end
     end
 
     -- Sorted, so two dumps differ only where the world differed. pairs() order would make every

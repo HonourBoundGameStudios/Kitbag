@@ -322,4 +322,21 @@ for _, key in ipairs(EXPECTED) do
     H.ok(type(G.Kitbag[key]) == "table", "Kitbag." .. key .. " is registered on the namespace")
 end
 
+-- Compat.ActionState — the conditions recorded when a swap fails (BUG-9). Exercised HERE because it
+-- is the one function whose whole job is asking the client four questions, and the mock client is
+-- the only place outside the game those can be asked at all.
+local state = G.Kitbag.Compat.ActionState()
+for _, key in ipairs({ "combat", "mounted", "dead", "casting" }) do
+    H.ok(state[key] ~= nil, "ActionState answers '" .. key .. "' rather than leaving it absent")
+    H.ok(type(state[key]) == "boolean",
+        "…as a boolean, so the dump renders it rather than printing a cast's spell name")
+end
+
+-- The feature-detection promise. UnitAffectingCombat is NOT among the stubs above, so this asserts
+-- the real behaviour on a client that does not have it: false, not a crash. A dump is asked for when
+-- something is already wrong, and a diagnostic that throws hides the bug behind its own.
+H.eq(state.combat, false,
+    "a condition this client cannot answer reads as false rather than erroring")
+H.eq(state.mounted, false, "…and one it can answer is answered — IsMounted is stubbed false")
+
 H.done()
