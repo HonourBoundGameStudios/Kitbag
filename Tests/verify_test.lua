@@ -192,4 +192,12 @@ H.ok(not source:find("this is a verification run", 1, true),
 H.ok(source:find("LossText", 1, true) ~= nil,
     "…it goes through Sets.LossText, the same pure function the window uses")
 
+-- A SKIP has to say which situation it is in, because the reader's next action differs completely.
+-- VERIFY-4 skipped three runs saying "trigger a `restore` rule first" — and the account holds no
+-- restore rule at all, so it was asking for something that could not happen. "Go and do it" and
+-- "there is nothing to do it with" are opposite instructions, and a skip that gives the first when
+-- the second is true sends someone off to reproduce a thing that does not exist.
+H.ok(source:find("no `restore` rule", 1, true) ~= nil,
+    "the restore-point skip distinguishes 'no rule exists' from 'a rule has not fired yet'")
+
 H.done()

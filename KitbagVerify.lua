@@ -224,7 +224,20 @@ Verify.CHECKS = {
             local char = Kitbag.char
             if not char then return nil, "no character bucket yet" end
             if not char.restorePoint then
-                return nil, "nothing has been remembered — trigger a `restore` rule first"
+                -- Which of the two situations this is decides what the reader should do next, and
+                -- they are opposite. "Go and trigger one" is useless advice when there is no restore
+                -- rule to trigger — it sends someone off to reproduce something that cannot happen,
+                -- which is how this item sat skipped for three runs.
+                local restoreRules = 0
+                for _, rule in ipairs(char.rules or {}) do
+                    if rule.restore then restoreRules = restoreRules + 1 end
+                end
+                if restoreRules == 0 then
+                    return nil, "no `restore` rule exists on this character — author one before this "
+                        .. "item can be answered at all"
+                end
+                return nil, string.format(
+                    "%d `restore` rule(s) exist but none has fired yet — trigger one", restoreRules)
             end
             local named = 0
             for _ in pairs(char.restorePoint.slots or {}) do named = named + 1 end
