@@ -512,6 +512,36 @@ H.eq(C.StateWords(nil), nil, "no state recorded is nil, not a line of four noes"
 H.eq(C.StateWords({ combat = true }), "combat yes, mounted no, dead no, casting no",
     "a condition the client could not answer reads as no rather than vanishing from the line")
 
+-- ---------------------------------------------------------------------------
+-- PushSwap — a rolling history of attempts, not just the last one
+-- ---------------------------------------------------------------------------
+--
+-- SavedVariables reaches disk on /reload, so a record made by an action lands on the NEXT reload.
+-- Storing only the most recent attempt means a player who clicks twice before reloading silently
+-- destroys the first one — which happened three times in one session on 2026-08-16, each time
+-- costing a round trip to discover the record on disk described an attempt nobody was asking about.
+-- A short history makes one reload carry everything since the last one.
+
+H.eq(#C.PushSwap(nil, { set = "A" }, 3), 1, "the first attempt starts a history rather than erroring")
+H.eq(C.PushSwap(nil, { set = "A" }, 3)[1].set, "A", "…and is the newest entry")
+
+local hist = C.PushSwap(C.PushSwap(nil, { set = "A" }, 3), { set = "B" }, 3)
+H.eq(hist[1].set, "B", "newest first, because that is the one a reader wants and the one a UI shows")
+H.eq(hist[2].set, "A", "…and the older attempt survives rather than being overwritten")
+
+-- Bounded, or a long session grows the saved file without limit — and SavedVariables is written in
+-- full on every reload, so an unbounded log is a growing cost on every single one.
+local many = nil
+for i = 1, 10 do many = C.PushSwap(many, { set = "S" .. i }, 3) end
+H.eq(#many, 3, "the history is capped")
+H.eq(many[1].set, "S10", "…keeping the newest")
+H.eq(many[3].set, "S8", "…and dropping the oldest")
+
+-- A caller that forgets the limit gets a sane one rather than an unbounded list, because the failure
+-- mode is invisible: nothing breaks, the file just grows for ever.
+H.ok(#C.PushSwap({ {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {} }, { set = "A" }) <= 10,
+    "no limit given falls back to a bounded default rather than growing without end")
+
 -- StowBags — which bags a removed item is offered to
 -- ---------------------------------------------------------------------------
 --

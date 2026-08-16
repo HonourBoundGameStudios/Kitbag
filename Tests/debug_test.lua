@@ -234,10 +234,10 @@ has(report({ when = "now", sets = {}, engine = { failed = "attempt to index a ni
 -- the reload, so the answer has to be waiting in the file when the dump is read rather than needing
 -- the fault to be reproduced on demand.
 
-local swapped = report({ when = "now", sets = {}, lastSwap = {
+local swapped = report({ when = "now", sets = {}, swaps = { {
     set = "FASTHOJ+TRAVEL", ok = false,
-    reason = "stuck on Off hand — the game said: You are mounted.", when = "12:04:31" } })
-has(swapped, "LAST SWAP", "the last swap attempt is a section of its own")
+    reason = "stuck on Off hand — the game said: You are mounted.", when = "12:04:31" } } })
+has(swapped, "RECENT SWAPS", "the swap history is a section of its own")
 has(swapped, "FASTHOJ+TRAVEL", "…naming the set that was attempted")
 has(swapped, "failed", "…saying plainly that it did not finish")
 has(swapped, "stuck on Off hand — the game said: You are mounted.",
@@ -247,18 +247,30 @@ has(swapped, "12:04:31",
 
 -- A swap that WORKED is worth as much as one that did not: it is what separates "the rule never
 -- fired" from "the rule fired and the equip failed", and those send a reader to opposite files.
-local ok = report({ when = "now", sets = {}, lastSwap = {
-    set = "Heal-PVP", ok = true, when = "12:05:02" } })
+local ok = report({ when = "now", sets = {}, swaps = { {
+    set = "Heal-PVP", ok = true, when = "12:05:02" } } })
 has(ok, "succeeded", "a swap that worked is recorded too — it is how a failed rule is ruled out")
 
 -- And a success carries its reason when it has one, because "succeeded" covers both a set that was
 -- equipped and a set that had nothing to do. Those are the two halves of BUG-10 — "a rule that
 -- matches can do nothing at all, silently" — and a dump that reads them the same way cannot tell a
 -- swap that happened from a swap that was a no-op.
-local noop = report({ when = "now", sets = {}, lastSwap = {
-    set = "Heal-PVP", ok = true, reason = "already wearing it", when = "12:05:02" } })
+local noop = report({ when = "now", sets = {}, swaps = { {
+    set = "Heal-PVP", ok = true, reason = "already wearing it", when = "12:05:02" } } })
 has(noop, "already wearing it",
     "a swap that succeeded by having nothing to do says so — it is not the same as one that moved gear")
+
+-- The reason there is a history at all. SavedVariables reaches disk on /reload, so two attempts
+-- before one reload used to leave only the second — and a reader then diagnoses an attempt nobody
+-- asked about. That happened three times in one session on 2026-08-16.
+local both = report({ when = "now", sets = {}, swaps = {
+    { set = "PVE-Heal", ok = false, reason = "stuck on Chest", when = "12:06:00" },
+    { set = "FASTHOJ+TRAVEL", ok = true, when = "12:04:31" },
+} })
+has(both, "stuck on Chest", "the newest attempt is reported")
+has(both, "FASTHOJ+TRAVEL", "…and the one before it survives rather than being overwritten")
+H.ok(both:find("PVE-Heal", 1, true) < both:find("FASTHOJ+TRAVEL", 1, true),
+    "newest first, so the attempt just made is the one at the top")
 
 -- Nothing attempted yet is a third state, and not the same as a swap that failed silently.
 has(report({ when = "now", sets = {} }), "(nothing attempted",
@@ -269,9 +281,9 @@ has(report({ when = "now", sets = {} }), "(nothing attempted",
 -- leave BUG-9 exactly where it started. Every condition is stated in BOTH directions: "not in
 -- combat" is the line that RULES OUT the leading suspect, and a reader must never have to infer an
 -- absence from a missing word.
-local stated = report({ when = "now", sets = {}, lastSwap = {
+local stated = report({ when = "now", sets = {}, swaps = { {
     set = "FASTHOJ+TRAVEL", ok = false, reason = "stuck on Off hand", when = "12:04:31",
-    state = { combat = true, mounted = true, dead = false, casting = false } } })
+    state = { combat = true, mounted = true, dead = false, casting = false } } } })
 has(stated, "combat yes", "being in combat at the moment of failure is stated")
 has(stated, "mounted yes", "…and being mounted, which is what triggered this swap in the first place")
 has(stated, "dead no", "…and the conditions that were NOT true are stated too, not left out")
@@ -279,15 +291,15 @@ has(stated, "casting no", "…all four, so absence is never something the reader
 
 -- A record from a build that did not capture the state must not read as a build that captured it
 -- and found nothing. That distinction is the whole of what a stale deploy costs.
-local unstated = report({ when = "now", sets = {}, lastSwap = {
-    set = "X", ok = false, reason = "stuck on Off hand", when = "12:06:00" } })
+local unstated = report({ when = "now", sets = {}, swaps = { {
+    set = "X", ok = false, reason = "stuck on Off hand", when = "12:06:00" } } })
 H.ok(not unstated:find("combat", 1, true),
     "a record with no state does not manufacture one")
 
 -- A failure the client said nothing about must not invent a reason. That case is itself evidence:
 -- it means the action was refused with no message, which is a different suspect list.
-local quiet = report({ when = "now", sets = {}, lastSwap = {
-    set = "X", ok = false, reason = "stuck on Off hand", when = "12:06:00" } })
+local quiet = report({ when = "now", sets = {}, swaps = { {
+    set = "X", ok = false, reason = "stuck on Off hand", when = "12:06:00" } } })
 has(quiet, "stuck on Off hand", "a failure the client did not explain reports what is known")
 
 -- The empty cases, stated rather than omitted. "No rules" is the single most likely explanation for

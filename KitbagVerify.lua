@@ -419,7 +419,8 @@ Verify.CHECKS = {
             end
             -- Reported, not judged: whether an attempt has happened yet is the reader's business,
             -- and "nothing attempted" is the honest answer at the start of a session.
-            local last = Kitbag.char and Kitbag.char.lastSwap
+            local swaps = (Kitbag.char and Kitbag.char.swaps) or {}
+            local last = swaps[1]
             if not last then return true, "ready; nothing attempted yet this character" end
             -- The conditions come through too, and through Core.StateWords rather than a second copy
             -- of the wording: this line is read in the client, and sending someone for a dump to

@@ -463,12 +463,16 @@ function Sets.Apply(set, label, silent, onDone)
     local function done(ok, reason)
         -- Stamped the same way the dump's own header is, so the two can be read against each other:
         -- a swap from a previous session is otherwise indistinguishable from the one just attempted.
-        char().lastSwap = {
+        local c = char()
+        c.swaps = Core.PushSwap(c.swaps, {
             set = label, ok = ok, reason = reason, when = date("%Y-%m-%d %H:%M:%S"),
             -- Only on a failure. A successful swap's conditions explain nothing and would double the
             -- size of the record for every ordinary equip.
             state = not ok and Compat.ActionState() or nil,
-        }
+        })
+        -- Superseded by the history above. Cleared rather than left behind, because a stale key that
+        -- still looks like an answer is how someone reads a swap from an hour ago as the current one.
+        c.lastSwap = nil
         if onDone then onDone(ok) end
         return ok
     end

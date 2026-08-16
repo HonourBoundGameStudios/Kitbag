@@ -252,11 +252,11 @@ H.ok(type(G.Kitbag) == "table", "the Kitbag namespace exists after every module 
 -- report rather than falling straight into its "nothing attempted yet" branch. Set BEFORE the run,
 -- because the check reads it at call time.
 Kitbag.char = Kitbag.char or {}
-Kitbag.char.lastSwap = {
+Kitbag.char.swaps = { {
     set = "FASTHOJ+TRAVEL", ok = false, reason = "stuck on Off hand",
     when = "2026-08-16 12:04:31",
     state = { combat = true, mounted = true, dead = false, casting = false },
-}
+} }
 
 G.print = function() end
 local verifyResults = Kitbag.Verify.Run()

@@ -781,6 +781,26 @@ function Core.StowBags(bags)
     return usable
 end
 
+--- Add an attempt to the rolling history, newest first. PURE. Returns the new list.
+--
+-- Why a history rather than just the last one: SavedVariables reaches disk on /reload, so a record
+-- made by an action lands on the NEXT reload. Keeping only the most recent attempt means two clicks
+-- before a reload silently destroy the first — which cost three round trips in one session, each
+-- spent discovering that the record on disk described an attempt nobody had asked about.
+--
+-- Capped, because the file is rewritten in full on every reload: an unbounded log is a cost paid on
+-- each one, and its failure mode is invisible — nothing breaks, the file just grows.
+local SWAP_HISTORY = 10
+
+function Core.PushSwap(history, record, limit)
+    limit = tonumber(limit) or SWAP_HISTORY
+    local out = { record }
+    for i = 1, math.min(#(history or {}), limit - 1) do
+        out[#out + 1] = history[i]
+    end
+    return out
+end
+
 --- The conditions a failed swap failed in, as one line. PURE.
 --
 -- One vocabulary because two readers ask the same question — the debug dump prints this and so does
