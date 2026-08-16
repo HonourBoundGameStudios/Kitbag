@@ -31,22 +31,31 @@ local SETTLE = 0.4
 -- this hour. An unbounded wait is not patience, it is a wedge (BUG-11).
 local BUSY_LIMIT = 10
 
+-- How long the driver waits for a question the client has put on screen — the Bind-on-Equip
+-- confirmation, and its siblings. Much longer than BUSY_LIMIT because it is denominated in HUMAN
+-- time: a player reading a dialog is not a client that has failed to answer in 400ms. Bounded all
+-- the same, because a dialog nobody answers must not wedge the driver (BUG-11's lesson, applied
+-- rather than learned twice).
+local BIND_LIMIT = 60
+
 Equip.MAX_RETRIES = MAX_RETRIES
 Equip.SETTLE = SETTLE
 Equip.BUSY_LIMIT = BUSY_LIMIT
+Equip.BIND_LIMIT = BIND_LIMIT
 
--- { actions =, index =, tries =, waited =, blockedFor =, onDone =, label =, lastError = }
+-- { actions =, index =, tries =, waited =, blockedFor =, bindWaited =, onDone =, label =,
+--   lastError = }
 local queue = nil
 local driver = CreateFrame("Frame")
 
-local function finish(ok, failedAction, stalled, found)
+local function finish(ok, failedAction, blocked, found)
     local done, label = queue and queue.onDone, queue and queue.label
     -- Built here rather than by the caller: the client's wording and the reason the driver gave up
     -- both live in this file, and a caller reassembling them is a second copy of the rule. Reason is
     -- defined below with the other pure decisions; it is read off the table when this runs, never at
     -- load, so no forward declaration is needed.
     local reason = not ok
-        and Equip.Reason(failedAction, queue and queue.lastError, stalled, found) or nil
+        and Equip.Reason(failedAction, queue and queue.lastError, blocked, found) or nil
     queue = nil
     driver:SetScript("OnUpdate", nil)
     driver:UnregisterEvent("UI_ERROR_MESSAGE")
@@ -70,16 +79,17 @@ end
 -- now" arrive as the same sentence — one a Kitbag bug and one a game rule. The client's wording is
 -- quoted rather than interpreted; guessing at its meaning is how a message becomes wrong after a
 -- patch.
--- `stalled` says the driver gave up because the player never became able to act, which is a
--- different report with a different fix from three attempts the client refused. Naming that state is
--- our own reading of our own IsBusy rather than a guess at the client's meaning, so it is the one
--- interpretation this function is entitled to make — and the client's own words still win over it.
 -- `found` is what the destination slot actually held at the moment the driver gave up, and it is the
 -- one fact that separates the two mechanisms a silent failure leaves behind: the item never arrived,
 -- or it arrived and `satisfied` refused to recognise it. Those want opposite fixes and are one
 -- string apart, and the driver had that string in its hand and dropped it (BUG-9, Amoondi's "stuck
 -- on Chest" with nothing blocking and no client message at all).
-function Equip.Reason(failedAction, lastError, stalled, found)
+-- `blocked` names what the driver was waiting on when it gave up: nil, "busy" (the player could
+-- never act — our own reading of our own IsBusy, the one interpretation this function is entitled to
+-- make) or "bind" (the client asked a question nobody answered). An unanswered question is not a
+-- failure of the addon and must not read like one — the sentence should send the player back to the
+-- dialog, not to a bug report. The client's own words still win over both.
+function Equip.Reason(failedAction, lastError, blocked, found)
     local slot = failedAction and Core.SlotById(failedAction.to)
     local where = "stuck on " .. (slot and slot.label or "an unknown slot")
 
@@ -87,7 +97,9 @@ function Equip.Reason(failedAction, lastError, stalled, found)
     -- with nothing after it reads as the addon losing the answer, which is worse than not asking.
     if type(lastError) == "string" and not lastError:match("^%s*$") then
         where = where .. " — the game said: " .. lastError
-    elseif stalled then
+    elseif blocked == "bind" then
+        where = where .. " — the bind confirmation was not answered"
+    elseif blocked then
         where = where .. " — you were dead or casting the whole time"
     end
 
@@ -187,6 +199,13 @@ end
 function Equip.Decide(s)
     if not s.hasAction then return "done" end
     if s.satisfied then return "advance" end
+    -- Before `busy`, and before the retry budget: a question on screen is not a refusal, and every
+    -- instrument the driver has reads "fine" while one is up. This is what BUG-9 turned out to be —
+    -- three retries spent in 1.2 seconds against a dialog nobody had answered yet.
+    if s.pendingBind then
+        if (s.bindWaited or 0) >= BIND_LIMIT then return "fail" end
+        return "wait"
+    end
     if s.busy then
         -- Both orderings above still hold: a plan that finished is finished and an item that
         -- arrived is accepted, however long the player has been unable to act.
@@ -209,12 +228,19 @@ local function step(_, elapsed)
     local busy = Compat.IsBusy()
     queue.blockedFor = busy and (queue.blockedFor + elapsed) or 0
 
+    -- Counted separately from `blockedFor`, and reset when the dialog goes away, so answering one
+    -- question does not eat the budget for the next item's.
+    local pendingBind = Compat.PendingBind()
+    queue.bindWaited = pendingBind and (queue.bindWaited + elapsed) or 0
+
     local action = queue.actions[queue.index]
     local decision = Equip.Decide({
         hasAction = action ~= nil,
         satisfied = action ~= nil and satisfied(action),
         busy = busy,
         blockedFor = queue.blockedFor,
+        pendingBind = pendingBind,
+        bindWaited = queue.bindWaited,
         tries = queue.tries,
         waited = queue.waited,
     })
@@ -230,7 +256,7 @@ local function step(_, elapsed)
         -- Read the slot one last time, for the report rather than for the decision. `satisfied` has
         -- already said no; what it does not say is WHAT is in there, and that is the whole difference
         -- between "the item never arrived" and "it arrived and we did not recognise it".
-        return finish(false, action, busy,
+        return finish(false, action, pendingBind and "bind" or (busy and "busy" or nil),
             Core.ItemKey(GetInventoryItemLink("player", action.to)))
     elseif decision == "perform" then
         queue.tries, queue.waited = queue.tries + 1, 0
@@ -251,7 +277,8 @@ function Equip.Run(plan, label, onDone)
     end
 
     queue = {
-        actions = plan.actions, index = 1, tries = 0, waited = 0, blockedFor = 0,
+        actions = plan.actions, index = 1, tries = 0, waited = 0,
+        blockedFor = 0, bindWaited = 0,
         onDone = onDone, label = label,
     }
     driver:SetScript("OnUpdate", step)

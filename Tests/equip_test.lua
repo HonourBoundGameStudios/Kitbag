@@ -192,15 +192,58 @@ H.eq(E.Reason({ to = 5, key = "14175:0:0:0:0:0:174" }, "You are mounted.", false
     "stuck on Chest — the game said: You are mounted. (slot holds 6569:0:0:0:0:0:1808, wanted 14175:0:0:0:0:0:174)",
     "the client's message and the slot evidence are both kept — they answer different questions")
 
+-- ---------------------------------------------------------------------------
+-- A question on screen is not a failure (BUG-9, the actual cause)
+-- ---------------------------------------------------------------------------
+--
+-- The whole hunt ended here: item 6584 was Bind-on-Equip, so the client put up its EQUIP_BIND
+-- confirmation and waited for a human. That is not an error — no UI_ERROR_MESSAGE fires, nothing is
+-- blocking, the item is present, reachable and wearable — so every instrument the driver had said
+-- "fine" while it burned three retries in 1.2 seconds against a dialog nobody had answered yet, and
+-- then reported "stuck on Chest".
+--
+-- A pending question must therefore suspend the driver rather than spend it. The budget is its own
+-- and it is long, because it is denominated in HUMAN time: a player reading a dialog is not a client
+-- that has failed to answer in 400ms.
+
+H.ok(E.BIND_LIMIT and E.BIND_LIMIT > E.BUSY_LIMIT,
+    "waiting on a person gets a longer budget than waiting on the client")
+
+H.eq(decide({ hasAction = true, satisfied = false, busy = false, tries = 1, waited = 99,
+              pendingBind = true, bindWaited = 0 }), "wait",
+    "a bind confirmation on screen suspends the driver — the retry budget must not run against it")
+H.eq(decide({ hasAction = true, satisfied = false, busy = false, tries = E.MAX_RETRIES,
+              waited = E.SETTLE, pendingBind = true, bindWaited = 5 }), "wait",
+    "…even with the retries already spent, because they were spent on a question, not a refusal")
+H.eq(decide({ hasAction = true, satisfied = true, busy = false, tries = 1, waited = 0,
+              pendingBind = true, bindWaited = 5 }), "advance",
+    "an item that arrived is accepted even with a dialog still up — arrival beats the question")
+
+-- Bounded, like every other wait here. A dialog nobody answers must not wedge the driver for ever,
+-- which is BUG-11's lesson applied before it can be learned twice.
+H.eq(decide({ hasAction = true, satisfied = false, busy = false, tries = 1, waited = 0,
+              pendingBind = true, bindWaited = E.BIND_LIMIT }), "fail",
+    "an unanswered dialog eventually gives up rather than waiting for ever")
+H.eq(decide({ hasAction = true, satisfied = false, busy = false, tries = 0, waited = 0 }), "perform",
+    "no dialog and no block is the ordinary path, unchanged")
+
 -- Giving up because the client never let the driver act at all is a different report from giving up
 -- after three refused attempts, and it has a different fix. Saying so is our own reading of our own
 -- IsBusy, not a guess at what the client meant — the one thing this seam refuses to invent (BUG-11).
-H.eq(E.Reason({ to = 17 }, nil, true),
+H.eq(E.Reason({ to = 17 }, nil, "busy"),
     "stuck on Off hand — you were dead or casting the whole time",
     "a swap abandoned because the player never became able to act says that, not 'stuck'")
-H.eq(E.Reason({ to = 17 }, "You are dead.", true),
+H.eq(E.Reason({ to = 17 }, "You are dead.", "busy"),
     "stuck on Off hand — the game said: You are dead.",
     "…but the client's own words still win when there are any, since they are the better answer")
+
+-- An unanswered question is not a failure of the addon and must not read like one. The player is the
+-- one who did not act, the dialog told them so, and the sentence should send them back to it rather
+-- than to a bug report.
+H.eq(E.Reason({ to = 5, key = "6584:0:0:0:0:0:1997" }, nil, "bind", nil),
+    "stuck on Chest — the bind confirmation was not answered " ..
+    "(slot holds nothing, wanted 6584:0:0:0:0:0:1997)",
+    "an unanswered bind dialog says so — it is the player's move, not the addon's fault")
 
 -- Reading the event payload. The modern engine fires (errorType, message); the older one fired the
 -- message alone. Reading it wrong stores nil and silently puts the report back to what BUG-9 was

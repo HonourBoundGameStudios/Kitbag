@@ -238,6 +238,29 @@ function Compat.ActionState()
     }
 end
 
+-- The confirmations the client raises when equipping would bind an item. Equipping from a bag is the
+-- EQUIP_BIND path; the others are listed because they are the same question asked by a different
+-- door, and a driver that recognises only one of them stalls on the other two.
+local BIND_POPUPS = { "EQUIP_BIND", "AUTOEQUIP_BIND", "USE_BIND" }
+
+--- Is the client waiting for the player to confirm binding an item?
+--
+-- This is the whole of BUG-9. A Bind-on-Equip item raises a dialog rather than an error: nothing is
+-- busy, no UI_ERROR_MESSAGE fires, the item is present and wearable, and every instrument the driver
+-- had reported "fine" while it spent its retries against a question nobody had answered yet.
+--
+-- Feature-detected: StaticPopup_Visible is not guaranteed on every flavour, and an addon that
+-- assumes it would break the swap it is trying to protect. Absent means "no question" — the same
+-- answer the driver behaved on before this existed.
+function Compat.PendingBind()
+    local visible = _G.StaticPopup_Visible
+    if not visible then return false end
+    for _, name in ipairs(BIND_POPUPS) do
+        if visible(name) then return true end
+    end
+    return false
+end
+
 --- Is the player currently in a state where swapping gear will be refused or wasted?
 -- Casting is the one people notice: a swap mid-cast cancels it.
 function Compat.IsBusy()
