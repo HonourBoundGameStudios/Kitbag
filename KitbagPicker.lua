@@ -101,7 +101,11 @@ local function build()
 
     -- Left-aligned and width-limited rather than centred: a long set name should run out of room
     -- against the close button instead of sliding out from under it.
-    frame.title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    -- The title, the close button and the grid are NAMED so `/kit verify` can measure the three
+    -- questions VERIFY-10 asks about this panel: does the bar clear the last column, does the close
+    -- button clear the bar, and does a long name run out against the close button. All three are
+    -- relationships between edges, which is precisely what an eye cannot settle to a pixel.
+    frame.title = frame:CreateFontString("KitbagPickerTitle", "OVERLAY", "GameFontNormalSmall")
     frame.title:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD, -PAD)
     frame.title:SetWidth(GRID_WIDTH + BAR_STRIP - 16)
     frame.title:SetJustifyH("LEFT")
@@ -111,12 +115,12 @@ local function build()
 
     -- Esc closes it and so does picking anything, but a panel with no visible way out reads as
     -- stuck. Scaled well down from the template's default, which is itself the size of four icons.
-    local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
+    local close = CreateFrame("Button", "KitbagPickerClose", frame, "UIPanelCloseButton")
     close:SetSize(20, 20)
     close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -2, -2)
     close:SetScript("OnClick", function() frame:Hide() end)
 
-    local grid = CreateFrame("Frame", nil, frame)
+    local grid = CreateFrame("Frame", "KitbagPickerGrid", frame)
     grid:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD, -20)
     grid:SetSize(GRID_WIDTH, ROWS * CELL)
 

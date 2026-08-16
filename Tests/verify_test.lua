@@ -144,4 +144,14 @@ H.ok(byId["selection"] ~= nil,
 H.eq(byId["selection"] and byId["selection"].item, "VERIFY-8",
     "…and it names the item it answers")
 
+-- VERIFY-10's picker questions are geometry, and geometry is the one thing on that list a person is
+-- WORST at: "does the scroll bar clear the last column" is a three-pixel question answered by eye
+-- with "looks fine". Worse, BAR_STRIP is our guess at how far outside its scroll frame Blizzard
+-- hangs a FauxScrollFrame bar — their number, not ours, so it cannot be reasoned from this side and
+-- has to be measured against a real one.
+H.ok(byId["picker-layout"] ~= nil,
+    "a check measures the picker's layout, rather than asking someone to eyeball three pixels")
+H.eq(byId["picker-layout"] and byId["picker-layout"].item, "VERIFY-10",
+    "…and it names the item it answers")
+
 H.done()

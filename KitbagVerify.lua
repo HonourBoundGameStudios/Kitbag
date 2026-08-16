@@ -337,6 +337,81 @@ Verify.CHECKS = {
         end,
     },
     {
+        id = "picker-layout", item = "VERIFY-10", label = "Picker layout clears itself",
+        -- Three edge relationships, all of which VERIFY-10 asks a person to judge by eye. The first
+        -- is the one that cannot be reasoned from our side at all: FauxScrollFrameTemplate hangs its
+        -- bar OUTSIDE the scroll frame by an amount Blizzard chooses, and BAR_STRIP is this addon's
+        -- guess at that amount. A guess about someone else's layout is exactly what measuring is for.
+        run = function()
+            local Picker, Sets = Kitbag.Picker, Kitbag.Sets
+            if not Picker or not Sets then return nil, "KitbagPicker is not loaded" end
+            if not Kitbag.char then return nil, "no character bucket yet — not logged in" end
+            local name = (Sets.Names() or {})[1]
+            if not name then return nil, "no sets yet — make one and run this again" end
+
+            Picker.Open(name, 1, UIParent)
+            local frame = _G.KitbagPickerFrame
+            if not frame or not frame:IsShown() then
+                Picker.Close()
+                return nil, "the picker did not open, so there was nothing to measure"
+            end
+
+            local grid  = _G.KitbagPickerGrid
+            local close = _G.KitbagPickerClose
+            local title = _G.KitbagPickerTitle
+            local bar   = _G.KitbagPickerScrollScrollBar
+            if not (grid and close and title and bar) then
+                Picker.Close()
+                -- Naming these is what makes the measurement possible, so a missing name is a broken
+                -- check rather than a skippable condition — say so instead of quietly passing.
+                return false, "a named piece of the picker is missing, so nothing could be measured"
+            end
+
+            local faults, notes = {}, {}
+            local function edge(a, b) return a and b and (a - b) or nil end
+
+            -- 1. The bar must start at or right of the grid's right edge, or it sits on the icons.
+            local clearance = edge(bar:GetLeft(), grid:GetRight())
+            if clearance then
+                notes[#notes + 1] = string.format("bar clears the last column by %d", clearance)
+                if clearance < 0 then
+                    faults[#faults + 1] = string.format(
+                        "the scroll bar overlaps the last column of icons by %d", -clearance)
+                end
+            end
+
+            -- 2. The close button must sit above the bar, not on its top end.
+            local gap = edge(close:GetBottom(), bar:GetTop())
+            if gap then
+                notes[#notes + 1] = string.format("close clears the bar by %d", gap)
+                if gap < 0 then
+                    faults[#faults + 1] = string.format(
+                        "the close button overlaps the top of the scroll bar by %d", -gap)
+                end
+            end
+
+            -- 3. A long set name must run out of room against the close button rather than under it —
+            -- and must not wrap, because a second line lands on the first row of icons.
+            local room = edge(close:GetLeft(), title:GetRight())
+            if room then
+                notes[#notes + 1] = string.format("title stops %d short of close", room)
+                if room < 0 then
+                    faults[#faults + 1] = string.format(
+                        "a long set name runs under the close button by %d", -room)
+                end
+            end
+            if title.GetNumLines and title:GetNumLines() > 1 then
+                faults[#faults + 1] = "the title wrapped onto a second line, which lands on the icons"
+            end
+
+            Picker.Close()
+
+            if #notes == 0 then return nil, "no edges could be read — the panel may not be laid out yet" end
+            if #faults > 0 then return false, table.concat(faults, "; ") end
+            return true, table.concat(notes, ", ")
+        end,
+    },
+    {
         id = "icon-picker", item = "VERIFY-2", label = "Set icon picker opens",
         run = function()
             local Icons, Sets = Kitbag.Icons, Kitbag.Sets
