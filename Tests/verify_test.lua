@@ -176,6 +176,16 @@ H.ok(byId["new-set-selected"] ~= nil,
 H.eq(byId["new-set-selected"] and byId["new-set-selected"].item, "VERIFY-10",
     "…and it names the item it answers")
 
+-- VERIFY-3's last half needs a set that is ACTUALLY part-banked, and finding one is a reading rather
+-- than a judgement — so the addon should do it instead of asking someone to open the bank and squint
+-- at set rows. Two things fall out of one check: whether a real bank, with real gear in it, makes a
+-- real set report `atBank` at all (the pure branches are covered, the join never has been), and the
+-- NAME of the set to use for the half that genuinely needs a person to press Equip twice.
+H.ok(byId["part-banked"] ~= nil,
+    "a check names which saved sets have gear sitting in the bank, and how much")
+H.eq(byId["part-banked"] and byId["part-banked"].item, "VERIFY-3",
+    "…and it names the item it answers")
+
 -- VERIFY-13's two remaining LIVE questions, both about a frame this addon does not own. The tick
 -- and the teardown are correct by construction in our code — but DropDownList1 is Blizzard's, so
 -- "we call CloseDropDownMenus in OnHide" is a statement about our intent and not about what is left

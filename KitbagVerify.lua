@@ -219,6 +219,79 @@ Verify.CHECKS = {
         end,
     },
     {
+        id = "part-banked", item = "VERIFY-3", label = "A part-banked set is named, with what is at the bank",
+        -- VERIFY-3's last half — "a part-banked set completes on a second Equip" — needs a set that
+        -- is actually part-banked, and FINDING one is a reading rather than a judgement. Asking a
+        -- person to open the bank and squint at set rows is the exact shape this epic keeps
+        -- converting into checks.
+        --
+        -- It also answers a question the pure tests structurally cannot: Core.Explain's `in your
+        -- bank` branch is covered and so is atBank counting, but whether a REAL bank full of REAL
+        -- gear makes a REAL saved set report atBank has never once been observed. That join is where
+        -- an item key stored by one path and read by another would come apart, and it would look
+        -- like "Kitbag can't find my gear" rather than like a parsing fault.
+        run = function()
+            local Sets, Inventory = Kitbag.Sets, Kitbag.Inventory
+            if not (Sets and Inventory and Sets.Overview) then
+                return nil, "KitbagSets is not loaded"
+            end
+            if not Kitbag.char then return nil, "no character bucket yet — not logged in" end
+            if #(Sets.Names() or {}) == 0 then return nil, "no sets yet — make one and run this again" end
+
+            -- How much bank there is to see at all, which decides WHICH of the two skips below is
+            -- honest. "Go and build a part-banked set" and "the addon cannot see your bank yet" send
+            -- a reader in completely different directions, and VERIFY-4 sat skipped for three runs on
+            -- exactly that confusion.
+            local banked = 0
+            for _, place in pairs(Inventory.Bagged() or {}) do
+                if place.bank then banked = banked + 1 end
+            end
+            if banked == 0 then
+                return nil, "no bank contents cached yet — visit a banker once, then run this again"
+            end
+
+            -- Through Sets.Overview, which is what the window itself reads. A second computation
+            -- here could disagree with the rows on screen, and then the check and the window would
+            -- be two witnesses telling different stories about the same set.
+            local parts = {}
+            for name, entry in pairs(Sets.Overview() or {}) do
+                local plan = entry and entry.plan
+                if plan and (plan.atBank or 0) > 0 then
+                    local slots = {}
+                    for _, miss in ipairs(plan.missing or {}) do
+                        if miss.where == "bank" then
+                            local slot = Kitbag.Core.SlotById(miss.slot)
+                            slots[#slots + 1] = slot and slot.label or ("slot " .. tostring(miss.slot))
+                        end
+                    end
+                    parts[#parts + 1] = { name = name, count = plan.atBank, slots = slots }
+                end
+            end
+
+            if #parts == 0 then
+                return nil, string.format(
+                    "%d item(s) readable in the bank, but no saved set names any of them — build a "
+                    .. "set out of bank gear before this item can be answered", banked)
+            end
+
+            -- Sorted, so two runs of the same character are diffable rather than merely both green.
+            table.sort(parts, function(a, b) return a.name < b.name end)
+            local lines = {}
+            for _, part in ipairs(parts) do
+                lines[#lines + 1] = string.format("%s (%d: %s)", part.name, part.count,
+                    table.concat(part.slots, ", "))
+            end
+
+            -- The open/shut state belongs on this line: it is the difference between a second Equip
+            -- being able to finish the set and it being unable to, and the reader is about to try
+            -- exactly that.
+            return true, string.format("%s — bank is %s. Equip %s at an OPEN bank to finish VERIFY-3",
+                table.concat(lines, "; "),
+                Inventory.IsBankOpen() and "OPEN, so a second Equip can complete these" or "shut",
+                parts[1].name)
+        end,
+    },
+    {
         id = "restore-point", item = "VERIFY-4", label = "Restore point survives a reload",
         run = function()
             local char = Kitbag.char
