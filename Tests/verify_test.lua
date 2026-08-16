@@ -173,4 +173,12 @@ H.ok(byId["import-button"] ~= nil,
 H.eq(byId["import-button"] and byId["import-button"].item, "VERIFY-14",
     "…and it names the item it answers")
 
+-- VERIFY-11's geometry half. "The bar clears the X on every row" has a specific failure the item
+-- names: the bar landing on top of every row's X reads as a DEAD BUTTON, not as a layout bug, so it
+-- gets reported as "delete doesn't work" and sends the next session into the wrong file entirely.
+H.ok(byId["rule-list-layout"] ~= nil,
+    "a check measures whether the rule list's scroll bar lands on the X it would disable")
+H.eq(byId["rule-list-layout"] and byId["rule-list-layout"].item, "VERIFY-11",
+    "…and it names the item it answers")
+
 H.done()

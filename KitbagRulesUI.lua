@@ -205,8 +205,13 @@ local function createRow(parent, index)
     row.text:SetPoint("RIGHT", row, "RIGHT", -96, 0)
     row.text:SetJustifyH("LEFT")
 
-    local function tinyButton(label, offset, delta)
-        local button = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+    -- `suffix` names the button, which only the X asks for: `/kit verify` measures the scroll bar
+    -- against it (VERIFY-11), because a bar sitting on top of every row's X reads as a dead button
+    -- rather than as a layout fault — and "delete doesn't work" sends the next session to the wrong
+    -- file entirely.
+    local function tinyButton(label, offset, delta, suffix)
+        local button = CreateFrame("Button",
+            suffix and ("KitbagRuleRow" .. index .. suffix) or nil, row, "UIPanelButtonTemplate")
         button:SetSize(24, 18)
         button:SetPoint("RIGHT", row, "RIGHT", offset, 0)
         button:SetText(label)
@@ -227,7 +232,7 @@ local function createRow(parent, index)
 
     row.up = tinyButton("^", -70, -1)
     row.down = tinyButton("v", -44, 1)
-    row.remove = tinyButton("X", -4, 0)
+    row.remove = tinyButton("X", -4, 0, "Remove")
 
     row:SetScript("OnClick", function(self) edit(self.ruleIndex) end)
     return row
@@ -254,7 +259,7 @@ local function build()
     frame.title:SetPoint("TOP", frame, "TOP", 0, -5)
     frame.title:SetText("Kitbag — auto-swap rules")
 
-    local list = CreateFrame("Frame", nil, frame)
+    local list = CreateFrame("Frame", "KitbagRulesList", frame)
     list:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -32)
     -- Short of the frame's right edge, to leave the scroll bar its own room. An overlap would put
     -- the bar on top of every row's X, which reads as a dead button rather than as a layout bug.

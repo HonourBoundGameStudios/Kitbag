@@ -658,6 +658,45 @@ Verify.CHECKS = {
         end,
     },
     {
+        id = "rule-list-layout", item = "VERIFY-11", label = "The rule list's bar clears its X buttons",
+        -- The failure this measures is not cosmetic and does not read as a layout fault. A scroll bar
+        -- sitting on every row's X makes delete look BROKEN, so it gets reported as "the X does
+        -- nothing" and the next session goes hunting in the click handler, which is fine.
+        run = function()
+            local RulesUI = Kitbag.RulesUI
+            if not RulesUI then return nil, "KitbagRulesUI is not loaded" end
+            local list = _G.KitbagRulesList
+            local x    = _G.KitbagRuleRow1Remove
+            local bar  = _G.KitbagRulesScrollFrameScrollBar
+            if not (list and x) then
+                return nil, "the rule list is built with the editor — open /kit rules once, then run this"
+            end
+            if not bar then return false, "the rule list has no scroll bar frame to measure" end
+
+            local rules = Kitbag.char and Kitbag.char.rules or {}
+            local count = #rules
+
+            local clearance = bar:GetLeft() and x:GetRight() and (bar:GetLeft() - x:GetRight())
+            if not clearance then
+                return nil, "the rule editor has not been laid out yet — open /kit rules, then run this"
+            end
+
+            -- Whether the bar is SHOWN depends on the rule count, but its position does not, so the
+            -- clearance is worth measuring either way. Reporting the count with it is what lets a
+            -- reader tell "measured with the bar up" from "measured with it hidden".
+            local shown = bar:IsShown()
+            local detail = string.format("bar clears row 1's X by %d (%d rule(s), bar %s)",
+                clearance, count, shown and "showing" or "hidden")
+
+            if clearance < 0 then
+                return false, string.format(
+                    "the scroll bar overlaps row 1's X by %d — delete will read as a dead button "
+                    .. "(%d rule(s), bar %s)", -clearance, count, shown and "showing" or "hidden")
+            end
+            return true, detail
+        end,
+    },
+    {
         id = "scroll-clamp", item = "VERIFY-11", label = "A shrinking list cannot go blank",
         -- Pure arithmetic, but run HERE too: the pure test proves ScrollOffset is right, and this
         -- proves the client is running a build that contains it.
