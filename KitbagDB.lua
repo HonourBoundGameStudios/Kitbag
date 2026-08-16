@@ -36,6 +36,10 @@ local function defaults()
             deferInCombat = false,  -- queue swaps until combat ends instead of attempting them
             announce = true,        -- print the set name on a successful swap
             flyouts = true,         -- per-slot alternatives on the character sheet (UI-5)
+            -- Off by default, and it is the one option here whose default is a safety decision
+            -- rather than a taste one: binding an item cannot be undone, and a rule-driven swap
+            -- that quietly bound a BoE meant for an alt or the auction house is unrecoverable.
+            autoConfirmBind = false,
             minimap = { hide = false, angle = 200 },
             -- Off by default (UI-7): an addon that puts unrequested frames on someone's screen is
             -- an addon they uninstall.
@@ -122,6 +126,9 @@ DB.OPTIONS = {
       hint = "Most gear cannot be changed in combat anyway." },
     { path = "announce",      label = "Say in chat when a set is equipped" },
     { path = "flyouts",       label = "Show alternatives when I hover a paperdoll slot" },
+    { path = "autoConfirmBind", label = "Bind items for me when a set needs it",
+      hint = "Off, a set that needs a Bind-on-Equip item waits for you to confirm. On, Kitbag " ..
+             "answers for you — binding cannot be undone." },
     { path = "minimap.hide",  label = "Show the minimap button", invert = true },
     { path = "trinkets.hide", label = "Show the trinket quick-use bar", invert = true },
 }

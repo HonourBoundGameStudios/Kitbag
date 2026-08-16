@@ -203,6 +203,10 @@ function Equip.Decide(s)
     -- instrument the driver has reads "fine" while one is up. This is what BUG-9 turned out to be —
     -- three retries spent in 1.2 seconds against a dialog nobody had answered yet.
     if s.pendingBind then
+        -- Answering for the player is opt-in and the choice lives here rather than in the frame
+        -- handler, so "would this build bind an item without being asked" is a question a test can
+        -- settle. Binding cannot be undone.
+        if s.autoConfirmBind then return "confirm" end
         if (s.bindWaited or 0) >= BIND_LIMIT then return "fail" end
         return "wait"
     end
@@ -241,6 +245,10 @@ local function step(_, elapsed)
         blockedFor = queue.blockedFor,
         pendingBind = pendingBind,
         bindWaited = queue.bindWaited,
+        -- Read every frame rather than captured when the plan started: a player who turns the option
+        -- off mid-swap has said something, and the swap in flight is exactly what they said it about.
+        autoConfirmBind = Kitbag.db and Kitbag.db.options
+            and Kitbag.db.options.autoConfirmBind or false,
         tries = queue.tries,
         waited = queue.waited,
     })
@@ -258,6 +266,10 @@ local function step(_, elapsed)
         -- between "the item never arrived" and "it arrived and we did not recognise it".
         return finish(false, action, pendingBind and "bind" or (busy and "busy" or nil),
             Core.ItemKey(GetInventoryItemLink("player", action.to)))
+    elseif decision == "confirm" then
+        -- Not a retry: the action was already performed and is waiting on an answer, so spending a
+        -- try here would charge the player for their own dialog.
+        Compat.ConfirmBind()
     elseif decision == "perform" then
         queue.tries, queue.waited = queue.tries + 1, 0
         perform(action)

@@ -261,6 +261,28 @@ function Compat.PendingBind()
     return false
 end
 
+--- Answer a bind confirmation the way a player would. Returns whether one was answered.
+--
+-- The dialog's own accept button is clicked rather than calling EquipPendingItem directly, because
+-- the button is what carries Blizzard's OnAccept — which knows the pending index this dialog was
+-- raised for. Reaching past it would mean keeping our own copy of that bookkeeping, and getting it
+-- wrong would confirm the wrong item, which is not a mistake with an undo.
+function Compat.ConfirmBind()
+    local visible = _G.StaticPopup_Visible
+    if not visible then return false end
+    for _, name in ipairs(BIND_POPUPS) do
+        local index, frame = visible(name)
+        frame = frame or (index and _G["StaticPopup" .. tostring(index)])
+        local button = frame and (frame.button1
+            or (frame.GetName and _G[tostring(frame:GetName()) .. "Button1"]))
+        if button and button:IsShown() then
+            button:Click()
+            return true
+        end
+    end
+    return false
+end
+
 --- Is the player currently in a state where swapping gear will be refused or wasted?
 -- Casting is the one people notice: a swap mid-cast cancels it.
 function Compat.IsBusy()

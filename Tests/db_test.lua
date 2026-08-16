@@ -120,6 +120,13 @@ H.eq(DB.Get(opts, "announce"), true, "a top-level option reads back")
 H.eq(DB.Get(opts, "minimap.hide"), false, "…and so does a nested one")
 H.eq(DB.Get(opts, "nothing.here"), nil, "a path that does not exist is nil, not an error")
 
+-- The one option whose default is a safety decision rather than a taste one. Binding an item cannot
+-- be undone, and a rule-driven swap that quietly bound a BoE meant for an alt or the auction house
+-- is unrecoverable — so "did somebody flip this default" is worth a test of its own rather than
+-- leaving it to the loop above, which only asserts that the option exists at all.
+H.eq(DB.Get(opts, "autoConfirmBind"), false,
+    "Kitbag never binds an item for you unless you have asked it to")
+
 DB.Set(opts, "minimap.hide", true)
 H.eq(opts.options.minimap.hide, true, "setting a nested option writes where the defaults put it")
 DB.Set(opts, "announce", false)

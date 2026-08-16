@@ -219,6 +219,20 @@ H.eq(decide({ hasAction = true, satisfied = true, busy = false, tries = 1, waite
               pendingBind = true, bindWaited = 5 }), "advance",
     "an item that arrived is accepted even with a dialog still up — arrival beats the question")
 
+-- Answering it for the player is opt-in, and the decision to answer belongs in the policy rather
+-- than in the frame handler, so "would this build bind an item without being asked" is a question a
+-- test can settle. Binding is irreversible: a rule-driven swap that quietly bound a BoE meant for an
+-- alt or the auction house would be unrecoverable, which is why the default is off.
+H.eq(decide({ hasAction = true, satisfied = false, busy = false, tries = 1, waited = 0,
+              pendingBind = true, bindWaited = 0, autoConfirmBind = true }), "confirm",
+    "with the option on, the driver answers the dialog itself")
+H.eq(decide({ hasAction = true, satisfied = false, busy = false, tries = 1, waited = 0,
+              pendingBind = true, bindWaited = 0 }), "wait",
+    "with the option off — the default — it waits for the player and never binds anything")
+H.eq(decide({ hasAction = true, satisfied = true, busy = false, tries = 1, waited = 0,
+              pendingBind = true, bindWaited = 0, autoConfirmBind = true }), "advance",
+    "an item already on is not worth answering a dialog for — arrival still beats the question")
+
 -- Bounded, like every other wait here. A dialog nobody answers must not wedge the driver for ever,
 -- which is BUG-11's lesson applied before it can be learned twice.
 H.eq(decide({ hasAction = true, satisfied = false, busy = false, tries = 1, waited = 0,
