@@ -743,6 +743,24 @@ plan = C.Plan({ [1] = HELM }, { slots = { [1] = false } }, {}, { freeBagSlots = 
 H.eq(plan.nothing, false, "a set that deliberately empties a slot is not a blank set")
 H.eq(#plan.actions, 1, "…and it has work to do, which a blank set never does")
 
+-- The case where "blank" and "inherits everything" look identical in storage (VERIFY-10). A child
+-- set's own delta can be completely empty while the set it describes is fully specified by its
+-- parent — that is what inheritance IS. `nothing` is read off `set.slots`, so it gives the right
+-- answer only if the plan is built on the RESOLVED set and not on the stored delta. Get that wrong
+-- and a perfectly good inheriting set reports "Empty — nothing in it yet" on the row, in the row
+-- tooltip, in the inspector and from `/kit equip`, all four agreeing and all four wrong.
+--
+-- Characterization: this passes today. It is here because the four surfaces above each test the flag
+-- separately, so the flag is the one thing that must not quietly change meaning underneath them.
+local inheriting = C.Resolve({
+    Parent = { slots = { [1] = HELM } },
+    Child  = { slots = {}, parent = "Parent" },
+}, "Child")
+H.eq(next(inheriting.slots) ~= nil, true, "a blank child resolves to its parent's slots")
+plan = C.Plan({}, inheriting, {}, { freeBagSlots = 4 })
+H.eq(plan.nothing, false,
+    "a set whose own delta is empty is NOT blank when it inherits — it is fully specified")
+
 -- ---------------------------------------------------------------------------
 -- CleanName — the name a set is actually stored under (UI-16)
 -- ---------------------------------------------------------------------------
