@@ -722,8 +722,11 @@ function Core.Plan(equipped, set, where, meta)
                         { kind = "equip", from = { equipped = src }, to = slotId, key = want }
                     cur[src], cur[slotId] = cur[slotId], want
                 else
-                    actions[#actions + 1] =
-                        { kind = "equip", from = { bag = at.bag, slot = at.slot }, to = slotId, key = want }
+                    -- `bank` rides along unused by the driver: a bank source is a plan that should
+                    -- never have been built (reachable() refuses one with the bank shut), and when
+                    -- one turns up anyway the failure report is the only place it can be seen.
+                    actions[#actions + 1] = { kind = "equip", to = slotId, key = want,
+                        from = { bag = at.bag, slot = at.slot, bank = at.bank } }
                     cur[slotId] = want
                 end
             end

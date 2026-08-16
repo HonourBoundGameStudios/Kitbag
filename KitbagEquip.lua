@@ -99,10 +99,30 @@ function Equip.Reason(failedAction, lastError, stalled, found)
     -- not a finding — it is the addon reporting that it did not look, dressed up as evidence.
     local wanted = failedAction and failedAction.key
     if found or wanted then
-        where = where .. string.format(" (slot holds %s, wanted %s)",
-            found and tostring(found) or "nothing", wanted and tostring(wanted) or "nothing")
+        where = where .. string.format(" (slot holds %s, wanted %s%s)",
+            found and tostring(found) or "nothing", wanted and tostring(wanted) or "nothing",
+            Equip.Source(failedAction))
     end
     return where
+end
+
+--- Where the driver was reaching for the item, as a clause to hang off the failure. PURE.
+--
+-- A bank source is shouted rather than merely stated. The planner is supposed to refuse one while
+-- the bank is shut, precisely because PickupContainerItem on a bank bag does nothing and says
+-- nothing — which is indistinguishable from every other silent failure until someone names it.
+function Equip.Source(action)
+    local from = action and action.from
+    if not from then return "" end
+    if from.equipped then
+        local slot = Core.SlotById(from.equipped)
+        return " from " .. (slot and slot.label or ("slot " .. tostring(from.equipped)))
+    end
+    if from.bag == nil then return "" end
+    if from.bank then
+        return string.format(" from the BANK, bag %s slot %s", tostring(from.bag), tostring(from.slot))
+    end
+    return string.format(" from bag %s slot %s", tostring(from.bag), tostring(from.slot))
 end
 
 -- The client says why it refused exactly once, in UI_ERROR_MESSAGE, and the driver used to let it

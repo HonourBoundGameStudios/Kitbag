@@ -169,6 +169,24 @@ H.eq(E.Reason({ kind = "unequip", to = 17 }, nil, false, "21610:0:0:0:0:0:0"),
     "stuck on Off hand (slot holds 21610:0:0:0:0:0:0, wanted nothing)",
     "an unequip wanted nothing, and says so rather than printing a nil")
 
+-- WHERE the driver was reaching for it. Amoondi's second failure named two different item ids, so
+-- `satisfied` is exonerated — item 6584 simply never arrived, silently, three times. What separates
+-- the surviving explanations is the source: a carried bag that has moved under the plan, or a BANK
+-- location the plan should never have accepted, which KitbagCore.lua's own comment predicts fails in
+-- exactly this way ("PickupContainerItem on a bank bag simply does nothing then").
+H.eq(E.Reason({ to = 5, key = "6584:0:0:0:0:0:1997", from = { bag = 3, slot = 7 } },
+        nil, false, "14175:0:0:0:0:0:174"),
+    "stuck on Chest (slot holds 14175:0:0:0:0:0:174, wanted 6584:0:0:0:0:0:1997 from bag 3 slot 7)",
+    "an equip from a bag names the bag and slot it was reaching into")
+H.eq(E.Reason({ to = 5, key = "6584:0:0:0:0:0:1997", from = { bag = 6, slot = 2, bank = true } },
+        nil, false, nil),
+    "stuck on Chest (slot holds nothing, wanted 6584:0:0:0:0:0:1997 from the BANK, bag 6 slot 2)",
+    "a bank source is shouted, because a plan should never have accepted one with the bank shut")
+H.eq(E.Reason({ to = 11, key = "1076:0:0:0:0:0:0", from = { equipped = 12 } },
+        nil, false, "1319:0:0:0:0:0:0"),
+    "stuck on Ring 1 (slot holds 1319:0:0:0:0:0:0, wanted 1076:0:0:0:0:0:0 from Ring 2)",
+    "a slot-to-slot move names the slot it was moving from, by label rather than by number")
+
 -- The client's words still come first when there are any: they explain, where the keys only describe.
 H.eq(E.Reason({ to = 5, key = "14175:0:0:0:0:0:174" }, "You are mounted.", false, "6569:0:0:0:0:0:1808"),
     "stuck on Chest — the game said: You are mounted. (slot holds 6569:0:0:0:0:0:1808, wanted 14175:0:0:0:0:0:174)",
