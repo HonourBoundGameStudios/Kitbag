@@ -92,4 +92,50 @@ H.eq(decide({ hasAction = true, satisfied = false, busy = false,
 H.ok(E.MAX_RETRIES * E.SETTLE >= 1.0,
     "the retry budget spans at least a second of real latency, not three frames")
 
+-- ---------------------------------------------------------------------------
+-- Reason — WHY the driver gave up (BUG-9)
+-- ---------------------------------------------------------------------------
+--
+-- Reason(failedAction, lastError) -> the tail of "could not finish <set> — <reason>."
+--
+-- "stuck on Off hand" is what the addon has always said, and it is the same sentence whether the
+-- bags had nowhere to put the shield or the client refused the unequip outright because the player
+-- was mounted. Those are a Kitbag bug and a game rule respectively, and telling them apart was
+-- costing a client session each time. The client says which — in UI_ERROR_MESSAGE — and the driver
+-- was throwing it away.
+
+H.eq(E.Reason({ to = 17 }, nil), "stuck on Off hand",
+    "with nothing from the client, the report is what it always was — the slot it stuck on")
+H.eq(E.Reason(nil, nil), "stuck on an unknown slot",
+    "no action to name (a cancel before the first one) still reports honestly")
+
+H.eq(E.Reason({ to = 17 }, "You are mounted."),
+    "stuck on Off hand — the game said: You are mounted.",
+    "the client's own refusal is quoted, so a game rule no longer reads as a Kitbag bug")
+H.eq(E.Reason(nil, "Your bags are full."),
+    "stuck on an unknown slot — the game said: Your bags are full.",
+    "the client's reason survives even when the slot cannot be named")
+
+-- An error is only worth reporting if it says something. The client's message arrives as an event
+-- payload, so an empty or blank string is a real possibility and must not produce "the game said: ".
+H.eq(E.Reason({ to = 8 }, ""), "stuck on Feet",
+    "an empty message is no message")
+H.eq(E.Reason({ to = 8 }, "   "), "stuck on Feet",
+    "a blank message is no message either")
+
+-- The slot id comes off the plan and the plan comes off saved data, so an id that is not an
+-- equippable slot must be survivable rather than fatal — Core.SlotById returns nil for it.
+H.eq(E.Reason({ to = 99 }, nil), "stuck on an unknown slot",
+    "an unrecognised slot id degrades to the honest phrase rather than erroring")
+
+-- Reading the event payload. The modern engine fires (errorType, message); the older one fired the
+-- message alone. Reading it wrong stores nil and silently puts the report back to what BUG-9 was
+-- about, so both shapes are pinned here rather than trusted.
+H.eq(E.ErrorText(50, "You are mounted."), "You are mounted.",
+    "(errorType, message) -> the message, not the number")
+H.eq(E.ErrorText("You are mounted."), "You are mounted.",
+    "the message alone -> the message")
+H.eq(E.ErrorText(nil, nil), nil,
+    "no message in the payload is nil, not an empty report")
+
 H.done()

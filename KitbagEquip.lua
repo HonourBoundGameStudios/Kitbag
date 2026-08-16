@@ -28,15 +28,50 @@ local SETTLE = 0.4
 Equip.MAX_RETRIES = MAX_RETRIES
 Equip.SETTLE = SETTLE
 
-local queue = nil      -- { actions =, index =, tries =, waited =, onDone =, label = }
+local queue = nil      -- { actions =, index =, tries =, waited =, onDone =, label =, lastError = }
 local driver = CreateFrame("Frame")
 
 local function finish(ok, failedAction)
     local done, label = queue and queue.onDone, queue and queue.label
+    local why = queue and queue.lastError
     queue = nil
     driver:SetScript("OnUpdate", nil)
-    if done then done(ok, failedAction, label) end
+    driver:UnregisterEvent("UI_ERROR_MESSAGE")
+    if done then done(ok, failedAction, label, why) end
 end
+
+--- The message out of a UI_ERROR_MESSAGE payload, whichever way the client hands it over. PURE.
+-- The modern engine fires (errorType, message); the older one fired the message alone. Getting this
+-- wrong does not throw — it stores nil, which silently reverts the report to the one BUG-9 was
+-- about, so it is worth pinning rather than eyeballing.
+function Equip.ErrorText(a, b)
+    if type(b) == "string" then return b end
+    if type(a) == "string" then return a end
+    return nil
+end
+
+--- How to report a plan that could not be finished. PURE.
+--
+-- The slot alone was the whole report until BUG-9, and it is not enough: it names WHERE the driver
+-- gave up and never WHY, so "your bags cannot take the shield" and "you cannot change weapons right
+-- now" arrive as the same sentence — one a Kitbag bug and one a game rule. The client's wording is
+-- quoted rather than interpreted; guessing at its meaning is how a message becomes wrong after a
+-- patch.
+function Equip.Reason(failedAction, lastError)
+    local slot = failedAction and Core.SlotById(failedAction.to)
+    local where = "stuck on " .. (slot and slot.label or "an unknown slot")
+    -- The message arrives as an event payload, so blank is a real possibility — and "the game said:"
+    -- with nothing after it reads as the addon losing the answer, which is worse than not asking.
+    if type(lastError) ~= "string" or lastError:match("^%s*$") then return where end
+    return where .. " — the game said: " .. lastError
+end
+
+-- The client says why it refused exactly once, in UI_ERROR_MESSAGE, and the driver used to let it
+-- scroll past. Only listened to while a plan is in flight (see Run), and cleared whenever an action
+-- lands, so a message can only be attributed to the action being attempted when it arrived.
+driver:SetScript("OnEvent", function(_, _, a, b)
+    if queue then queue.lastError = Equip.ErrorText(a, b) or queue.lastError end
+end)
 
 -- Put whatever is on the cursor down in the first bag that will take it.
 --
@@ -116,6 +151,9 @@ local function step(_, elapsed)
         return finish(true)
     elseif decision == "advance" then
         queue.index, queue.tries, queue.waited = queue.index + 1, 0, 0
+        -- An action that landed answers whatever the client complained about on the way, so the
+        -- message must not follow the queue to a later slot and be reported against it.
+        queue.lastError = nil
     elseif decision == "fail" then
         return finish(false, action)
     elseif decision == "perform" then
@@ -125,7 +163,7 @@ local function step(_, elapsed)
     -- "wait": the client has not caught up yet. Doing nothing is the correct action.
 end
 
---- Run a plan. `onDone(ok, failedAction, label)` fires once, whatever the outcome.
+--- Run a plan. `onDone(ok, failedAction, label, lastError)` fires once, whatever the outcome.
 -- Returns false if a plan is already running — a second set click must not interleave with the
 -- first, which is how gear ends up in a state neither set asked for.
 function Equip.Run(plan, label, onDone)
@@ -140,6 +178,9 @@ function Equip.Run(plan, label, onDone)
         onDone = onDone, label = label,
     }
     driver:SetScript("OnUpdate", step)
+    -- Registered here rather than at load, and dropped again in finish: an error that arrives while
+    -- no plan is in flight belongs to something else entirely and must never be quoted as ours.
+    driver:RegisterEvent("UI_ERROR_MESSAGE")
     return true
 end
 

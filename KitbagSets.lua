@@ -516,16 +516,15 @@ function Sets.Apply(set, label, silent, onDone)
         return done(false)
     end
 
-    local started = Equip.Run(plan, label, function(ok, failed, applied)
+    local started = Equip.Run(plan, label, function(ok, failed, applied, why)
         -- Only a real set becomes `lastSet`. A restore point is an outfit, not a set, and recording
         -- it would leave the rule engine comparing against a name no set list contains.
         if ok and char().sets[applied] then char().lastSet = applied end
         if ok then
             if not silent and db().options.announce then say("equipped |cffffd100%s|r.", applied) end
         else
-            local s = failed and Core.SlotById(failed.to)
-            say("|cffff8080could not finish|r |cffffd100%s|r — stuck on %s.",
-                tostring(applied), s and s.label or "an unknown slot")
+            say("|cffff8080could not finish|r |cffffd100%s|r — %s.",
+                tostring(applied), Equip.Reason(failed, why))
         end
         Kitbag.Refresh()
         done(ok)
