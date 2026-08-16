@@ -400,6 +400,32 @@ Verify.CHECKS = {
             return true, "offsets clamp to the data"
         end,
     },
+    {
+        id = "swap-record", item = "BUG-9", label = "A failed swap records why",
+        -- Diagnostic rather than cosmetic, which is what makes it worth a check: a session spent
+        -- reproducing the mount failure against a build that cannot record the answer reads exactly
+        -- like the fault refusing to reproduce. UI-15's blank panel was the previous build still
+        -- deployed; this is that lesson pre-empted rather than learned again.
+        run = function()
+            local Equip = Kitbag.Equip
+            if not Equip or not Equip.Reason then
+                return false, "Equip.Reason is missing — this build cannot say why a swap failed"
+            end
+            if not Equip.Reason({ to = 17 }, "You are mounted."):find("You are mounted.", 1, true) then
+                return false, "the client's own wording is not being carried into the report"
+            end
+            if not Equip.BUSY_LIMIT then
+                return false, "Equip.BUSY_LIMIT is missing — this build can still wedge (BUG-11)"
+            end
+            -- Reported, not judged: whether an attempt has happened yet is the reader's business,
+            -- and "nothing attempted" is the honest answer at the start of a session.
+            local last = Kitbag.char and Kitbag.char.lastSwap
+            if not last then return true, "ready; nothing attempted yet this character" end
+            return true, string.format("last: %s %s%s", tostring(last.set),
+                last.ok and "succeeded" or "FAILED",
+                last.reason and (" — " .. tostring(last.reason)) or "")
+        end,
+    },
 }
 
 -- The slot art names KitbagUI asks the client for. Listed here rather than reached for out of

@@ -114,10 +114,24 @@ for i, check in ipairs(V.CHECKS) do
 end
 
 -- Every check names the backlog item it answers, so a green run can be turned back into ticks
--- without anyone re-deriving which check was standing in for which item.
+-- without anyone re-deriving which check was standing in for which item. A BUG id counts: a check
+-- can stand in for "the client is running a build that contains the fix", which is the question a
+-- bug fixed outside the game leaves behind, and there is no VERIFY item to hang that on.
 for _, check in ipairs(V.CHECKS) do
-    H.ok(type(check.item) == "string" and check.item:match("^VERIFY%-%d+$"),
-        "check " .. tostring(check.id) .. " names the VERIFY item it answers")
+    H.ok(type(check.item) == "string"
+        and (check.item:match("^VERIFY%-%d+$") or check.item:match("^BUG%-%d+$")),
+        "check " .. tostring(check.id) .. " names the item it answers")
 end
+
+-- The instrumentation BUG-9 is waiting on. It is diagnostic rather than cosmetic, so the failure
+-- mode it guards against is the worst kind: a client session spent reproducing a fault against a
+-- build that cannot record the answer, which reads exactly like the fault not being reproducible.
+-- UI-15's blank panel was the previous build still deployed; this is the same lesson, pre-empted.
+local byId = {}
+for _, check in ipairs(V.CHECKS) do byId[check.id] = check end
+H.ok(byId["swap-record"] ~= nil,
+    "a check proves the running build can record WHY a swap failed, not just that one did")
+H.eq(byId["swap-record"] and byId["swap-record"].item, "BUG-9",
+    "…and it names the bug it is standing in for")
 
 H.done()
