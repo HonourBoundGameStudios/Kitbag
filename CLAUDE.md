@@ -126,6 +126,14 @@ Co-Authored-By: <Agent name> <noreply@anthropic.com>
   session (or after a context compaction), re-read this file at regular intervals so the Process, the
   gotchas, and the standing rules don't drift out of context.
 
+- **Anything the Admiral has to DO goes last, under its own heading.** Findings first, then the ask.
+  Never interleave the two: a request buried in the middle of an explanation is a request that gets
+  missed, and the Admiral then re-reads the whole report to find out what was wanted. This matters
+  most in exactly the situation that produces the longest reports — an in-client debugging round trip,
+  where the agent cannot act and every step forward is something only the Admiral can do. State what
+  the evidence says, then say what would settle it, in that order. One clearly-marked ask beats three
+  scattered ones; if there are genuinely several, number them.
+
 ## Fleet Comms 📡 — you are part of a fleet
 
 **Kitbag** is one ship in a fleet of projects coordinated by the **Orchestrai** flagship. Ships
