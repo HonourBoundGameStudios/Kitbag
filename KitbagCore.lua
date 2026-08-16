@@ -822,6 +822,36 @@ function Core.StowBags(bags)
     return usable
 end
 
+--- Which bag slot a removed item should be put into. PURE. Returns bagId, slot — or nil, nil.
+--
+-- BUG-13. The driver used to hand the item to `PutItemInBag` and let the client find room, and on a
+-- character whose backpack was full and whose every free slot was in bag 4, that call did nothing and
+-- said nothing — ten times over, across three sessions. The same shield went into the same bag by
+-- hand, mounted, while the addon was still fighting for it, so the client was willing in exactly the
+-- state the driver failed in.
+--
+-- So the item is put in a NAMED slot instead, with `PickupContainerItem` — the one call in this addon
+-- that has always worked, since every successful equip is made of it. The cost is that choosing the
+-- slot becomes ours rather than the client's, and that is the direction this codebase trades in:
+-- a choice can be cornered in a test, "ask the client and hope" cannot.
+--
+-- `contents[bagId][slot]` is truthy where something already sits. Occupancy is read rather than
+-- inferred from `free`, because the two come from different client calls and a bag that claims room
+-- while every slot reads full must yield nothing — returning a slot on the strength of the count
+-- alone would drop the item onto whatever is in there.
+function Core.StowSlot(bags, contents)
+    contents = contents or {}
+    for _, bag in ipairs(Core.StowBags(bags or {})) do
+        local used = contents[bag.id] or {}
+        -- No size means the client could not say how big the bag is, which is not the same as "it
+        -- starts at slot 1 and is empty" — that assumption drops the item on top of something.
+        for slot = 1, (bag.size or 0) do
+            if not used[slot] then return bag.id, slot end
+        end
+    end
+    return nil, nil
+end
+
 --- Add an attempt to the rolling history, newest first. PURE. Returns the new list.
 --
 -- Why a history rather than just the last one: SavedVariables reaches disk on /reload, so a record

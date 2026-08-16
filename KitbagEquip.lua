@@ -157,10 +157,15 @@ function Equip.Trace(t)
         if t.offered then
             local bags = {}
             for _, bag in ipairs(t.offered) do
-                bags[#bags + 1] = string.format("bag %s (%s free)",
-                    tostring(bag.bag), tostring(bag.free))
+                -- A named slot and a bag asked to find room are different claims, and BUG-13 is the
+                -- difference: "we asked bag 4 for room and it ignored us" took four rounds to
+                -- establish, while "we put it in bag 4 slot 2" can be checked by opening the bag.
+                bags[#bags + 1] = bag.slot
+                    and string.format("bag %s slot %s", tostring(bag.bag), tostring(bag.slot))
+                    or string.format("bag %s (%s free)", tostring(bag.bag), tostring(bag.free))
             end
-            return " [picked up, but the bag move had not completed — offered to "
+            return " [picked up, but the bag move had not completed — "
+                .. (t.offered[1] and t.offered[1].slot and "put into " or "offered to ")
                 .. table.concat(bags, ", ") .. "]"
         end
         -- No list at all is a build that never watched, which must not read as one that watched and
@@ -197,34 +202,22 @@ driver:SetScript("OnEvent", function(_, _, a, b)
     if queue then queue.lastError = Equip.ErrorText(a, b) or queue.lastError end
 end)
 
--- Put whatever is on the cursor down in the first bag that will take it.
+-- Put whatever is on the cursor into a named bag slot. Returns what it tried, for the failure report.
 --
--- PutItemInBackpack() alone only ever tries bag 0, so a full backpack failed the unequip even with
--- three empty bags hanging off it — and the failure looked identical to genuinely having nowhere to
--- put the item. The planner refuses the plan up front when there is truly no room (CORE-5); this is
--- the other half of the same bug.
+-- BUG-13, and the reason this no longer goes through PutItemInBag. That call asks the client to find
+-- room, and on a character whose backpack was full and whose every free slot sat in bag 4 it did
+-- nothing at all: no error, no message, cursor still holding the shield, ten times across three
+-- sessions. The same shield went into the same bag by hand — mounted, with the addon fighting for it
+-- — so the client was willing in precisely the state the driver was failing in.
 --
--- Which bags to ask is Core.StowBags, not "all of them in turn": asking a bag that cannot take the
--- item is not a free miss, it is a "That bag is full" in the chat frame. A swap that worked
--- perfectly still read as a string of errors, one per bag passed on the way to the one with room —
--- and nothing distinguished that spam from a swap that genuinely failed.
--- Returns the bags it actually offered the item to, in order, for the failure report. An empty list
--- is the finding this was added for (BUG-13): "the bag move had not completed" is what the driver
--- says when the cursor is still holding the item, and it says it identically whether five bags
--- refused the item or whether no put was ever issued at all.
+-- PickupContainerItem is the one item-moving call in this addon that has never failed: every
+-- successful equip is made of it. It needs a slot rather than a bag, so the choosing moves to
+-- Core.StowSlot where it can be tested, which is the trade this codebase makes everywhere else.
 local function stow()
-    local offered = {}
-    for _, bag in ipairs(Core.StowBags(Inventory.Bags())) do
-        offered[#offered + 1] = { bag = bag.id, free = bag.free }
-        -- The backpack has no inventory id to hand PutItemInBag; it has its own call.
-        if bag.id == 0 then
-            PutItemInBackpack()
-        else
-            PutItemInBag(Compat.ContainerToInventory(bag.id))
-        end
-        if not CursorHasItem() then return offered end
-    end
-    return offered
+    local bag, slot = Inventory.FreeBagSlot()
+    if not bag then return {} end
+    Compat.PickupContainerItem(bag, slot)
+    return { { bag = bag, slot = slot } }
 end
 
 -- Returns what the cursor was seen doing, for the failure report only — never for the decision,

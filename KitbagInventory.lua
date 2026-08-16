@@ -82,9 +82,30 @@ function Inventory.Bags()
     local bags = {}
     for bag = 0, Compat.LAST_BAG do
         local free, family = Compat.GetContainerNumFreeSlots(bag)
-        bags[#bags + 1] = { id = bag, free = free, family = family }
+        -- Size as well as room (BUG-13): the driver now puts a removed item into a NAMED slot rather
+        -- than asking the bag to find one, so it has to know how many slots there are to look at.
+        bags[#bags + 1] = { id = bag, free = free, family = family,
+            size = Compat.GetContainerNumSlots(bag) }
     end
     return bags
+end
+
+--- The bag and slot a removed item should go into, or nil. Reads the client; decides nothing.
+--
+-- Occupancy is read slot by slot rather than trusted from the free count, because Core.StowSlot
+-- refuses to name a slot the two disagree about — see BUG-13, where the count said thirteen free and
+-- the item went nowhere.
+function Inventory.FreeBagSlot()
+    local bags = Inventory.Bags()
+    local contents = {}
+    for _, bag in ipairs(Core.StowBags(bags)) do
+        local used = {}
+        for slot = 1, (bag.size or 0) do
+            if Compat.GetContainerItemLink(bag.id, slot) then used[slot] = true end
+        end
+        contents[bag.id] = used
+    end
+    return Core.StowSlot(bags, contents)
 end
 
 --- How many bag slots an unequipped item could actually go into (CORE-5).

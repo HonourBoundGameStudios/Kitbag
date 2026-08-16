@@ -607,6 +607,55 @@ H.eq(stowIds({ { id = 0, free = 0, family = 0 } }), "",
     "no bag with room -> nothing to try, rather than one error per bag")
 
 -- ---------------------------------------------------------------------------
+-- StowSlot — WHICH slot a removed item is put into (BUG-13)
+-- ---------------------------------------------------------------------------
+--
+-- BUG-13, settled by hand at the client after four rounds of instruments. `PutItemInBag` does not
+-- work here: the driver picked the shield up, called it against a bag with thirteen free slots, and
+-- the client did nothing and said nothing. The Admiral then dragged the same shield into the same bag
+-- by hand, mounted, while the addon was actively fighting them for it — so the client was willing in
+-- the exact state the driver failed in, and the call was the fault.
+--
+-- The replacement is not a new idea, it is the one call in this addon that demonstrably works: every
+-- successful equip moves an item with PickupContainerItem. But that call names a SLOT rather than
+-- asking a bag to find room, so the choosing becomes ours — which is the good kind of trade, because
+-- choosing is exactly what can be cornered in a test and "ask the client and hope" is not.
+--
+--   StowSlot(bags, contents) -> bagId, slot.  contents[bagId][slot] = true where something already is
+
+H.eq(select("#", C.StowSlot({}, {})), 2, "the answer is always a pair, even when it is nil, nil")
+
+local BAGS = { { id = 0, free = 1, family = 0, size = 4 }, { id = 4, free = 2, family = 0, size = 3 } }
+
+local bag, slot = C.StowSlot(BAGS, { [0] = { true, true, true } })
+H.eq(bag, 0, "the first usable bag with a free slot wins, backpack first")
+H.eq(slot, 4, "…and the slot chosen is the first EMPTY one, not slot 1")
+
+-- The case Pobble actually had: a full backpack and every free slot in the last bag. The old code
+-- turned this into a single PutItemInBag against bag 4, which is the call that does nothing.
+bag, slot = C.StowSlot(BAGS, { [0] = { true, true, true, true }, [4] = { true } })
+H.eq(bag, 4, "a full bag is passed over for the next one with room")
+H.eq(slot, 2, "…and the first free slot in THAT bag is the target")
+
+-- StowBags' rules still apply, because this walks it rather than re-deciding: a special bag's slots
+-- are not candidates however empty, and no bag with room means no answer at all.
+H.eq(C.StowSlot({ { id = 1, free = 8, family = 1, size = 8 } }, {}), nil,
+    "a special bag's empty slots are not offered a shield")
+H.eq(C.StowSlot({ { id = 0, free = 0, family = 0, size = 4 } }, {}), nil,
+    "a bag with no room yields no slot, so the caller puts nothing anywhere")
+
+-- The disagreement worth catching: `free` comes from the client's own count and the occupancy from
+-- reading the slots, so a bag can claim room while every slot reads full. Trusting `free` and
+-- returning a slot anyway would put the item nowhere and report success.
+H.eq(C.StowSlot({ { id = 2, free = 3, family = 0, size = 2 } }, { [2] = { true, true } }), nil,
+    "a bag that claims room but reads full yields nothing rather than a slot that is not empty")
+
+-- A bag whose size the client could not answer has no slots to offer, which must not read as
+-- "slot 1 is free" — that would drop the item onto whatever is actually in there.
+H.eq(C.StowSlot({ { id = 3, free = 2, family = 0 } }, {}), nil,
+    "a bag with no known size is skipped rather than assumed to start at slot 1")
+
+-- ---------------------------------------------------------------------------
 -- Totals (CORE-4)
 -- ---------------------------------------------------------------------------
 --

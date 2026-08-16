@@ -220,6 +220,14 @@ H.eq(E.Trace({ picked = true, stowed = false, offered = { { bag = 0, free = 5 },
     " [picked up, but the bag move had not completed — offered to bag 0 (5 free), bag 2 (8 free)]",
     "the bags the item was offered to are named, with the room each claimed to have")
 
+-- Once the driver names a SLOT rather than a bag (BUG-13's fix), the report has to name it too. The
+-- distinction is the whole difference between "we asked bag 4 to find room and it ignored us" — the
+-- fault that cost four rounds — and "we put it in bag 4 slot 2 and it did not arrive", which is a
+-- claim precise enough to check by opening the bag and looking.
+H.eq(E.Trace({ picked = true, stowed = false, offered = { { bag = 4, slot = 2 } } }),
+    " [picked up, but the bag move had not completed — put into bag 4 slot 2]",
+    "a stow that named a slot reports the slot, not just the bag")
+
 -- Unchanged when nothing was recorded, because a build that never watched the bags must not read as
 -- one that watched and saw none — the same rule the state line is built on.
 H.eq(E.Trace({ picked = true, stowed = false }),
