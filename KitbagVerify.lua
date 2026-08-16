@@ -527,6 +527,89 @@ Verify.CHECKS = {
         end,
     },
     {
+        id = "new-set-selected", item = "VERIFY-10",
+        label = "A new set is selected the moment it is made",
+        -- The one check here that CHANGES something, and it is worth the cost. UI-16's "New set"
+        -- button makes an empty set, and the next thing the player does is click slots to fill it in
+        -- — which they will do to whichever set the inspector is showing. If the selection does not
+        -- move at once, those clicks land on the PREVIOUS set: the gear goes somewhere real, so
+        -- nothing errors and nothing looks broken, and the damage is found later in a set that
+        -- quietly grew pieces nobody put there.
+        --
+        -- It presses the button rather than calling Sets.New, because Sets.New working is not the
+        -- question — the wiring between the button and the selection is, and calling the store
+        -- directly steps straight over it. The scratch set is deleted again before this returns.
+        run = function()
+            local UI, Sets = Kitbag.UI, Kitbag.Sets
+            if not UI or not Sets then return nil, "KitbagUI is not loaded" end
+            if not Kitbag.char then return nil, "no character bucket yet — not logged in" end
+            if not (UI.Select and UI.Selected) then
+                return false, "UI.Selected is missing, so the selection cannot be read"
+            end
+
+            local window = _G.KitbagFrame
+            local button = _G.KitbagNewSetButton
+            local box    = _G.KitbagNameBox
+            if not (window and button and box) then
+                return nil, "the window has not been built — open /kit once, then run this"
+            end
+
+            -- Never a name a player would choose, and refused outright if it somehow exists: this
+            -- check deletes what it made, and deleting someone's real set to answer a layout
+            -- question is not a trade worth making.
+            local scratch = "KitbagVerifyScratch"
+            if (Kitbag.char.sets or {})[scratch] then
+                return nil, string.format("a set called %q already exists — delete it, since this "
+                    .. "check would otherwise destroy it on the way out", scratch)
+            end
+
+            -- Shown, for VERIFY-8's reason: UI.Refresh returns immediately while the window is
+            -- hidden, so the inspector would be reporting whatever it drew last and the check would
+            -- fail naming two real sets. A check must put the addon in the state its question is about.
+            local wasShown = window:IsShown()
+            if not wasShown then
+                window:Show()
+                UI.Refresh()
+            end
+
+            local restore, typed = UI.Selected(), box:GetText()
+            box:SetText(scratch)
+
+            -- Guarded so the cleanup below runs even if the click raises. Verify.Run would catch the
+            -- error, but by then the scratch set is in SavedVariables for good.
+            local clicked, err = pcall(function() button:Click() end)
+
+            local made   = (Kitbag.char.sets or {})[scratch] ~= nil
+            local landed = UI.Selected()
+            local title  = _G.KitbagInspectorTitle and _G.KitbagInspectorTitle:GetText()
+
+            if made then Sets.Delete(scratch) end
+            box:SetText(typed or "")
+            box:ClearFocus()
+            if restore then UI.Select(restore) end
+            if not wasShown then window:Hide() end
+
+            if not clicked then return false, "clicking New set errored: " .. tostring(err) end
+            if not made then
+                return false, "pressing New set with a name typed in the box made no set at all"
+            end
+            if landed ~= scratch then
+                return false, string.format(
+                    "the set was made but the selection stayed on %s — the next slot clicked would "
+                    .. "land on the wrong set", tostring(landed))
+            end
+            if title ~= scratch then
+                return false, string.format(
+                    "the selection moved to %s but the inspector is still headed %s",
+                    scratch, tostring(title))
+            end
+            -- Said plainly, because the check's own two chat lines arrive with it and otherwise read
+            -- as something having happened to the character's sets.
+            return true, "made, selected and drawn at once; the scratch set was deleted again "
+                .. "(the two set messages above are this check's)"
+        end,
+    },
+    {
         id = "icon-picker", item = "VERIFY-2", label = "Set icon picker opens",
         run = function()
             local Icons, Sets = Kitbag.Icons, Kitbag.Sets

@@ -164,6 +164,18 @@ H.ok(byId["bottom-row"] ~= nil,
 H.eq(byId["bottom-row"] and byId["bottom-row"].item, "VERIFY-10",
     "…and it names the item it answers")
 
+-- VERIFY-10's last question: is a new set selected the MOMENT it is made, or only at the next
+-- unrelated refresh? Correct by construction — UI.Select is the one path anything chooses a set by
+-- (VERIFY-8) and `created` goes through it — but "by construction" is what the previous version of
+-- this said before the window's own refresh turned out to return early while hidden. The only proof
+-- is pressing the button the player presses, so the check must drive KitbagNewSetButton and NOT call
+-- Sets.New itself: a check that takes the shortcut proves the store works and says nothing about the
+-- wiring between the button and the selection, which is the entire question.
+H.ok(byId["new-set-selected"] ~= nil,
+    "a check proves a freshly made set is selected at once, not at the next unrelated refresh")
+H.eq(byId["new-set-selected"] and byId["new-set-selected"].item, "VERIFY-10",
+    "…and it names the item it answers")
+
 -- VERIFY-13's two remaining LIVE questions, both about a frame this addon does not own. The tick
 -- and the teardown are correct by construction in our code — but DropDownList1 is Blizzard's, so
 -- "we call CloseDropDownMenus in OnHide" is a statement about our intent and not about what is left
@@ -207,6 +219,13 @@ H.ok(source:find("LossText", 1, true) ~= nil,
 -- restore rule at all, so it was asking for something that could not happen. "Go and do it" and
 -- "there is nothing to do it with" are opposite instructions, and a skip that gives the first when
 -- the second is true sends someone off to reproduce a thing that does not exist.
+-- The same lesson one step further along. `KitbagNewSetButton` appearing in the file proves nothing —
+-- the bottom-row check names it too, just to measure it. What has to be true is that something is
+-- CLICKED: calling Sets.New directly would exercise the store and skip the wiring between the button
+-- and the selection, which is the whole of what VERIFY-10 has left to ask.
+H.ok(source:find(":Click()", 1, true) ~= nil,
+    "the new-set check clicks a button, rather than calling the store the button would have called")
+
 H.ok(source:find("no `restore` rule", 1, true) ~= nil,
     "the restore-point skip distinguishes 'no rule exists' from 'a rule has not fired yet'")
 
