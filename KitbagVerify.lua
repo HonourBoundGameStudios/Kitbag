@@ -300,6 +300,20 @@ Verify.CHECKS = {
             local names = Sets.Names() or {}
             if #names < 2 then return nil, "needs two sets to prove the selection MOVED — make another" end
 
+            -- The window MUST be showing, and this check's first live run is why it says so. UI.Refresh
+            -- returns immediately when the window is hidden, so UI.Select moves the selection and the
+            -- doll is never redrawn — and the title still reads whatever set was last inspected. That
+            -- reported a FAIL naming two real sets, which is the most convincing possible way to be
+            -- wrong. It is not a bug in the window: with the window shut there is nothing to redraw,
+            -- and reopening refreshes. A check must put the addon in the state the question is ABOUT.
+            local window = _G.KitbagFrame
+            if not window then return nil, "the window has not been built — open /kit once, then run this" end
+            local wasShown = window:IsShown()
+            if not wasShown then
+                window:Show()
+                UI.Refresh()
+            end
+
             local restore = UI.Selected()
             -- Whichever is not already showing, so the check always asks for a change.
             local target = (restore == names[1]) and names[2] or names[1]
@@ -309,6 +323,7 @@ Verify.CHECKS = {
             local title = _G.KitbagInspectorTitle and _G.KitbagInspectorTitle:GetText()
 
             if restore then UI.Select(restore) end
+            if not wasShown then window:Hide() end
 
             if landed ~= target then
                 return false, string.format("asked for %s, selection reads %s",
