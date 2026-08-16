@@ -189,8 +189,13 @@ H.eq(E.Reason({ kind = "unequip", to = 17 }, nil, false, nil),
 H.eq(E.Trace(nil), "", "no observation is no clause, rather than an empty pair of brackets")
 H.eq(E.Trace({ picked = false }), " [the item never reached the cursor]",
     "a pickup the client ignored is the first suspect and says so")
-H.eq(E.Trace({ picked = true, stowed = false }), " [picked up, but no bag would take it]",
-    "a cursor that still holds the item means the bags refused it, whatever they reported free")
+-- Wording corrected once the client answered: a cursor still holding the item one instruction after
+-- PutItemInBag does NOT mean the bag refused it. A bag move is a server round trip, so the honest
+-- reading is "not finished yet" — and calling that a refusal is what made BUG-12 look external for
+-- an entire session.
+H.eq(E.Trace({ picked = true, stowed = false }),
+    " [picked up, but the bag move had not completed]",
+    "a cursor still holding the item means the move is in flight, not that a bag refused it")
 H.eq(E.Trace({ picked = true, stowed = true }),
     " [picked up and stowed, yet the slot still holds it]",
     "the loud case: both calls worked and the client put it back anyway")

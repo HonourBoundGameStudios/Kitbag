@@ -62,6 +62,10 @@ local function finish(ok, failedAction, blocked, found)
     queue = nil
     driver:SetScript("OnUpdate", nil)
     driver:UnregisterEvent("UI_ERROR_MESSAGE")
+    -- perform() no longer clears the cursor on its way out, so the plan ending is the last chance to
+    -- put back anything still held. Leaving an item on the cursor would strand it there for the
+    -- player, which is a worse bug than the one that made this necessary.
+    if CursorHasItem() then ClearCursor() end
     if done then done(ok, failedAction, label, reason) end
 end
 
@@ -138,7 +142,10 @@ end
 function Equip.Trace(t)
     if not t then return "" end
     if not t.picked then return " [the item never reached the cursor]" end
-    if not t.stowed then return " [picked up, but no bag would take it]" end
+    -- NOT "no bag would take it". A bag move is a server round trip, so a cursor that still holds the
+    -- item one instruction later is a move in flight, not a refusal — reading it as a refusal is what
+    -- made BUG-12 look like a full-bags problem for an entire session.
+    if not t.stowed then return " [picked up, but the bag move had not completed]" end
     -- Both calls did what they were asked and the slot is still occupied, so the client undid it.
     return " [picked up and stowed, yet the slot still holds it]"
 end
@@ -196,13 +203,22 @@ end
 -- which stays with `satisfied` re-reading the slot. Two boolean reads, and they are the difference
 -- between three indistinguishable silent failures (BUG-12).
 local function perform(action)
+    -- Anything left on the cursor by the previous attempt goes back before this one starts. This is
+    -- where the tidy-up belongs — BEFORE issuing a move, with a whole frame having passed — and not
+    -- immediately after, which is what BUG-12 was.
+    if CursorHasItem() then ClearCursor() end
+
     if action.kind == "unequip" then
         PickupInventoryItem(action.to)
         local picked = CursorHasItem() and true or false
         stow()
-        local stowed = not CursorHasItem()
-        ClearCursor()
-        return { picked = picked, stowed = stowed }
+        -- Deliberately NO ClearCursor here. Putting an item in a bag is a server round trip — the
+        -- premise this whole file is built on — so the cursor is still holding it one instruction
+        -- later even when the move is perfectly fine. ClearCursor at that moment does not tidy up
+        -- after a failure, it CANCELS a success and puts the shield straight back on the player's
+        -- arm. Nothing moved, no error, three times over: BUG-12, and it was ours all along.
+        -- The next frame's `satisfied` re-read is what decides, which is what it is for.
+        return { picked = picked, stowed = not CursorHasItem() }
     elseif action.from.equipped then
         PickupInventoryItem(action.from.equipped)
         PickupInventoryItem(action.to)
