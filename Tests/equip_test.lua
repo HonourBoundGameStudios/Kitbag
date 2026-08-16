@@ -75,6 +75,29 @@ H.eq(decide({ hasAction = true, satisfied = false, busy = true, tries = 0, waite
 H.eq(decide({ hasAction = true, satisfied = false, busy = true, tries = 9, waited = 99 }), "wait",
     "busy outranks the retry limit — being unable to act is not the same as failing")
 
+-- ...but only for as long as the state can plausibly clear. Casting ends by itself in seconds;
+-- being DEAD does not, and `UnitIsDeadOrGhost` is one of the two things IsBusy answers true to. A
+-- wait with no bound is not a wait, it is a wedge: OnUpdate spins for ever, onDone never fires, so
+-- IsRunning() stays true and every later swap is refused with "a swap is already in progress", and
+-- the rule engine's claim on the set is never settled (BUG-10) so no rule fires again until a
+-- /reload. Dying mid-swap must end the swap, not the session. (BUG-11)
+H.ok(E.BUSY_LIMIT and E.BUSY_LIMIT > E.SETTLE,
+    "there is a bound on being blocked, and it is longer than a single settle")
+H.eq(decide({ hasAction = true, satisfied = false, busy = true, tries = 1, waited = 0,
+              blockedFor = E.BUSY_LIMIT }), "fail",
+    "blocked for the whole budget -> fail, rather than waiting for a state that never clears")
+H.eq(decide({ hasAction = true, satisfied = false, busy = true, tries = 1, waited = 0,
+              blockedFor = E.BUSY_LIMIT - 0.1 }), "wait",
+    "inside the budget it still waits — a cast really does end by itself")
+H.eq(decide({ hasAction = true, satisfied = true, busy = true, tries = 1, waited = 0,
+              blockedFor = E.BUSY_LIMIT * 2 }), "advance",
+    "an action that landed is accepted even after the block budget is spent — arrival beats the clock")
+H.eq(decide({ hasAction = false, busy = true, tries = 0, waited = 0,
+              blockedFor = E.BUSY_LIMIT * 2 }), "done",
+    "a finished plan finishes, however long the player has been dead")
+H.eq(decide({ hasAction = true, satisfied = false, busy = true, tries = 0, waited = 0 }), "wait",
+    "a caller that says nothing about being blocked is treated as not yet blocked, not as an error")
+
 -- Giving up is bounded, and honest: the caller names the slot it stuck on.
 H.eq(decide({ hasAction = true, satisfied = false, busy = false,
               tries = E.MAX_RETRIES, waited = E.SETTLE }), "fail",
@@ -127,6 +150,16 @@ H.eq(E.Reason({ to = 8 }, "   "), "stuck on Feet",
 -- equippable slot must be survivable rather than fatal — Core.SlotById returns nil for it.
 H.eq(E.Reason({ to = 99 }, nil), "stuck on an unknown slot",
     "an unrecognised slot id degrades to the honest phrase rather than erroring")
+
+-- Giving up because the client never let the driver act at all is a different report from giving up
+-- after three refused attempts, and it has a different fix. Saying so is our own reading of our own
+-- IsBusy, not a guess at what the client meant — the one thing this seam refuses to invent (BUG-11).
+H.eq(E.Reason({ to = 17 }, nil, true),
+    "stuck on Off hand — you were dead or casting the whole time",
+    "a swap abandoned because the player never became able to act says that, not 'stuck'")
+H.eq(E.Reason({ to = 17 }, "You are dead.", true),
+    "stuck on Off hand — the game said: You are dead.",
+    "…but the client's own words still win when there are any, since they are the better answer")
 
 -- Reading the event payload. The modern engine fires (errorType, message); the older one fired the
 -- message alone. Reading it wrong stores nil and silently puts the report back to what BUG-9 was

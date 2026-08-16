@@ -25,19 +25,31 @@ local Equip = {}
 local MAX_RETRIES = 3
 local SETTLE = 0.4
 
+-- How long the driver will wait for a player who cannot act before abandoning the plan. Waiting is
+-- right for the state people actually hit — a cast ends by itself in a second or two — but IsBusy is
+-- also true for DEAD, which does not clear until the player chooses to release, and might not clear
+-- this hour. An unbounded wait is not patience, it is a wedge (BUG-11).
+local BUSY_LIMIT = 10
+
 Equip.MAX_RETRIES = MAX_RETRIES
 Equip.SETTLE = SETTLE
+Equip.BUSY_LIMIT = BUSY_LIMIT
 
-local queue = nil      -- { actions =, index =, tries =, waited =, onDone =, label =, lastError = }
+-- { actions =, index =, tries =, waited =, blockedFor =, onDone =, label =, lastError = }
+local queue = nil
 local driver = CreateFrame("Frame")
 
-local function finish(ok, failedAction)
+local function finish(ok, failedAction, stalled)
     local done, label = queue and queue.onDone, queue and queue.label
-    local why = queue and queue.lastError
+    -- Built here rather than by the caller: the client's wording and the reason the driver gave up
+    -- both live in this file, and a caller reassembling them is a second copy of the rule. Reason is
+    -- defined below with the other pure decisions; it is read off the table when this runs, never at
+    -- load, so no forward declaration is needed.
+    local reason = not ok and Equip.Reason(failedAction, queue and queue.lastError, stalled) or nil
     queue = nil
     driver:SetScript("OnUpdate", nil)
     driver:UnregisterEvent("UI_ERROR_MESSAGE")
-    if done then done(ok, failedAction, label, why) end
+    if done then done(ok, failedAction, label, reason) end
 end
 
 --- The message out of a UI_ERROR_MESSAGE payload, whichever way the client hands it over. PURE.
@@ -57,13 +69,20 @@ end
 -- now" arrive as the same sentence — one a Kitbag bug and one a game rule. The client's wording is
 -- quoted rather than interpreted; guessing at its meaning is how a message becomes wrong after a
 -- patch.
-function Equip.Reason(failedAction, lastError)
+-- `stalled` says the driver gave up because the player never became able to act, which is a
+-- different report with a different fix from three attempts the client refused. Naming that state is
+-- our own reading of our own IsBusy rather than a guess at the client's meaning, so it is the one
+-- interpretation this function is entitled to make — and the client's own words still win over it.
+function Equip.Reason(failedAction, lastError, stalled)
     local slot = failedAction and Core.SlotById(failedAction.to)
     local where = "stuck on " .. (slot and slot.label or "an unknown slot")
     -- The message arrives as an event payload, so blank is a real possibility — and "the game said:"
     -- with nothing after it reads as the addon losing the answer, which is worse than not asking.
-    if type(lastError) ~= "string" or lastError:match("^%s*$") then return where end
-    return where .. " — the game said: " .. lastError
+    if type(lastError) == "string" and not lastError:match("^%s*$") then
+        return where .. " — the game said: " .. lastError
+    end
+    if stalled then return where .. " — you were dead or casting the whole time" end
+    return where
 end
 
 -- The client says why it refused exactly once, in UI_ERROR_MESSAGE, and the driver used to let it
@@ -128,7 +147,12 @@ end
 function Equip.Decide(s)
     if not s.hasAction then return "done" end
     if s.satisfied then return "advance" end
-    if s.busy then return "wait" end
+    if s.busy then
+        -- Both orderings above still hold: a plan that finished is finished and an item that
+        -- arrived is accepted, however long the player has been unable to act.
+        if (s.blockedFor or 0) >= BUSY_LIMIT then return "fail" end
+        return "wait"
+    end
     if s.tries == 0 then return "perform" end          -- nothing in flight to collide with
     if s.waited < SETTLE then return "wait" end        -- give the client time to answer
     if s.tries >= MAX_RETRIES then return "fail" end
@@ -136,13 +160,21 @@ function Equip.Decide(s)
 end
 
 local function step(_, elapsed)
-    queue.waited = queue.waited + (elapsed or 0)
+    elapsed = elapsed or 0
+    queue.waited = queue.waited + elapsed
+
+    -- Counted only while the client is refusing to let us act, and reset the moment it stops, so a
+    -- player who is dead for eight seconds and then alive does not carry those eight seconds into
+    -- the next thing that blocks. It is the plan's patience, not a stopwatch on the plan.
+    local busy = Compat.IsBusy()
+    queue.blockedFor = busy and (queue.blockedFor + elapsed) or 0
 
     local action = queue.actions[queue.index]
     local decision = Equip.Decide({
         hasAction = action ~= nil,
         satisfied = action ~= nil and satisfied(action),
-        busy = Compat.IsBusy(),
+        busy = busy,
+        blockedFor = queue.blockedFor,
         tries = queue.tries,
         waited = queue.waited,
     })
@@ -155,7 +187,7 @@ local function step(_, elapsed)
         -- message must not follow the queue to a later slot and be reported against it.
         queue.lastError = nil
     elseif decision == "fail" then
-        return finish(false, action)
+        return finish(false, action, busy)
     elseif decision == "perform" then
         queue.tries, queue.waited = queue.tries + 1, 0
         perform(action)
@@ -163,7 +195,8 @@ local function step(_, elapsed)
     -- "wait": the client has not caught up yet. Doing nothing is the correct action.
 end
 
---- Run a plan. `onDone(ok, failedAction, label, lastError)` fires once, whatever the outcome.
+--- Run a plan. `onDone(ok, failedAction, label, reason)` fires once, whatever the outcome; `reason`
+-- is the finished sentence on a failure and nil on a success.
 -- Returns false if a plan is already running — a second set click must not interleave with the
 -- first, which is how gear ends up in a state neither set asked for.
 function Equip.Run(plan, label, onDone)
@@ -174,7 +207,7 @@ function Equip.Run(plan, label, onDone)
     end
 
     queue = {
-        actions = plan.actions, index = 1, tries = 0, waited = 0,
+        actions = plan.actions, index = 1, tries = 0, waited = 0, blockedFor = 0,
         onDone = onDone, label = label,
     }
     driver:SetScript("OnUpdate", step)

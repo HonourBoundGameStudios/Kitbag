@@ -529,16 +529,15 @@ function Sets.Apply(set, label, silent, onDone)
         return done(false, "a swap was already in progress")
     end
 
-    local started = Equip.Run(plan, label, function(ok, failed, applied, why)
+    local started = Equip.Run(plan, label, function(ok, _, applied, reason)
         -- Only a real set becomes `lastSet`. A restore point is an outfit, not a set, and recording
         -- it would leave the rule engine comparing against a name no set list contains.
         if ok and char().sets[applied] then char().lastSet = applied end
-        local reason = nil
         if ok then
             if not silent and db().options.announce then say("equipped |cffffd100%s|r.", applied) end
         else
-            reason = Equip.Reason(failed, why)
-            say("|cffff8080could not finish|r |cffffd100%s|r — %s.", tostring(applied), reason)
+            say("|cffff8080could not finish|r |cffffd100%s|r — %s.", tostring(applied),
+                tostring(reason))
         end
         Kitbag.Refresh()
         done(ok, reason)
