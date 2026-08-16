@@ -211,6 +211,29 @@ function Debug.Report(world)
         end
     end
 
+    -- What the driver last actually DID, which no other section can say. The engine's memory above
+    -- explains a swap that never started; this explains one that started and did not finish — and
+    -- the two send a reader to opposite files. The reason is the client's own wording, captured by
+    -- Equip and otherwise printed once to a chat frame nobody was watching (BUG-9).
+    add("")
+    add("LAST SWAP")
+    local swap = world.lastSwap
+    if not swap then
+        add("  (nothing attempted since login)")
+    else
+        add("  %s — %s%s", tostring(swap.set), swap.ok and "succeeded" or "failed",
+            swap.when and (" at " .. tostring(swap.when)) or "")
+        -- A success has a reason too, and it is the one BUG-10 turned on: "succeeded" covers both a
+        -- set that was equipped and a set that had nothing to do, and those are the two halves of
+        -- "the rule fired and nothing moved". A failure with no reason is stated as such rather than
+        -- omitted — the client having said nothing is itself a different suspect list.
+        if swap.reason then
+            add("  reason: %s", tostring(swap.reason))
+        elseif not swap.ok then
+            add("  reason: (not recorded)")
+        end
+    end
+
     -- Sorted, so two dumps differ only where the world differed. pairs() order would make every
     -- line look changed and hide the one that did.
     local sets = {}
@@ -320,6 +343,11 @@ function Debug.Capture()
         engine.restorePoint = Kitbag.char and Kitbag.char.restorePoint ~= nil
     end
     world.engine = engine
+
+    -- Read straight off the character bucket rather than through Events.Diagnostics: the dump is
+    -- asked for when something is already wrong, and an engine read that throws must not take the
+    -- record of the last failed swap down with it.
+    world.lastSwap = Kitbag.char and Kitbag.char.lastSwap
 
     for _, name in ipairs(Sets and Sets.Names() or {}) do
         local plan, set = Sets.Preview(name)

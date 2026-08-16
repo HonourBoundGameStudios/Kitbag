@@ -453,7 +453,19 @@ end
 function Sets.Apply(set, label, silent, onDone)
     -- Called on every return below, so a caller that needs the outcome never has to infer it from
     -- the return value — which reports only whether the attempt STARTED.
-    local function done(ok)
+    --
+    -- It is also the one place the attempt is written down. The chat frame says what happened, once,
+    -- to whoever was looking — and the failure worth diagnosing happens on a mount, mid-combat, to
+    -- someone watching their health bar (BUG-9). Recording it here rather than at each return means
+    -- a path added later cannot forget to; recording it in the character's saved bucket rather than
+    -- in memory means a /reload — the very thing that clears the symptom — does not clear the
+    -- evidence with it.
+    local function done(ok, reason)
+        -- Stamped the same way the dump's own header is, so the two can be read against each other:
+        -- a swap from a previous session is otherwise indistinguishable from the one just attempted.
+        char().lastSwap = {
+            set = label, ok = ok, reason = reason, when = date("%Y-%m-%d %H:%M:%S"),
+        }
         if onDone then onDone(ok) end
         return ok
     end
@@ -494,12 +506,12 @@ function Sets.Apply(set, label, silent, onDone)
         end
         -- Nothing to do counts as done. A set that names no slots can never "go on", and reporting
         -- it as a failure would have the rule engine retry it on every event for ever.
-        return done(true)
+        return done(true, "the set names no slots")
     end
 
     if plan.empty then
         if not silent then say("already wearing |cffffd100%s|r.", label) end
-        return done(true)
+        return done(true, "already wearing it")
     end
 
     -- Refuse before moving anything. The alternative is the driver spending its full retry budget on
@@ -508,32 +520,34 @@ function Sets.Apply(set, label, silent, onDone)
     if plan.blocked == "bags" then
         say("|cffff8080your bags are full|r — |cffffd100%s|r needs %d free slot(s) to put what " ..
             "it takes off.", label, plan.needsBagSlots)
-        return done(false)
+        return done(false, string.format("your bags are full — needs %d free slot(s)",
+            plan.needsBagSlots or 0))
     end
 
     if Equip.IsRunning() then
         say("|cffff8080busy|r — a swap is already in progress.")
-        return done(false)
+        return done(false, "a swap was already in progress")
     end
 
     local started = Equip.Run(plan, label, function(ok, failed, applied, why)
         -- Only a real set becomes `lastSet`. A restore point is an outfit, not a set, and recording
         -- it would leave the rule engine comparing against a name no set list contains.
         if ok and char().sets[applied] then char().lastSet = applied end
+        local reason = nil
         if ok then
             if not silent and db().options.announce then say("equipped |cffffd100%s|r.", applied) end
         else
-            say("|cffff8080could not finish|r |cffffd100%s|r — %s.",
-                tostring(applied), Equip.Reason(failed, why))
+            reason = Equip.Reason(failed, why)
+            say("|cffff8080could not finish|r |cffffd100%s|r — %s.", tostring(applied), reason)
         end
         Kitbag.Refresh()
-        done(ok)
+        done(ok, reason)
     end)
 
     -- Run refuses if a plan is already in flight. IsRunning above catches that, so this is the
     -- belt-and-braces path — but a `done` that fires on all paths except one is worse than none,
     -- because the caller then has a memory it can never clear.
-    if not started then done(false) end
+    if not started then done(false, "a swap was already in progress") end
     return started
 end
 

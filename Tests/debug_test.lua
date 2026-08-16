@@ -224,6 +224,52 @@ has(report({ when = "now", sets = {}, engine = { failed = "attempt to index a ni
     "could not be read: attempt to index a nil value",
     "an engine read that errored reports the error instead of hiding behind '(not read)'")
 
+-- ---------------------------------------------------------------------------
+-- The last swap attempt, and why it ended that way (BUG-9)
+-- ---------------------------------------------------------------------------
+--
+-- The driver now says why it gave up, but it says it in the chat frame — which is gone by the time
+-- anyone thinks to look, and which nobody was watching at the moment it scrolled past. The failure
+-- being diagnosed happens once, on a mount, in combat; the round trip that costs a human action is
+-- the reload, so the answer has to be waiting in the file when the dump is read rather than needing
+-- the fault to be reproduced on demand.
+
+local swapped = report({ when = "now", sets = {}, lastSwap = {
+    set = "FASTHOJ+TRAVEL", ok = false,
+    reason = "stuck on Off hand — the game said: You are mounted.", when = "12:04:31" } })
+has(swapped, "LAST SWAP", "the last swap attempt is a section of its own")
+has(swapped, "FASTHOJ+TRAVEL", "…naming the set that was attempted")
+has(swapped, "failed", "…saying plainly that it did not finish")
+has(swapped, "stuck on Off hand — the game said: You are mounted.",
+    "…and carrying the client's own words, which is the whole point of the section")
+has(swapped, "12:04:31",
+    "…stamped, so a failure from an hour ago cannot be read as the one just reproduced")
+
+-- A swap that WORKED is worth as much as one that did not: it is what separates "the rule never
+-- fired" from "the rule fired and the equip failed", and those send a reader to opposite files.
+local ok = report({ when = "now", sets = {}, lastSwap = {
+    set = "Heal-PVP", ok = true, when = "12:05:02" } })
+has(ok, "succeeded", "a swap that worked is recorded too — it is how a failed rule is ruled out")
+
+-- And a success carries its reason when it has one, because "succeeded" covers both a set that was
+-- equipped and a set that had nothing to do. Those are the two halves of BUG-10 — "a rule that
+-- matches can do nothing at all, silently" — and a dump that reads them the same way cannot tell a
+-- swap that happened from a swap that was a no-op.
+local noop = report({ when = "now", sets = {}, lastSwap = {
+    set = "Heal-PVP", ok = true, reason = "already wearing it", when = "12:05:02" } })
+has(noop, "already wearing it",
+    "a swap that succeeded by having nothing to do says so — it is not the same as one that moved gear")
+
+-- Nothing attempted yet is a third state, and not the same as a swap that failed silently.
+has(report({ when = "now", sets = {} }), "(nothing attempted",
+    "no swap since login says so rather than the section going missing")
+
+-- A failure the client said nothing about must not invent a reason. That case is itself evidence:
+-- it means the action was refused with no message, which is a different suspect list.
+local quiet = report({ when = "now", sets = {}, lastSwap = {
+    set = "X", ok = false, reason = "stuck on Off hand", when = "12:06:00" } })
+has(quiet, "stuck on Off hand", "a failure the client did not explain reports what is known")
+
 -- The empty cases, stated rather than omitted. "No rules" is the single most likely explanation for
 -- "it never swapped", and a dump that simply has no RULES section cannot distinguish it from a dump
 -- taken before rules were read.
