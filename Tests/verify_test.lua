@@ -154,6 +154,16 @@ H.ok(byId["picker-layout"] ~= nil,
 H.eq(byId["picker-layout"] and byId["picker-layout"].item, "VERIFY-10",
     "…and it names the item it answers")
 
+-- VERIFY-10's other half (UI-16). "Does the bottom row still fit at 660 wide?" is arithmetic a
+-- person cannot do by eye, because the failure is not a gap that looks tight — UIPanelButtonTemplate
+-- does not shrink its text, it lets the label run out under the button's own edge. So a row that has
+-- overflowed reads as a button with a slightly odd label rather than as a layout fault, and the
+-- second button UI-16 added is what spent the row's remaining room.
+H.ok(byId["bottom-row"] ~= nil,
+    "a check measures whether the window's bottom row still fits the second button UI-16 added")
+H.eq(byId["bottom-row"] and byId["bottom-row"].item, "VERIFY-10",
+    "…and it names the item it answers")
+
 -- VERIFY-13's two remaining LIVE questions, both about a frame this addon does not own. The tick
 -- and the teardown are correct by construction in our code — but DropDownList1 is Blizzard's, so
 -- "we call CloseDropDownMenus in OnHide" is a statement about our intent and not about what is left

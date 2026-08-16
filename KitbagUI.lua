@@ -795,13 +795,17 @@ local function build()
 
     doll = buildDoll(frame)
 
-    local rulesButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    -- The bottom row's four controls are NAMED so /kit verify can measure them (VERIFY-10). The row
+    -- is full at 660 wide and UIPanelButtonTemplate does not shrink a label that no longer fits — it
+    -- lets it run out under the button's edge — so an overflow reads as an oddly-worded button rather
+    -- than as a layout fault, and nobody files it.
+    local rulesButton = CreateFrame("Button", "KitbagRulesButton", frame, "UIPanelButtonTemplate")
     rulesButton:SetSize(90, 22)
     rulesButton:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -14, 14)
     rulesButton:SetText("Rules")
     rulesButton:SetScript("OnClick", function() Kitbag.RulesUI.Toggle() end)
 
-    local optionsButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    local optionsButton = CreateFrame("Button", "KitbagOptionsButton", frame, "UIPanelButtonTemplate")
     optionsButton:SetSize(90, 22)
     optionsButton:SetPoint("RIGHT", rulesButton, "LEFT", -6, 0)
     optionsButton:SetText("Options")
@@ -869,7 +873,7 @@ local function build()
         preferredIndex = 3,
     }
 
-    local save = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    local save = CreateFrame("Button", "KitbagSaveButton", frame, "UIPanelButtonTemplate")
     save:SetSize(150, 22)
     save:SetPoint("LEFT", nameBox, "RIGHT", 10, 0)
     save:SetText("Save what I'm wearing")
@@ -889,7 +893,7 @@ local function build()
 
     -- The other way in (UI-16). Saving what you are wearing cannot make a set out of gear that is
     -- still in the bank; an empty set plus the slot picker can.
-    local blank = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    local blank = CreateFrame("Button", "KitbagNewSetButton", frame, "UIPanelButtonTemplate")
     blank:SetSize(90, 22)
     blank:SetPoint("LEFT", save, "RIGHT", 6, 0)
     blank:SetText("New set")

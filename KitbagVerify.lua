@@ -440,6 +440,93 @@ Verify.CHECKS = {
         end,
     },
     {
+        id = "bottom-row", item = "VERIFY-10", label = "The bottom row still fits at 660 wide",
+        -- UI-16 put a second button ("New set") into a row that was already full, and paid for it by
+        -- narrowing the name box. Whether that was enough is arithmetic across five frames at a fixed
+        -- window width — and the failure does NOT present as a layout fault, because
+        -- UIPanelButtonTemplate never shrinks a label that no longer fits: it lets the text run out
+        -- under the button's own edge. So an overflowed row reads as a button with a strangely
+        -- clipped word on it, which nobody reports as "the window is too narrow".
+        run = function()
+            if not Kitbag.UI then return nil, "KitbagUI is not loaded" end
+            local frame = _G.KitbagFrame
+            if not frame then
+                return nil, "the window has not been built — open /kit once, then run this"
+            end
+
+            -- Left to right, which is the order the row is anchored in and therefore the order a
+            -- reader wants the numbers in.
+            local row = {
+                { name = "the name box", frame = _G.KitbagNameBox },
+                { name = "Save",         frame = _G.KitbagSaveButton },
+                { name = "New set",      frame = _G.KitbagNewSetButton },
+                { name = "Options",      frame = _G.KitbagOptionsButton },
+                { name = "Rules",        frame = _G.KitbagRulesButton },
+            }
+            for _, piece in ipairs(row) do
+                if not piece.frame then
+                    -- A missing name means the check cannot see the row at all, which is a broken
+                    -- check rather than a condition to skip past.
+                    return false, piece.name .. " has no global name, so the row cannot be measured"
+                end
+            end
+
+            local faults, notes = {}, {}
+
+            -- 1. The row against itself. Every neighbour must clear the one before it; the pair that
+            -- actually decides this is New set against Options, because that is the seam the second
+            -- button was squeezed into.
+            -- Most of these gaps are anchor constants and can only change if someone re-anchors the
+            -- row; New set→Options is the real one, since those two are anchored from OPPOSITE edges
+            -- of the window and nothing but the window's width holds them apart.
+            for i = 2, #row do
+                local before, after = row[i - 1], row[i]
+                local gap = before.frame:GetRight() and after.frame:GetLeft()
+                    and (after.frame:GetLeft() - before.frame:GetRight())
+                if gap then
+                    notes[#notes + 1] = string.format("%s→%s %d", before.name, after.name, gap)
+                    if gap < 0 then
+                        faults[#faults + 1] = string.format("%s overlaps %s by %d",
+                            after.name, before.name, -gap)
+                    end
+                end
+            end
+
+            -- 2. The row against the window. Anchored to both edges, so this can only fail if the
+            -- window is narrower than the row needs — which is the question the item actually asks.
+            local inLeft = row[1].frame:GetLeft() and frame:GetLeft()
+                and (row[1].frame:GetLeft() - frame:GetLeft())
+            local inRight = row[#row].frame:GetRight() and frame:GetRight()
+                and (frame:GetRight() - row[#row].frame:GetRight())
+            if inLeft and inLeft < 0 then faults[#faults + 1] = "the name box runs off the left edge" end
+            if inRight and inRight < 0 then faults[#faults + 1] = "Rules runs off the right edge" end
+
+            -- 3. Each label inside its own button. The silent one: the text is not clipped by the
+            -- frame, it simply draws past it, so a label that no longer fits looks like a label
+            -- somebody typed badly.
+            for i = 2, #row do
+                local piece = row[i]
+                local label = piece.frame.GetFontString and piece.frame:GetFontString()
+                local strWidth = label and label.GetStringWidth and label:GetStringWidth()
+                local width = piece.frame:GetWidth()
+                if strWidth and width and strWidth > width - 8 then
+                    faults[#faults + 1] = string.format("%q is %d wide in a %d button, so it clips",
+                        tostring(piece.frame:GetText()), math.floor(strWidth + 0.5),
+                        math.floor(width + 0.5))
+                end
+            end
+
+            if #notes == 0 then
+                return nil, "no edges could be read — the window may not be laid out yet"
+            end
+            if #faults > 0 then return false, table.concat(faults, "; ") end
+            -- The numbers on a PASS, not just "ok": a 2-pixel gap and a 20-pixel gap are both passes
+            -- and mean very different things to whoever adds the next control to this row.
+            return true, string.format("window %d wide; gaps %s",
+                math.floor(frame:GetWidth() + 0.5), table.concat(notes, ", "))
+        end,
+    },
+    {
         id = "icon-picker", item = "VERIFY-2", label = "Set icon picker opens",
         run = function()
             local Icons, Sets = Kitbag.Icons, Kitbag.Sets
