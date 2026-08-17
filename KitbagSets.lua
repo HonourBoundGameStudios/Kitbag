@@ -171,6 +171,79 @@ function Sets.Inherit(name, parentName)
     return true
 end
 
+--- The characters a set can be copied to: every OTHER character in the file, sorted (CORE-7).
+--
+-- Only characters the account has actually seen. `DB.Character` makes a bucket on demand, so any
+-- name at all could be made into a target — and a set copied to a character that does not exist
+-- would report success and be invisible for ever.
+--
+-- Yourself is left off rather than offered-and-refused, which is the UI-11 rule: a choice that will
+-- be rejected is worse than no choice, because the rejection arrives after the click.
+--
+-- Compared by bucket identity rather than by re-reading `Compat.CharacterKey()`, so this cannot
+-- disagree with the `same` refusal in `Core.CopySet` — that one is by identity too.
+function Sets.CopyTargets()
+    local out = {}
+    for key, bucket in pairs(db().chars or {}) do
+        if bucket ~= char() then out[#out + 1] = key end
+    end
+    table.sort(out)
+    return out
+end
+
+--- Copy a set into another character's bucket (CORE-7).
+--
+-- CORE-6 kept one account-wide file with a `chars[…]` bucket precisely so this would stay possible;
+-- this is the door. The judgement — what travels, and what is refused — is `Core.CopySet` and is
+-- pure; here is the storage and the report, the same division every other set operation uses.
+--
+-- The alt is not logged in, so nothing of theirs is redrawn and nothing of theirs is running. That
+-- is also the one caveat worth knowing: their bucket is written when THIS client saves, so a copy
+-- made while that character is logged in on a second client is overwritten when the second one
+-- logs out. Nothing can be done about it from here, and it costs a copy rather than a set.
+function Sets.CopyTo(name, charKey)
+    name = Core.CleanName(name)
+    if not name then
+        say("which set? |cffffd100/kit copy Tank to Alt - Realm|r")
+        return false
+    end
+
+    local target = type(charKey) == "string" and (db().chars or {})[charKey] or nil
+    if not target then
+        local targets = Sets.CopyTargets()
+        say("no character called |cffffd100%s|r. |cff808080Kitbag can only copy to characters it " ..
+            "has seen log in%s|r", tostring(charKey),
+            #targets > 0 and (": " .. table.concat(targets, ", ") .. ".") or ".")
+        return false
+    end
+
+    local set, why = Core.CopySet(char().sets, name, target.sets)
+    if not set then
+        if why == "same" then
+            say("|cffffd100%s|r is already this character — nothing to copy.", charKey)
+        elseif why == "exists" then
+            say("|cffff8080%s already has a set called|r |cffffd100%s|r. |cff808080Rename one of " ..
+                "them and copy again — Kitbag will not overwrite their gear.|r", charKey, name)
+        else
+            say("no set called |cffffd100%s|r.", name)
+        end
+        return false
+    end
+
+    target.sets[name] = set
+    -- No `Kitbag.Refresh()`, and the absence is deliberate rather than forgotten: every window in
+    -- the addon draws THIS character's sets, and none of them changed. Redrawing would be a
+    -- no-op that implies something on screen did.
+    --
+    -- Says it arrived flat, because that is the difference the player will otherwise notice later:
+    -- a set that inherits here is one whole outfit over there, and re-saving it on the alt will not
+    -- behave the way re-saving the original does.
+    say("copied |cffffd100%s|r to |cffffd100%s|r%s.", name, charKey,
+        char().sets[name].parent and " — flattened, since they have no parent set to inherit from"
+            or "")
+    return true
+end
+
 --- What the confirmation says under "Delete <name>?" — the consequences, in a sentence (BUG-8).
 --
 -- Empty when there are none, so the prompt does not pad itself with reassurance nobody needs; a

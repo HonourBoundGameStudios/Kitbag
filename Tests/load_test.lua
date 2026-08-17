@@ -519,4 +519,65 @@ G.GetInventoryItemLink = worn
 H.eq(G.Kitbag.char.swaps[2] and G.Kitbag.char.swaps[2].state, nil,
     "a swap that succeeded records no conditions at all")
 
+-- ---------------------------------------------------------------------------
+-- Copying a set to another character (CORE-7)
+-- ---------------------------------------------------------------------------
+--
+-- Exercised here for the reason Sets.Inherit is: this reaches across the account-wide file into a
+-- bucket belonging to somebody who is not logged in, so `Kitbag.db` and `Kitbag.char` both have to
+-- exist for it to be callable at all. Core.CopySet owns the judgement and is covered in core_test;
+-- what is asserted here is the wiring — that the copy lands in the RIGHT bucket, that a target the
+-- account has never seen is refused rather than invented, and that the source is untouched.
+
+G.Kitbag.db = {
+    chars = {
+        ["Deller - Whitemane"] = { sets = {}, rules = {} },
+        ["Rinanella - Whitemane"] = { sets = { Raid = { slots = { [1] = "999:0:0:0:0:0:0" } } },
+            rules = {} },
+    },
+    options = {},
+}
+G.Kitbag.db.chars["Pobble - Whitemane"] = {
+    sets = {
+        Base  = { slots = { [1] = "111:0:0:0:0:0:0" } },
+        Raid  = { slots = { [16] = "333:0:0:0:0:0:0" }, parent = "Base" },
+    },
+    rules = {},
+}
+G.Kitbag.char = G.Kitbag.db.chars["Pobble - Whitemane"]
+
+-- The menu's list. Yourself is not on it — you already have the set, and Core would refuse anyway,
+-- so offering the choice would only produce a refusal after the click (the UI-11 rule).
+local targets = Sets.CopyTargets()
+H.eq(table.concat(targets, ", "), "Deller - Whitemane, Rinanella - Whitemane",
+    "the copy targets are the other characters the account has seen, in name order")
+
+H.eq(Sets.CopyTo("Raid", "Deller - Whitemane"), true, "copying to another character succeeds")
+local landed = G.Kitbag.db.chars["Deller - Whitemane"].sets.Raid
+H.ok(landed ~= nil, "…and the set lands in THAT character's bucket")
+H.eq(landed and landed.slots[16], "333:0:0:0:0:0:0", "…carrying its own slots")
+H.eq(landed and landed.slots[1], "111:0:0:0:0:0:0",
+    "…and the slot it was inheriting, which the alt has no parent set to supply")
+H.eq(landed and landed.parent, nil, "…while inheriting from nothing on the far side")
+
+-- The source is a delta still. Copying is a read of this character's list, not a rewrite of it.
+H.eq(G.Kitbag.char.sets.Raid.parent, "Base", "the source set still inherits — copying did not flatten it")
+H.eq(G.Kitbag.char.sets.Raid.slots[1], nil, "…and did not gain the parent's slot on the way past")
+
+-- A clash refuses and leaves the target's own set exactly as it was. This is the unrecoverable one:
+-- Rinanella's Raid is hers, and a silent overwrite is gear work that nothing can rebuild.
+H.eq(Sets.CopyTo("Raid", "Rinanella - Whitemane"), false,
+    "a name the target already uses is refused rather than overwritten")
+H.eq(G.Kitbag.db.chars["Rinanella - Whitemane"].sets.Raid.slots[1], "999:0:0:0:0:0:0",
+    "…and their set is untouched by the refusal")
+
+-- A character the account has never seen is refused rather than created. DB.Character makes a bucket
+-- on demand, so the naive implementation would happily invent one for a typo'd name — and the copy
+-- would succeed, report success, and be invisible for ever.
+H.eq(Sets.CopyTo("Raid", "Typo - Whitemane"), false, "an unknown character is refused")
+H.eq(G.Kitbag.db.chars["Typo - Whitemane"], nil, "…and no bucket is invented for them")
+
+H.eq(Sets.CopyTo("Raid", "Pobble - Whitemane"), false, "copying to yourself is refused")
+H.eq(Sets.CopyTo("Nope", "Deller - Whitemane"), false, "copying a set that does not exist is refused")
+
 H.done()
