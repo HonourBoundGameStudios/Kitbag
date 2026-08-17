@@ -1104,4 +1104,49 @@ H.eq(#missing.orphans, 0, "…and orphans nothing")
 H.eq(C.DeleteImpact(nil, "Base").exists, false, "no sets at all is not a crash")
 H.eq(C.DeleteImpact(family, nil).exists, false, "no name at all is not a crash")
 
+-- ---------------------------------------------------------------------------
+-- CopySet — a set as another character would have to store it (CORE-7)
+-- ---------------------------------------------------------------------------
+--
+-- The sharp one is inheritance. A stored child holds only what differs from its parent, and the
+-- parent is another set in THIS character's list. Copying the delta across hands the alt a set that
+-- resolves against a parent it does not have — which is not an error, because Resolve treats a
+-- missing parent as contributing nothing. It is the "it half-applied my set" report, arriving as a
+-- set that looks complete in the list and turns out to be two slots.
+
+local copy, why = C.CopySet(family, "Fire", {})
+H.eq(why, nil, "copying a set that exists is allowed")
+H.eq(copy.name, "Fire", "the copy keeps its name")
+H.eq(copy.slots[16], SWORD, "…and its own slots")
+H.eq(copy.slots[1], HELM, "…AND the slots it was inheriting, flattened in")
+H.eq(copy.parent, nil, "the copy inherits from nothing — the alt has no such parent set")
+
+-- Deep, not shared. Two characters' set lists live in one saved file, so a shared slots table would
+-- make editing the alt's copy silently edit the original, and the two would look independent.
+copy.slots[16] = TWOHAND
+H.eq(family.Fire.slots[16], SWORD, "editing the copy does not reach back into the original")
+
+local iconed = { Kept = { name = "Kept", icon = "Interface\\Icons\\Ability_Warrior_Rampage",
+    slots = { [1] = HELM } } }
+H.eq(C.CopySet(iconed, "Kept", {}).icon, "Interface\\Icons\\Ability_Warrior_Rampage",
+    "a chosen icon travels with the set — it is the set's identity in the list")
+
+-- Refusals. Never overwrite: the same judgement Sets.New and the ItemRack import make, and for the
+-- same reason — replacing a curated set is unrecoverable and refusing is not.
+local clash = { Fire = { name = "Fire", slots = {} } }
+local blocked, reason = C.CopySet(family, "Fire", clash)
+H.eq(blocked, nil, "a name the target already uses is refused rather than overwritten")
+H.eq(reason, "exists", "…and says which refusal it was, so the caller can name the clash")
+
+local gone, goneWhy = C.CopySet(family, "Nope", {})
+H.eq(gone, nil, "copying a set that does not exist is refused")
+H.eq(goneWhy, "no-set", "…distinctly from a clash, because they ask different things of the player")
+
+local same, sameWhy = C.CopySet(family, "Alone", family)
+H.eq(same, nil, "copying a set onto its own character is refused")
+H.eq(sameWhy, "same", "…named, because 'Alone already exists' would be a baffling way to say it")
+
+H.eq(C.CopySet(nil, "Fire", {}), nil, "no source list at all is not a crash")
+H.eq(C.CopySet(family, "Fire", nil), nil, "no target list at all is not a crash")
+
 H.done()

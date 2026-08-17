@@ -965,5 +965,36 @@ function Core.DeleteImpact(sets, name)
     return out
 end
 
+--- A set as another character would have to store it: flat, parentless, and nobody else's table
+--- (CORE-7). Returns `nil, why` — "no-set", "exists" or "same" — rather than copying.
+--
+-- Flattening is the whole of the risk here. A stored child holds only what DIFFERS from its parent,
+-- and that parent is a set in the source character's list. Copying the delta across would hand the
+-- alt a set that resolves against a parent it does not have — and `Resolve` treats a missing parent
+-- as contributing nothing, so nothing errors and nothing warns: the set simply arrives as two slots
+-- while looking complete in the list. That is the "it half-applied my set" report with a longer fuse.
+--
+-- Never overwrites, for the reason `Sets.New` and the ItemRack import do not: replacing a curated
+-- set cannot be undone, and refusing can. The caller answers a clash by renaming, which is why the
+-- refusals are distinguished rather than folded into one false.
+--
+-- Both characters live in ONE saved file, so the copy must share no table with the original: a
+-- shared `slots` would make editing the alt's copy silently edit the source, and the two would look
+-- independent right up until someone noticed their sets moving on their own. `Resolve` already
+-- builds a fresh set from fresh slots, which is why nothing is re-copied here — and the test asserts
+-- the independence directly rather than trusting that contract to stay true.
+function Core.CopySet(sets, name, targetSets)
+    if type(sets) ~= "table" or type(targetSets) ~= "table" then return nil, "no-set" end
+    -- Ahead of the existence check: "Alone already exists" is a baffling thing to be told about the
+    -- character you are standing on, and the two refusals want different responses.
+    if sets == targetSets then return nil, "same" end
+    if type(sets[name]) ~= "table" then return nil, "no-set" end
+    if targetSets[name] ~= nil then return nil, "exists" end
+
+    -- Resolved rather than stored, and the resolved set has no `parent` left on it — which is the
+    -- whole point: what travels is the outfit, not the relationship.
+    return Core.Resolve(sets, name)
+end
+
 Kitbag.Core = Core
 return Core
