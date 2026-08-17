@@ -580,4 +580,36 @@ H.eq(G.Kitbag.db.chars["Typo - Whitemane"], nil, "…and no bucket is invented f
 H.eq(Sets.CopyTo("Raid", "Pobble - Whitemane"), false, "copying to yourself is refused")
 H.eq(Sets.CopyTo("Nope", "Deller - Whitemane"), false, "copying a set that does not exist is refused")
 
+-- The slash door. Asserted through SlashCmdList rather than by calling Sets.CopyTo again, because
+-- the only thing left to get wrong is the parse — and both halves of it can contain spaces. A set is
+-- called "Raid Fire" and a character key is "Name - Realm", so a positional split makes either one
+-- unaddressable. " to " is the separator for the same reason "inherit … from …" has one.
+local slash = G.SlashCmdList.KITBAG
+H.ok(type(slash) == "function", "the slash handler is registered")
+
+G.Kitbag.char.sets["Raid Fire"] = { slots = { [5] = "555:0:0:0:0:0:0" } }
+slash("copy Raid Fire to Deller - Whitemane")
+local viaSlash = G.Kitbag.db.chars["Deller - Whitemane"].sets["Raid Fire"]
+H.ok(viaSlash ~= nil, "a set name with a space in it survives the parse")
+H.eq(viaSlash and viaSlash.slots[5], "555:0:0:0:0:0:0", "…and arrives with its gear")
+
+-- The realm half of the key contains " - ", which is what a lazy separator would split on first.
+H.ok(G.Kitbag.db.chars["Deller - Whitemane"].sets["Raid Fire"] ~= nil,
+    "…and the ' - ' in the character key is not mistaken for the separator")
+
+-- A set whose own name contains the separator. The character key is the half with a fixed shape —
+-- one name, one realm, no " to " in it — so the LAST separator is the real one and the set name is
+-- whatever came before it. A non-greedy left-hand match splits on the FIRST one instead and tries to
+-- copy a set called "Raid" to a character called "Ruin to Deller - Whitemane", which refuses with a
+-- message naming a character nobody typed.
+G.Kitbag.char.sets["Raid to Ruin"] = { slots = { [7] = "777:0:0:0:0:0:0" } }
+slash("copy Raid to Ruin to Deller - Whitemane")
+H.ok(G.Kitbag.db.chars["Deller - Whitemane"].sets["Raid to Ruin"] ~= nil,
+    "a set name containing ' to ' splits on the LAST separator, not the first")
+
+-- `copy` with nothing to copy to says who IS available rather than printing usage at someone who
+-- already typed it correctly. Nothing to assert but that it does not error — the message is chat.
+slash("copy")
+H.ok(true, "a bare `copy` reports rather than erroring")
+
 H.done()

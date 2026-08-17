@@ -36,6 +36,8 @@ local function help()
     say("  |cffffd100/kit list|r — what's saved")
     say("  |cffffd100/kit inherit <set> from <parent>|r — make a set a delta on another")
     say("  |cffffd100/kit inherit <set> none|r — stop inheriting, keeping the pieces")
+    say("  |cffffd100/kit copy <set> to <character>|r — give an alt a copy of a set")
+    say("  |cffffd100/kit copy|r — which characters you can copy to")
     say("  |cffffd100/kit rules|r — the auto-swap rule editor")
     say("  |cffffd100/kit options|r — auto-swap, announcements, minimap, trinket bar")
     say("  |cffffd100/kit why|r — which rule is choosing your set, and why")
@@ -100,6 +102,28 @@ local function command(input)
             else
                 Sets.Say("|cffffd100/kit inherit Raid Fire from Raid|r, or " ..
                     "|cffffd100/kit inherit Raid Fire none|r.")
+            end
+        end
+    elseif cmd == "copy" then
+        -- " to " is the separator for the reason "inherit … from …" has one, and here BOTH halves
+        -- can contain spaces: sets are called "Raid Fire" and character keys are "Name - Realm".
+        --
+        -- GREEDY on the left, which is the opposite of the obvious `(.-)`. The character key is the
+        -- half with a fixed shape — one name, one realm, and no " to " in either — so the LAST
+        -- separator is always the real one. Splitting on the first would try to copy "Raid" to a
+        -- character called "Ruin to Deller - Whitemane" and refuse, naming someone nobody typed.
+        local set, who = string.match(rest, "^(.+)%s+to%s+(.+)$")
+        if set then
+            Sets.CopyTo(set, who)
+        else
+            -- Naming the characters beats printing usage: the hard half of this command is
+            -- remembering exactly how a character key is spelled, and only Kitbag knows.
+            local targets = Sets.CopyTargets()
+            if #targets == 0 then
+                Sets.Say("no other characters yet — |cff808080Kitbag can copy to any character it " ..
+                    "has seen log in.|r")
+            else
+                Sets.Say("|cffffd100/kit copy <set> to <character>|r — %s", table.concat(targets, ", "))
             end
         end
     elseif cmd == "rules" then RulesUI.Toggle()
