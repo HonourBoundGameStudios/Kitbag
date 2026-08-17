@@ -9,10 +9,15 @@
 #
 # Two deliberate design choices, both about not leaking by accident:
 #
-#   * THE PUBLIC REPO IS NOT A REMOTE OF THIS ONE. Its history is separate and this script syncs
-#     files into a working checkout under .publish\. If it were a remote, one absent-minded
-#     `git push --all` would publish every working note in every commit, permanently. It cannot,
-#     because there is nothing here to push to.
+#   * THE PUBLIC REPO'S HISTORY IS SEPARATE, and this script syncs files into a working checkout
+#     under .publish\ rather than pushing a branch. One absent-minded `git push` of the workshop
+#     branch would publish every working note in every commit, permanently.
+#     THIS USED TO SAY "it cannot, because there is nothing here to push to". That was true until
+#     somebody added the public repo as a remote, and then it was false and nothing said so — the
+#     workshop branch sat on a public GitHub repo for three days in August 2026 with Process/,
+#     Research/, Design/ and CLAUDE.md on it. The whitelist below never got it wrong; it never got
+#     asked. An absence is not a control. What holds that shut now is Process/hooks/pre-push, which
+#     refuses to push any tree containing those paths, and which is exercised by publish_test.lua.
 #   * PUBLISH IS A WHITELIST, never a list of exclusions. A new working document added to this repo
 #     is private by default; only a file matching something below can ever reach the public tree.
 #     An exclusion list gets it backwards — anything new is public until someone remembers.

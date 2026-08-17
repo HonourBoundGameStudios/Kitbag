@@ -201,4 +201,90 @@ else
     H.ok(classified > 0, "the root listing found " .. classified .. " entries to classify")
 end
 
+-- ---------------------------------------------------------------------------
+-- The workshop branch cannot be pushed to the public remote
+-- ---------------------------------------------------------------------------
+--
+-- Everything above guards the COPY that publish.ps1 makes. This guards the other route to the same
+-- public repository, which is the one that actually failed: between 2026-08-13 and 2026-08-16 the
+-- workshop branch itself was pushed to it, and Process/, Research/, Design/ and CLAUDE.md sat on a
+-- public GitHub repo for three days. The whitelist never got it wrong — it never got ASKED.
+--
+-- What had been holding that shut was the absence of a remote, recorded in publish.ps1's header as
+-- "it cannot, because there is nothing here to push to". An absence is not a control: it is enforced
+-- by nobody, it is invisible when it changes, and it reverted the moment somebody ran
+-- `git remote add`. Nothing went red. So the replacement has to be a thing that RUNS.
+--
+-- The hook lives in Process/ deliberately. It is workshop machinery, and Process/ is already private
+-- by construction and already named in $forbidden — so the guard sits inside the thing it guards and
+-- adds no new root entry for the classification check above to have an opinion about.
+
+local HOOK = "Process/hooks/pre-push"
+
+if not haveGit then
+    print("  # skipped: git could not answer, so the push guard cannot be checked")
+else
+    H.ok(slurp(HOOK) ~= nil, "the pre-push guard exists at " .. HOOK)
+
+    -- A hook that is not wired up is not a hook. Git only runs hooks from core.hooksPath, and that is
+    -- local config rather than repository content — which makes it exactly the kind of thing that is
+    -- true on one machine and silently false everywhere else, so the gate has to ask.
+    local configured = popen("git config core.hooksPath 2>" .. (WINDOWS and "NUL" or "/dev/null"))
+    local hooksPath = configured and configured[1] or ""
+    H.ok(hooksPath:gsub("\\", "/") == "Process/hooks",
+        "git is configured to run it (core.hooksPath = '" .. hooksPath .. "', want 'Process/hooks')")
+
+    -- Derived, not restated. Every private path publish.ps1 refuses to publish must also be a path
+    -- the hook refuses to push — the two guards cover one public repository by two different routes,
+    -- and a name protected on only one of them is a hole. Untracked entries are skipped because they
+    -- can never appear in a commit's tree, so blocking them would be noise.
+    local hookText = slurp(HOOK) or ""
+    for _, name in ipairs(forbidden) do
+        local tracked = popen('git ls-files --error-unmatch "' .. name ..
+            '" 2>' .. (WINDOWS and "NUL" or "/dev/null"))
+        if tracked and #tracked > 0 then
+            H.ok(hookText:match("%f[%w_]" .. name:gsub("%.", "%%.") .. "%f[^%w_]") ~= nil,
+                "the hook also refuses to push '" .. name .. "' (publish.ps1 forbids it)")
+        end
+    end
+end
+
+-- Run the hook for real. Reading the script would only prove it CONTAINS the right words; the thing
+-- worth knowing is what it does when git hands it a push, and this is cheap enough to just do.
+local head = popen("git rev-parse HEAD 2>" .. (WINDOWS and "NUL" or "/dev/null"))
+local NULL_SHA = string.rep("0", 40)
+
+local function runHook(localSha)
+    local input = "Tests/hook_input.tmp"   -- *.tmp is gitignored
+    local f = io.open(input, "w")
+    if not f then return nil end
+    f:write("refs/heads/master " .. localSha .. " refs/heads/master " .. NULL_SHA .. "\n")
+    f:close()
+    local cmd = "sh " .. HOOK .. " origin https://github.com/HonourBoundGameStudios/Kitbag.git < " ..
+        input .. " >" .. (WINDOWS and "NUL" or "/dev/null") .. " 2>&1"
+    local a, _, c = os.execute(cmd)
+    os.remove(input)
+    -- Lua 5.1 hands back the raw status; 5.2+ returns ok, "exit", code.
+    if type(a) == "number" then return a end
+    return c or (a and 0 or 1)
+end
+
+if not head or #head == 0 or not slurp(HOOK) then
+    print("  # skipped: no HEAD or no hook, cannot exercise the guard")
+else
+    local refused = runHook(head[1])
+    if refused == nil then
+        print("  # skipped: could not run sh, so the hook's behaviour was not exercised")
+    else
+        -- HEAD is the workshop tree. If pushing it is allowed, the guard is decorative.
+        H.ok(refused ~= 0, "pushing the workshop tree is REFUSED (hook exited " .. tostring(refused) .. ")")
+
+        -- Deleting a remote branch pushes the null sha and carries no tree with it. Refusing that
+        -- would have blocked the very command that cleaned this mess up, which is the shape of guard
+        -- that gets switched off within a week.
+        local del = runHook(NULL_SHA)
+        H.ok(del == 0, "deleting a remote branch is still allowed (hook exited " .. tostring(del) .. ")")
+    end
+end
+
 H.done()
