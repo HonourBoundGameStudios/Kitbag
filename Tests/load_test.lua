@@ -167,6 +167,10 @@ G.ReloadUI = function() end
 G.Screenshot = function() end
 G.PlaySound = function() end
 G.SetBinding = function() return true end
+-- Reached only by exercising Bindings.Apply, not by any module's load path — added when the import
+-- test below first called it. Worth the note: a per-set binding points a key at a hidden click
+-- button rather than at a binding name, so this and SetBinding are different APIs doing similar work.
+G.SetBindingClick = function() return true end
 G.SaveBindings = function() end
 G.GetBindingKey = function() return nil end
 G.CreateMacro = function() end
@@ -611,5 +615,89 @@ H.ok(G.Kitbag.db.chars["Deller - Whitemane"].sets["Raid to Ruin"] ~= nil,
 -- already typed it correctly. Nothing to assert but that it does not error — the message is chat.
 slash("copy")
 H.ok(true, "a bare `copy` reports rather than erroring")
+
+-- ---------------------------------------------------------------------------
+-- Pressing Import (UI-18 / VERIFY-14)
+-- ---------------------------------------------------------------------------
+--
+-- `Import.FromItemRack` is pure and covered exhaustively in import_test; what had NO coverage is the
+-- half that writes — the sets landing in the character's bucket, the options being applied to the
+-- account, and the keybindings being re-bound. That is exactly what VERIFY-14 still holds open as
+-- "pressing it brings the five across", and it is testable here for the reason Sets.Inherit and
+-- Sets.CopyTo are: it reads two globals another addon wrote and writes into Kitbag.db.
+--
+-- The db is built with the shipped DB.Load rather than a hand-written table, so the option paths
+-- KitbagImport maps to are checked against the real defaults. A path Kitbag does not have writes
+-- nothing and returns false (DB.Set refuses to invent a branch), so a drift between OPTION_MAP and
+-- the defaults would show up here as options that silently never arrive.
+
+local DB = G.Kitbag.DB
+G.Kitbag.db = DB.Load({})
+G.Kitbag.char = DB.Character(G.Kitbag.db, "Pobble - Whitemane")
+
+-- Real strings from a real ItemRack file, same fixtures as import_test.
+local IR_HELM   = "16955::::::::60::::::::::"
+local IR_GLOVES = "16855:2544:::::::60::::::::::"
+
+G.ItemRackUser = {
+    Sets = {
+        HEAL = { equip = { [1] = IR_HELM }, icon = 135019, key = "CTRL-1" },
+        DPS  = { equip = { [10] = IR_GLOVES } },
+        ["~Unequip"] = { equip = {} },   -- ItemRack's own scratch set, on every character
+    },
+}
+-- ItemRack's settings are the OPPOSITE of Kitbag's defaults on all three mapped options, so an
+-- option that failed to transfer cannot be mistaken for one that transferred to the same value.
+G.ItemRackSettings = { EnableEvents = "OFF", ShowMinimap = "OFF", EnableTrinketMenu = "ON" }
+
+-- The button's tooltip promises the keybindings come across too, and storing `key` on the set is only
+-- half of that — something has to tell the client. Recorded rather than assumed: this is the one part
+-- of the import that reaches an API no module's load path touches, which is how the missing
+-- SetBindingClick stub above was found in the first place.
+local boundKeys = {}
+local stubSetBindingClick = G.SetBindingClick
+G.SetBindingClick = function(key, ...)
+    boundKeys[#boundKeys + 1] = key
+    return stubSetBindingClick(key, ...)
+end
+
+local imported = Sets.ImportItemRack()
+H.eq(imported.imported, 2, "pressing Import brings across every set that is really a set")
+H.ok(G.Kitbag.char.sets.HEAL ~= nil, "…and they land in THIS character's bucket")
+H.eq(G.Kitbag.char.sets.HEAL.slots[1], G.Kitbag.Core.ItemKey(IR_HELM), "…carrying their gear")
+H.eq(G.Kitbag.char.sets.HEAL.key, "CTRL-1", "…and the key ItemRack had them on")
+H.eq(G.Kitbag.char.sets["~Unequip"], nil, "ItemRack's scratch sets are not stored as sets")
+
+H.eq(table.concat(boundKeys, ", "), "CTRL-1",
+    "…and that key is actually bound in the client, not merely stored on the set")
+
+G.SetBindingClick = stubSetBindingClick
+
+-- The options, through the shipped paths. All three are inverted from the defaults above.
+H.eq(DB.Get(G.Kitbag.db, "autoSwap"), false, "a mapped ItemRack option reaches the account options")
+H.eq(DB.Get(G.Kitbag.db, "minimap.hide"), true, "…including the ones stored the opposite way up")
+H.eq(DB.Get(G.Kitbag.db, "trinkets.hide"), false, "…in both directions")
+
+-- Once everything is across there is nothing to offer, which is what takes the button away.
+H.eq(Sets.ImportOffer(), nil, "with the sets across, the window has nothing left to offer")
+
+-- The re-import. `/kit import` is still reachable after the button has gone, and a second run brings
+-- NOTHING across — every set clashes with the one it created the first time. The options must not
+-- move on that run: they are the player's now, and ItemRack's copy of them is older than every
+-- change made since. Re-applying them silently turns auto-swap back on for someone who deliberately
+-- turned it off, and gear that starts swapping again by itself is not traceable to a command that
+-- said "nothing new to import".
+DB.Set(G.Kitbag.db, "autoSwap", true)
+DB.Set(G.Kitbag.db, "minimap.hide", false)
+
+local again = Sets.ImportItemRack()
+H.eq(again.imported, 0, "a second import brings nothing across — every set is already here")
+H.eq(DB.Get(G.Kitbag.db, "autoSwap"), true,
+    "…and it leaves the options alone rather than re-applying ItemRack's over the player's")
+H.eq(DB.Get(G.Kitbag.db, "minimap.hide"), false, "…every one of them")
+
+-- No ItemRack at all is the majority case and reaches this at login. It must report rather than error.
+G.ItemRackUser, G.ItemRackSettings = nil, nil
+H.eq(Sets.ImportItemRack().imported, 0, "no ItemRack installed imports nothing rather than erroring")
 
 H.done()

@@ -342,18 +342,24 @@ function Sets.ImportItemRack()
         say("|cffff8080kept your existing|r %s — rename yours and import again to get ItemRack's.",
             table.concat(clashed, ", "))
     end
-    -- The options and the keybindings (COMPAT-5). Only mapped options come across, and only for
-    -- someone who is importing anyway — this never runs on its own.
-    local options = Import.OptionsFromItemRack(_G.ItemRackSettings)
-    local changed = 0
-    for path, value in pairs(options) do
-        if Kitbag.DB.Set(db(), path, value) then changed = changed + 1 end
-    end
-    if changed > 0 then
-        say("brought %d ItemRack option(s) across. |cff808080The rest configure a UI Kitbag does " ..
-            "not have and were left alone.|r", changed)
-        Kitbag.Minimap.SetHidden(db().options.minimap.hide)
-        Kitbag.Trinkets.SetHidden(db().options.trinkets.hide)
+    -- The options and the keybindings (COMPAT-5). Only mapped options come across, and only when a
+    -- set actually did — the window's button goes away once everything is across, but `/kit import`
+    -- does not, and on a second run every set clashes and nothing comes over. Re-applying ItemRack's
+    -- settings on that run would overwrite choices the player has made since with a copy that is
+    -- older than all of them, and turning auto-swap back on silently is gear moving by itself after a
+    -- command that said "nothing new to import".
+    if #names > 0 then
+        local options = Import.OptionsFromItemRack(_G.ItemRackSettings)
+        local changed = 0
+        for path, value in pairs(options) do
+            if Kitbag.DB.Set(db(), path, value) then changed = changed + 1 end
+        end
+        if changed > 0 then
+            say("brought %d ItemRack option(s) across. |cff808080The rest configure a UI Kitbag " ..
+                "does not have and were left alone.|r", changed)
+            Kitbag.Minimap.SetHidden(db().options.minimap.hide)
+            Kitbag.Trinkets.SetHidden(db().options.trinkets.hide)
+        end
     end
 
     local bound = 0
