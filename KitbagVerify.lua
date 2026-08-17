@@ -320,8 +320,10 @@ Verify.CHECKS = {
     {
         id = "tooltip-template", item = "VERIFY-2", label = "TooltipBorderedFrameTemplate exists",
         -- KitbagFlyout builds its panel from this template inside a pcall and silently falls back to
-        -- a plain frame. That fallback has never been seen, which means nobody knows which of the two
-        -- paths ships — so ask the client directly rather than inferring it from how the panel looks.
+        -- a plain frame. Classic Era answered this on 2026-08-14: the template resolves, so the
+        -- fallback is unused there — "never been seen" meant it never runs, not that nobody looked.
+        -- The check still earns its place because the answer is per-flavour, and a silent fallback
+        -- is exactly the kind that ships unnoticed. Ask the client rather than infer it from looks.
         run = function()
             local ok, created = pcall(CreateFrame, "Frame", nil, UIParent,
                 "TooltipBorderedFrameTemplate")

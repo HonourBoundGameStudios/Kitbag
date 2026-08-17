@@ -65,9 +65,9 @@ its editor, sets and set inheritance, the window with per-row readiness and move
 paperdoll flyouts, set icons, the trinket bar, the options panel and the ItemRack importer all work.
 
 **Verified in the client on Classic Era only.** The window, the rule editor, the options panel, the
-paperdoll flyouts, the slot picker, the trinket bar and the confirmation popups have all been seen
-drawing in a running game, and rules have been observed firing and equipping a set end to end. The
-set icon picker is the one panel still unexercised.
+paperdoll flyouts, the slot picker, the set icon picker, the trinket bar and the confirmation popups
+have all been seen drawing in a running game, and rules have been observed firing and equipping a set
+end to end. Every panel the addon draws has now been observed on screen.
 
 **The other flavours have `.toc` files and have never been launched.** Their `## Interface` numbers
 are read off the installed client's own `.build.info` rather than guessed — except Cataclysm's,

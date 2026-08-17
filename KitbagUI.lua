@@ -49,8 +49,9 @@ local STATE = {
 -- Blizzard's empty-slot art, so an untouched cell looks like the character sheet rather than a hole.
 -- Several slots share one texture — both fingers, both trinkets — and the back slot borrows the
 -- chest's, which is what the paperdoll itself does. A path that turns out not to exist on some
--- flavour simply draws nothing and leaves the plain cell behind it, so a wrong guess here is
--- cosmetic and cannot break the window.
+-- flavour does NOT draw nothing — it renders as missing-texture magenta, which is about as loud as
+-- a UI fault gets. That is the useful property: a wrong path here cannot break the window and cannot
+-- hide either, so it is caught the first time the window is opened rather than shipping unnoticed.
 local SLOT_ART = {
     HEAD = "Head", NECK = "Neck", SHOULDER = "Shoulder", SHIRT = "Shirt", CHEST = "Chest",
     WAIST = "Waist", LEGS = "Legs", FEET = "Feet", WRIST = "Wrists", HANDS = "Hands",
