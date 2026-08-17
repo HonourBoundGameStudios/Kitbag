@@ -120,15 +120,16 @@ Co-Authored-By: <Agent name> <noreply@anthropic.com>
 
 **The Admiral always pushes.** The agent commits, never pushes. Never `--no-verify`.
 
-**⚠️ Do not push `master` — publish with `publish.ps1`.** This is the workshop repo and `origin` is
-the **public** GitHub repo, whose public branch is `main` and whose history is separate. Pushing
-`master` publishes `Process/`, `Research/`, `Design/` and `CLAUDE.md`, permanently. That is not
-hypothetical: it happened between 2026-08-13 and 2026-08-16, and again on 2026-08-16 at 20:42 from
-this working copy — very possibly an IDE pushing on commit rather than anyone deciding to.
-`Process/hooks/pre-push` now refuses it (`core.hooksPath = Process/hooks`), and
-`Tests/publish_test.lua` fails if that guard is missing or unwired. **To publish: `pwsh -File
-publish.ps1`**, which syncs a whitelist into a disposable checkout of `main`. Deleting a remote
-branch is still allowed, deliberately.
+**One repo, and the working notes are simply not in it.** `upstream` is the public GitHub repo and
+`master` is pushed to it directly — same as every other ship in the fleet. `Process/`, `Research/`
+and `Design/` are **gitignored**, so they live on disk and have never been part of the repository.
+That is the entire guard, and it is the reason there is nothing else to remember: a file git does
+not track cannot be leaked by a push, by an IDE, or by a forgotten step. `CLAUDE.md` **is** tracked
+and public, deliberately — it is guidance, not notes.
+
+Kitbag previously ran a two-repo whitelist arrangement with a publish script and a pre-push hook.
+It leaked anyway, twice, and the second time was an IDE pushing on commit. It is gone; do not
+reintroduce it. **Nothing here needs a special publish step — just commit.**
 
 ## Standing orders
 

@@ -6,14 +6,16 @@
 *.zip
 dist/
 
-# Working checkout used by publish.ps1
-.publish/
-
 # OS / editor
 .DS_Store
 .vscode/
 .idea/
 
-# Agent configuration. Never committed: this repository is public, and these are local working
-# files rather than part of the addon.
+# Agent configuration and the working notes. NEVER TRACKED — that is the whole guard, and it is the
+# same one every other ship in the fleet uses. This repository is public and is pushed to directly;
+# a file git does not track cannot be leaked by a push, an IDE, or a forgotten step. There is no
+# whitelist to maintain and no second history to keep in sync, because there is nothing to filter.
 .claude/
+/Design/
+/Process/
+/Research/
