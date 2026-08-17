@@ -103,8 +103,25 @@ Enable Lua errors while developing: `/console scriptErrors 1` (or run BugSack).
 `Process/` (Backlog.md, Bugs.md, Archive.md, Tasks.md) · `Research/` · `Design/` · `Tests/`.
 The addon's `.lua` and `.toc` live at the root so the game can load the folder directly.
 
-**Read `Process/Backlog.md` and `Process/Bugs.md` at the start of a session; update them in the same
-commit as the work.**
+**Read `Process/Backlog.md` and `Process/Bugs.md` at the start of a session; update them as part of
+the work.**
+
+**⚠️ `Process/`, `Research/` and `Design/` are gitignored — they are NOT in the repository.** They
+live on disk only. That is what keeps the working notes off a public repo (see the Commit Format
+section), and it has one consequence worth stating out loud, because it removes a safety net this
+project used to rely on:
+
+- **The notes cannot be updated "in the same commit as the work", because they are in no commit at
+  all.** The old rule said exactly that and it is now impossible to follow.
+- **So nothing catches drift between the docs and the code.** `git status` stays clean however stale
+  `Backlog.md` gets, a diff review will never show a doc that should have changed, and there is no
+  history to ask when a claim stopped being true. Under the old arrangement a wrong backlog was at
+  least *visible* in the diff.
+- **The discipline therefore has to be deliberate: update the notes in the same working session as
+  the change, before moving on.** Treat "the tests are green and the notes still describe the old
+  behaviour" as unfinished work, not as a tidy-up for later — because there is no later signal.
+- **Back them up separately if they matter.** They are not in the repo, so they are not on GitHub and
+  not in any clone; a lost working tree loses them outright.
 
 ## Commit Format
 
