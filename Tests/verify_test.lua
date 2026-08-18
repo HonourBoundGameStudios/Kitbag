@@ -278,6 +278,19 @@ H.ok(byId["copy-button"] ~= nil,
     "a check measures the three-button action row UI-20 crowded, and whether Copy belongs on it")
 H.eq(byId["copy-button"] and byId["copy-button"].item, "VERIFY-17",
     "…and it names the item it answers")
+
+-- VERIFY-18's wake-up half, which the item itself says is the likelier failure. Holding a swap while
+-- the player is dead is a `return` and is covered pure; waking depends on PLAYER_ALIVE/PLAYER_UNGHOST
+-- ARRIVING, and Events.Enable registers inside pcall precisely because an event a flavour does not
+-- have is a hard error — so an absent one is silent, and silence is indistinguishable from a rule
+-- that never matched. The addon already records which events the client accepted; comparing that
+-- against what it asked for is two readings agreeing, not a judgement, so nobody should be reading
+-- fifteen lines of a dump by eye to do it.
+H.ok(byId["watched-events"] ~= nil,
+    "a check proves the client accepted every event the engine watches, not merely that it asked")
+H.eq(byId["watched-events"] and byId["watched-events"].item, "VERIFY-18",
+    "…and it names the item it answers")
+
 -- No source-scan guard on "it measures the neighbours too", though the first draft had one. The file
 -- already contains the word "Delete" for the delete-popup check, so a scan for it passes whatever
 -- this check does — and a guard that cannot fail is the fabricated-sentence mistake above wearing

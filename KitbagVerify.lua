@@ -318,6 +318,56 @@ Verify.CHECKS = {
         end,
     },
     {
+        id = "watched-events", item = "VERIFY-18", label = "The client accepted every watched event",
+        -- The engine ASKS for fifteen events inside a pcall, because an event a flavour does not have
+        -- is a hard error rather than a no. What it gets is a separate question, and the gap between
+        -- the two is silent: a rule conditioning on an event the client never sends looks exactly
+        -- like a rule that never matched, which is BUG-9's shape and cost a session once already.
+        --
+        -- Events.Enable already records the answer per event; this only compares the record against
+        -- what was asked for, which is why it is a check and not a person reading fifteen lines of a
+        -- dump. PLAYER_ALIVE and PLAYER_UNGHOST are called out by name because their failure is a
+        -- different and worse thing than a condition that never matches: they are what WAKES a swap
+        -- held off through a corpse run (RULE-6), so losing them does not mean a rule never fires —
+        -- it means gear that was deliberately held is never given back.
+        run = function()
+            local Events = Kitbag.Events
+            if not Events or not Events.Diagnostics then return nil, "KitbagEvents is not loaded" end
+
+            local watched = Events.Diagnostics().events or {}
+            if #watched == 0 then
+                -- Enable() runs unconditionally at PLAYER_LOGIN — it is not behind the auto-swap
+                -- option, which gates whether a matched rule ACTS and not whether the client is
+                -- listened to. So an empty record means the login handler did not reach here at
+                -- all, which is a much larger fault than a switched-off feature.
+                return nil, "the engine has never registered anything — Events.Enable() did not "
+                    .. "run, which happens at PLAYER_LOGIN and is not optional"
+            end
+
+            local WAKE = { PLAYER_ALIVE = true, PLAYER_UNGHOST = true }
+            local missing, wake = {}, {}
+            for _, e in ipairs(watched) do
+                if not e.registered then
+                    missing[#missing + 1] = tostring(e.name)
+                    if WAKE[e.name] then wake[#wake + 1] = tostring(e.name) end
+                end
+            end
+
+            if #wake > 0 then
+                return false, string.format(
+                    "%s did not register — a swap held while dead (RULE-6) would never be woken, "
+                    .. "and the gear would simply stay off", table.concat(wake, " and "))
+            end
+            if #missing > 0 then
+                return false, string.format(
+                    "%d of %d events did not register: %s — any rule conditioning on one of those "
+                    .. "will silently never match", #missing, #watched, table.concat(missing, ", "))
+            end
+            return true, string.format("all %d watched events registered, including the "
+                .. "PLAYER_ALIVE/PLAYER_UNGHOST pair the corpse-run wake-up needs", #watched)
+        end,
+    },
+    {
         id = "tooltip-template", item = "VERIFY-2", label = "TooltipBorderedFrameTemplate exists",
         -- KitbagFlyout builds its panel from this template inside a pcall and silently falls back to
         -- a plain frame. Classic Era answered this on 2026-08-14: the template resolves, so the
