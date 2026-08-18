@@ -41,7 +41,7 @@ local NUMBER_GETTERS = {
 local STRING_GETTERS = { GetName = true, GetText = true, GetFrameStrata = true, GetObjectType = true }
 local BOOL_GETTERS = {
     IsShown = true, IsVisible = true, IsMouseOver = true, GetChecked = true,
-    IsEnabled = true, IsUserPlaced = true, IsForbidden = true,
+    IsUserPlaced = true, IsForbidden = true,
 }
 -- Scripts and shown-state are REMEMBERED for the reason event registration is: they are answers this
 -- suite asks questions of. A generic SetScript that discards its handler makes every button in the
@@ -136,6 +136,14 @@ SCRIPT_METHODS = {
             SCRIPT_METHODS.Hide(child)
         end
     end,
+    -- Enabled-state is tracked, and DEFAULTS TO TRUE the way a real widget does. It used to sit in
+    -- BOOL_GETTERS answering false to everything, which is worse than useless for UI-19's question:
+    -- "is Equip greyed while you are dead" would have passed against a window that greys every
+    -- control it owns, and greying everything is precisely the easy, wrong version of that feature.
+    Enable = function(self) rawset(self, "_enabled", true) end,
+    Disable = function(self) rawset(self, "_enabled", false) end,
+    SetEnabled = function(self, on) rawset(self, "_enabled", on and true or false) end,
+    IsEnabled = function(self) return rawget(self, "_enabled") ~= false end,
     SetShown = function(self, shown) rawset(self, "_shown", shown and true or false) end,
     IsShown = function(self) return rawget(self, "_shown") and true or false end,
     IsVisible = function(self) return rawget(self, "_shown") and true or false end,
@@ -1305,5 +1313,41 @@ H.ok(G.Kitbag.db.chars["Alt - Mockrealm"].sets.Tank ~= nil,
     "picking a live character copies the set the menu was HEADED with")
 H.ok(G.Kitbag.db.chars["Alt - Mockrealm"].sets.Healer == nil,
     "…and not whatever was selected while the menu was open")
+
+-- ---------------------------------------------------------------------------
+-- Dead greys what MOVES GEAR, and nothing else (VERIFY-15, UI-19)
+-- ---------------------------------------------------------------------------
+--
+-- The decision is `Core.CanSwap` and is covered pure; what has never been exercised is the window
+-- acting on it. Both directions matter and the second is the one the item says is easy to forget:
+-- running back as a corpse is exactly when someone has time to tidy their gear sets, and editing one
+-- touches no gear at all. Disabling the whole window would have been easier and wrong.
+local panel = G.KitbagCopyButton:GetParent()
+G.KitbagFrame:Show()
+UI.Select("Tank")
+
+H.ok(panel.equip:IsEnabled(), "alive, Equip is live")
+
+G.UnitIsDeadOrGhost = function() return true end
+UI.Refresh()
+H.ok(not panel.equip:IsEnabled(), "dead, Equip greys rather than offering a swap that cannot happen")
+-- rawget, not `panel.blocked`: the mock manufactures a method for any key a widget does not have,
+-- so a plain read of an absent field hands back a function and is never nil. That is the one
+-- place this test double lies convincingly, and it lies in the direction of passing.
+H.ok(Kitbag.Core.SWAP_BLOCKED[rawget(panel, "blocked")] ~= nil,
+    "…and the window is holding the REASON, so the grey can explain itself")
+
+-- The half that is easy to forget. None of these move an item.
+H.ok(panel.delete:IsEnabled(), "…while Delete stays live, because deleting a set moves no gear")
+H.ok(panel.copy:IsEnabled(), "…and Copy to…, which writes into another character's list")
+H.ok(panel.key:IsEnabled(), "…and the keybinding button")
+if not G.KitbagRulesFrame:IsShown() then RulesUI.Toggle() end
+H.ok(G.KitbagRulesFrame:IsShown(), "…and the rule editor still opens as a ghost")
+if G.KitbagRulesFrame:IsShown() then RulesUI.Toggle() end
+
+G.UnitIsDeadOrGhost = nil
+UI.Refresh()
+H.ok(panel.equip:IsEnabled(), "coming back to life gives Equip back")
+H.ok(rawget(panel, "blocked") == nil, "…and the window stops holding a reason it no longer has")
 
 H.done()
