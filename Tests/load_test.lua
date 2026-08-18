@@ -1422,6 +1422,12 @@ H.ok(not panel.equip:IsEnabled(), "dead, Equip greys rather than offering a swap
 -- place this test double lies convincingly, and it lies in the direction of passing.
 H.ok(Kitbag.Core.SWAP_BLOCKED[rawget(panel, "blocked")] ~= nil,
     "…and the window is holding the REASON, so the grey can explain itself")
+-- Equip has no label to grey any more (UI-26), so Disable() on its own changes nothing a player can
+-- see: the picture keeps its colours and the button goes on looking pressable. Disabled-and-bright
+-- is worse than the bug UI-19 fixed, because the click now silently does nothing instead of
+-- explaining itself ten seconds later.
+H.ok(rawget(panel.equip, "kitbagDimmed") == true,
+    "…and the DIMMING reaches the picture, which is the only thing left to grey")
 
 -- The half that is easy to forget. None of these move an item.
 H.ok(panel.delete:IsEnabled(), "…while Delete stays live, because deleting a set moves no gear")
@@ -1435,6 +1441,8 @@ G.UnitIsDeadOrGhost = nil
 UI.Refresh()
 H.ok(panel.equip:IsEnabled(), "coming back to life gives Equip back")
 H.ok(rawget(panel, "blocked") == nil, "…and the window stops holding a reason it no longer has")
+H.ok(rawget(panel.equip, "kitbagDimmed") == false,
+    "…and the picture comes back with it, rather than staying grey on a button that now works")
 
 -- ---------------------------------------------------------------------------
 -- The inherit menu ticks the real parent, and picking one redraws (VERIFY-13)
@@ -1612,6 +1620,7 @@ end
 -- asserted, because both look like a deliberate design from a screenshot and neither can be read.
 local actionPanel = G.KitbagCopyButton:GetParent()
 for _, entry in ipairs({
+    { button = actionPanel.equip, what = "Equip" },
     { button = actionPanel.delete, what = "Delete" },
     { button = G.KitbagCopyButton, what = "Copy" },
 }) do

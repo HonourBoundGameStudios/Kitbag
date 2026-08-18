@@ -34,6 +34,12 @@ local MAX_ROWS = 13
 -- A path that turns out not to exist does not draw nothing — it renders as missing-texture magenta,
 -- which is about as loud as a UI fault gets. That is the useful property, and it is the same reason
 -- SLOT_ART below is written as paths rather than guarded.
+-- Equip is the addon's own icon, the one in every `.toc`'s `## IconTexture` (UI-26). It is the
+-- picture a player already associates with Kitbag by the time they reach this button, and "put
+-- armour on" is the thing it depicts — which is a better answer than a generic tick, because a tick
+-- means "confirm" and this button does not confirm anything.
+local EQUIP_ICON = "Interface\\Icons\\INV_Chest_Plate06"
+
 local DELETE_ICON = "Interface\\Buttons\\UI-GroupLoot-Pass-Up"
 local COPY_ICON = "Interface\\Icons\\INV_Misc_GroupLooking"
 
@@ -788,22 +794,30 @@ local function buildDoll(parent)
         well:Hide()
     end
 
-    -- The action row. One action and two tools (UI-23), sized off the panel rather than written
-    -- down. Three text buttons where the panel was built for two was UI-20's known-sharp edge, and
-    -- the shape of it said the wrong thing besides: Equip, Delete and "Copy to…" read as three
-    -- peers, when one of them is what this window is FOR and the other two are things you do to a
-    -- set now and then. Equip therefore takes everything the other two give up.
+    -- The action row: one action and two tools (UI-23), all three drawn rather than spelled (UI-26).
     --
-    -- Nothing may move — the row is the last thing in the panel and there is no space beneath it
-    -- for a fourth.
+    -- Equip is DELIBERATELY the odd one out at 34 against the tools' 24. It is the only control here
+    -- anybody presses twice, and an icon-only row of three identical squares would say the three are
+    -- peers — which is precisely the thing UI-23 changed the row to stop saying. With no labels left
+    -- to carry the hierarchy, size is the only thing that can.
+    --
+    -- Centred rather than anchored left, because the three no longer fill the panel and a huddle in
+    -- one corner of a 300-wide panel reads as a layout that came apart. The arithmetic is off the
+    -- widths rather than written down, so the row re-centres itself if any of the three changes size.
+    --
+    -- Nothing may move BELOW here — the row is the last thing in the panel and there is no space
+    -- beneath it for a fourth.
     local actionRow = weaponsY - CELL - 12
     local narrow = 24
-    local wide = PANEL_WIDTH - 16 - 2 * (narrow + 4)
+    local wide = 34
+    local rowWidth = wide + 4 + narrow + 4 + narrow
 
-    panel.equip = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    panel.equip:SetSize(wide, 24)
-    panel.equip:SetPoint("TOPLEFT", panel, "TOPLEFT", 8, actionRow)
-    panel.equip:SetText("Equip")
+    -- Unnamed, like Delete beside it: `/kit verify` reaches both through the panel that owns them,
+    -- and a global exists forever. Copy has one only because it appears on some accounts and not
+    -- others, which is a question a check has to be able to ask by name.
+    panel.equip = Skin.IconButton(panel, nil, EQUIP_ICON, wide)
+    panel.equip:SetPoint("TOPLEFT", panel, "TOPLEFT",
+        math.floor((PANEL_WIDTH - rowWidth) / 2), actionRow)
     panel.equip:SetScript("OnClick", function() if selected then Sets.Equip(selected) end end)
 
     -- A permanently greyed control with no explanation is a puzzle rather than an affordance
@@ -812,7 +826,10 @@ local function buildDoll(parent)
     -- word the same refusal three different ways.
     panel.equip:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:AddLine("Wear the selected set")
+        -- Named rather than "the selected set" now that the button has no words of its own: this is
+        -- the last thing read before the one control here that moves gear, and "Equip" was never the
+        -- part in doubt — WHICH set was.
+        GameTooltip:AddLine(selected and ("Wear " .. selected) or "Wear the selected set", 1, 0.82, 0)
         if panel.blocked then
             GameTooltip:AddLine(Core.SWAP_BLOCKED[panel.blocked], 1, 0.5, 0.5, true)
         elseif Equip.IsRunning() then
@@ -961,7 +978,9 @@ local function refreshDoll(name, plan, totals)
     -- someone has time to tidy their sets, and editing one touches no gear at all.
     local canSwap, why = Core.CanSwap(Kitbag.Compat.ActionState())
     doll.blocked = (not canSwap) and why or nil
-    if Equip.IsRunning() or not canSwap then doll.equip:Disable() else doll.equip:Enable() end
+    -- SetIconEnabled rather than Enable/Disable: with no label on the button, the picture is the only
+    -- thing there is to grey, and a disabled-but-bright icon looks pressable and then does nothing.
+    doll.equip:SetIconEnabled(not (Equip.IsRunning() or not canSwap))
 
     local cells = Core.Doll(Sets.Resolve(name), plan)
     dressModel(cells)

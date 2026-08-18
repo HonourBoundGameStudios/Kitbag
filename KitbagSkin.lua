@@ -88,6 +88,27 @@ function Skin.IconButton(parent, name, texture, width, height)
     -- only affordance there is. Same texture the doll cells use, for the same reason.
     button:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square")
 
+    -- Greying has to reach the PICTURE, because on a button with no words there is nothing else to
+    -- grey. `Disable()` on its own stops the clicks and changes nothing anybody can see, which is a
+    -- worse state than the one UI-19 fixed: the control goes on looking pressable and then silently
+    -- does nothing, where before it at least explained itself late.
+    --
+    -- The flag is recorded as well as drawn. Alpha and desaturation are calls into the client that a
+    -- test outside the game cannot read back, so without it the assertion would be about whether the
+    -- code ran rather than about what it decided — and this is the half that must not regress.
+    --
+    -- SetDesaturated is old but not universal, so it is feature-detected: a flavour without it
+    -- should draw a bright icon on a dead button rather than take the window down at build time.
+    -- The alpha drop is what actually carries the meaning; desaturation is the polish on top.
+    button.SetIconEnabled = function(self, on)
+        on = on and true or false
+        if on then self:Enable() else self:Disable() end
+        if icon.SetDesaturated then pcall(icon.SetDesaturated, icon, not on) end
+        icon:SetAlpha(on and 1 or 0.35)
+        self.kitbagDimmed = not on
+    end
+    button:SetIconEnabled(true)
+
     return button
 end
 

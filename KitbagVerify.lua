@@ -1249,24 +1249,23 @@ Verify.CHECKS = {
                 end
             end
 
-            -- Does the one remaining label fit its own button? Equip took the width the other two
-            -- gave up, so this is now the loosest fit on the row rather than the tightest — but a
-            -- client with a different font is exactly the case where "obviously fine" stops being.
-            local function fits(button, name)
-                local label = button.GetFontString and button:GetFontString()
-                local strWidth = label and label.GetStringWidth and label:GetStringWidth()
-                local width = button:GetWidth()
-                if not (strWidth and width) then return end
-                notes[#notes + 1] = string.format("%s %d in %d", name, round(strWidth), round(width))
-                if strWidth > width - 8 then
-                    faults[#faults + 1] = string.format(
-                        "%s's label is %d wide in a %d button, so it clips",
-                        name, round(strWidth), round(width))
-                end
-            end
-            fits(equip, "Equip")
+            named(equip, "Equip")
             named(delete, "Delete")
             named(copy, "Copy")
+
+            -- There is no label left on this row to measure (UI-26), so the clipping half of this
+            -- check is genuinely gone rather than quietly skipped — which is worth saying out loud,
+            -- because a check that stops measuring something and does not say so is the failure this
+            -- one already had once. What replaced it is the hierarchy: Equip is deliberately larger
+            -- than the two tools beside it, and with no words left on any of them that size is the
+            -- ONLY thing saying which of the three is the button this window is for. Three equal
+            -- squares is a row that reads as three peers, which is the thing UI-23 changed it to
+            -- stop saying.
+            if equip:GetWidth() and delete:GetWidth() and equip:GetWidth() <= delete:GetWidth() then
+                faults[#faults + 1] = string.format(
+                    "Equip is %d against the tools' %d, so nothing marks it as the main action",
+                    round(equip:GetWidth()), round(delete:GetWidth()))
+            end
 
             -- And do the three clear each other and the panel they sit in? The row is anchored
             -- left-to-right, so an overflow lands on the panel's right edge and nowhere else.
