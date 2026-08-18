@@ -219,12 +219,20 @@ G.StaticPopup_Show = function() return newWidget("StaticPopup1") end
 G.StaticPopup_Hide = function() end
 G.DropDownList1 = newWidget("DropDownList1")
 G.InterfaceOptions_AddCategory = function() end
-G.UIDropDownMenu_Initialize = function() end
+-- The initialiser is KEPT and run when the menu is opened, which is what the client does with it.
+-- Discarding it made every dropdown in the addon a black box from here: the entries — their text,
+-- what is greyed, and what each one DOES when picked — are built inside these callbacks, and the
+-- menus are where two of the addon's subtler rules live (a greyed entry carries its reason, and a
+-- menu acts on the set it was OPENED on rather than on whatever is selected when it is clicked).
+G.UIDropDownMenu_Initialize = function(frame, init) rawset(frame, "_init", init) end
 G.UIDropDownMenu_SetWidth = function() end
 G.UIDropDownMenu_SetText = function() end
 G.UIDropDownMenu_AddButton = function() end
 G.UIDropDownMenu_CreateInfo = function() return {} end
-G.ToggleDropDownMenu = function() end
+G.ToggleDropDownMenu = function(level, value, frame)
+    local init = frame and rawget(frame, "_init")
+    if init then init(frame, level or 1) end
+end
 G.CloseDropDownMenus = function() end
 
 G.CreateFrame = function(_, name, parent, _)
@@ -1241,5 +1249,61 @@ H.ok(G.Kitbag.char.sets.HEAL ~= nil, "pressing it brings the sets across")
 H.ok(G.Kitbag.char.sets.DPS ~= nil, "…all of them")
 H.ok(not importButton:IsShown(),
     "…and the button is gone on the import's OWN refresh, not at the next unrelated one")
+
+-- ---------------------------------------------------------------------------
+-- The copy menu greys the clash instead of refusing after the click (VERIFY-17)
+-- ---------------------------------------------------------------------------
+--
+-- `Sets.CopyTo` refuses a name the target already uses and says so in chat. That is the right answer
+-- to something TYPED and the wrong one to something CLICKED: the player picks a character off a list
+-- the program drew and is then told no. So the entries are greyed with the reason ON them, and this
+-- drives the real menu builder to prove it — the info tables Blizzard would draw are captured as they
+-- are handed over, which is as close to the drawn menu as anything outside the client can get.
+--
+-- Also proved here: the menu is about the set it was OPENED on. The list on the left stays live while
+-- a menu is up, so a row clicked in between must not change where the copy goes (BUG-8's lesson,
+-- quieter here — a copy destroys nothing, so the wrong set is found on another character days later).
+G.Kitbag.db = DB.Load({})
+G.Kitbag.db.chars["Mock - Mockrealm"] = { sets = { Tank = { slots = { [1] = "444:0:0:0:0:0:0" } },
+    Healer = { slots = { [2] = "555:0:0:0:0:0:0" } } }, rules = {}, swaps = {} }
+G.Kitbag.db.chars["Alt - Mockrealm"] = { sets = {}, rules = {}, swaps = {} }
+G.Kitbag.db.chars["Twin - Mockrealm"] = { sets = { Tank = { slots = {} } }, rules = {}, swaps = {} }
+G.Kitbag.char = G.Kitbag.db.chars["Mock - Mockrealm"]
+
+UI.Select("Tank")
+
+local entries = {}
+local realAddButton = G.UIDropDownMenu_AddButton
+G.UIDropDownMenu_AddButton = function(info, level)
+    entries[#entries + 1] = info
+    return realAddButton(info, level)
+end
+G.KitbagCopyButton:Click()
+G.UIDropDownMenu_AddButton = realAddButton
+
+local byName = {}
+for _, info in ipairs(entries) do byName[tostring(info.text)] = info end
+
+H.ok(byName["Copy Tank to"] ~= nil, "the menu is headed with the set it was opened on")
+H.ok(byName["Alt - Mockrealm"] ~= nil, "a character with no set of that name is offered")
+H.ok(not byName["Alt - Mockrealm"].disabled, "…and is live")
+
+local clash
+for text, info in pairs(byName) do
+    if text:find("Twin - Mockrealm", 1, true) then clash = info end
+end
+H.ok(clash ~= nil, "the character who already has a set called Tank is on the menu")
+H.ok(clash and clash.disabled == true, "…greyed, so the refusal never arrives after the click")
+H.ok(clash and tostring(clash.text):find("has a set called Tank", 1, true) ~= nil,
+    "…with the reason ON the line, not left as a name with no explanation")
+
+-- Clicking a live entry copies, and copies the set the menu was opened on even though the selection
+-- moved underneath it in the meantime.
+UI.Select("Healer")
+byName["Alt - Mockrealm"].func()
+H.ok(G.Kitbag.db.chars["Alt - Mockrealm"].sets.Tank ~= nil,
+    "picking a live character copies the set the menu was HEADED with")
+H.ok(G.Kitbag.db.chars["Alt - Mockrealm"].sets.Healer == nil,
+    "…and not whatever was selected while the menu was open")
 
 H.done()
