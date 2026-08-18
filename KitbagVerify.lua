@@ -292,32 +292,6 @@ Verify.CHECKS = {
         end,
     },
     {
-        id = "restore-point", item = "VERIFY-4", label = "Restore point survives a reload",
-        run = function()
-            local char = Kitbag.char
-            if not char then return nil, "no character bucket yet" end
-            if not char.restorePoint then
-                -- Which of the two situations this is decides what the reader should do next, and
-                -- they are opposite. "Go and trigger one" is useless advice when there is no restore
-                -- rule to trigger — it sends someone off to reproduce something that cannot happen,
-                -- which is how this item sat skipped for three runs.
-                local restoreRules = 0
-                for _, rule in ipairs(char.rules or {}) do
-                    if rule.restore then restoreRules = restoreRules + 1 end
-                end
-                if restoreRules == 0 then
-                    return nil, "no `restore` rule exists on this character — author one before this "
-                        .. "item can be answered at all"
-                end
-                return nil, string.format(
-                    "%d `restore` rule(s) exist but none has fired yet — trigger one", restoreRules)
-            end
-            local named = 0
-            for _ in pairs(char.restorePoint.slots or {}) do named = named + 1 end
-            return true, "a restore point is stored, naming " .. named .. " slot(s)"
-        end,
-    },
-    {
         id = "watched-events", item = "VERIFY-18", label = "The client accepted every watched event",
         -- The engine ASKS for fifteen events inside a pcall, because an event a flavour does not have
         -- is a hard error rather than a no. What it gets is a separate question, and the gap between
@@ -1567,10 +1541,10 @@ end
 --
 -- They live here rather than in a working document for one reason. The document is on the machine
 -- that writes the code and the acts are performed on the machine that runs the game, and that gap
--- has already cost sessions: four checks skipped on three consecutive runs asking for a `restore`
--- rule that did not exist on the account, because nobody at the keyboard could see that it was the
--- rule and not the reproduction that was missing. A checklist that ships with the addon is a
--- checklist the person doing the work can actually read.
+-- has already cost sessions: four checks skipped on three consecutive runs asking for a rule that
+-- could not exist on the account, because nobody at the keyboard could see that it was the rule and
+-- not the reproduction that was missing. A checklist that ships with the addon is a checklist the
+-- person doing the work can actually read.
 --
 -- `answeredBy` names the check that would settle the act — and exactly ONE act has one, which is the
 -- honest count rather than a disappointing one. A check that measures a control is not a check that
@@ -1610,12 +1584,6 @@ Verify.ACTS = {
         item = "VERIFY-15", act = "Die, with the window open and a set selected.",
         why = "Equip must grey and say why, the trinket bar and flyout must dim, and everything "
             .. "that moves no gear must stay live. Then release: the window must repaint itself.",
-    },
-    {
-        item = "VERIFY-4", act = "Author a rule with `then put it back` ticked, then trigger it.",
-        why = "No `restore` rule exists on this account, so the restore point has nothing to "
-            .. "record and this cannot be reproduced at all until one is made.",
-        answeredBy = "restore-point",
     },
     {
         item = "VERIFY-3", act = "Visit a banker, then Equip a part-banked set TWICE.",

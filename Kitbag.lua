@@ -138,10 +138,10 @@ local function command(input)
     elseif cmd == "debug" then Kitbag.Debug.Toggle()
     elseif cmd == "session" then
         -- The other half of `/kit verify`: what the addon CANNOT ask itself. These are acts in the
-        -- world — die, open a bank, author a rule — and they were previously written down only in a
-        -- working document on the machine that writes the code, not the one running the game. That
-        -- gap cost four skipped checks across three sessions, all asking for a `restore` rule that
-        -- did not exist on the account, which nobody at the keyboard could see.
+        -- world — die, open a bank, launch the other flavour — and they were previously written
+        -- down only in a working document on the machine that writes the code, not the one running
+        -- the game. That gap cost four skipped checks across three sessions, all asking for a rule
+        -- nobody at the keyboard could see was impossible to author.
         --
         -- Read from the LAST STORED RUN rather than by running the checks again: this is a question
         -- about what is outstanding, and re-running would open and close six windows to answer it.

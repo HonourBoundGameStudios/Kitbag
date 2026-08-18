@@ -215,48 +215,36 @@ H.eq(R.Coerce({ buff = "  Mark of the Wild " }).buff, "Mark of the Wild",
     "a typed buff name is trimmed like any other text")
 
 -- ---------------------------------------------------------------------------
--- Restore-previous (RULE-4)
+-- A rule only ever equips (RULE-4 removed)
 -- ---------------------------------------------------------------------------
 --
--- A conditional swap that never swaps back is half a feature: go into Bear Form and you get the
--- tank set, leave it and you are still wearing the tank set. Restoring to a *named* set is not the
--- answer either — you were wearing whatever you were wearing, which may not be any set at all.
+-- Restore-previous was taken out: a rule used to put a set on while it matched and put back what
+-- you were wearing when it stopped. It is gone at the Admiral's request, and this block is what
+-- stops it returning by accident — a `restore` flag left on stored data must be inert, not dormant.
 --
--- Rules.Next is the whole state machine, and it is pure so the awkward transitions can be cornered:
---   Next(activeSet, winner, hasSaved) -> { action = "none" | "equip" | "restore", set =, remember = }
+--   Next(activeSet, winner) -> { action = "none" | "equip", set = }
 
-local temporary = { set = "Bear", priority = 10, when = { form = 1 }, restore = true }
+local stale = { set = "Bear", priority = 10, when = { form = 1 }, restore = true }
 local permanent = { set = "Tank", priority = 10, when = { combat = true } }
 
-local step = R.Next(nil, temporary, false)
+local step = R.Next(nil, stale)
 H.eq(step.action, "equip", "a rule that starts matching equips its set")
 H.eq(step.set, "Bear", "…that set")
-H.eq(step.remember, true, "…and a restoring rule remembers what was worn first")
+H.eq(step.remember, nil, "…and remembers nothing, whatever the stored rule still says")
 
-H.eq(R.Next(nil, permanent, false).remember, false,
-    "a rule that does not restore remembers nothing — most swaps are meant to stick")
+H.eq(R.Next(nil, permanent).remember, nil, "a plain rule remembers nothing either")
 
-H.eq(R.Next("Bear", temporary, true).action, "none",
+H.eq(R.Next("Bear", stale).action, "none",
     "a rule that goes on matching does nothing — the swap already happened")
 
--- The one that is easy to get wrong: a second temporary rule taking over. Remembering again would
--- overwrite the outfit you actually started in with the one the first rule put on, and you would
--- never get back to your own gear.
-step = R.Next("Bear", { set = "Cat", restore = true }, true)
+step = R.Next("Bear", { set = "Cat" })
 H.eq(step.action, "equip", "a different winner takes over")
 H.eq(step.set, "Cat", "…with its own set")
-H.eq(step.remember, false, "…without overwriting what was originally worn")
 
--- …but if nothing was saved yet, the new restoring rule is the first one, and it must save.
-H.eq(R.Next("Tank", { set = "Cat", restore = true }, false).remember, true,
-    "taking over from a non-restoring rule still saves, since nothing was saved before")
-
-step = R.Next("Bear", nil, true)
-H.eq(step.action, "restore", "when the rule stops matching, what was worn before comes back")
-
-H.eq(R.Next("Tank", nil, false).action, "none",
-    "a rule with nothing saved leaves you in its set rather than guessing")
-H.eq(R.Next(nil, nil, false).action, "none", "no rule and nothing saved is the quiet case")
+-- The whole of the behaviour change: nothing comes back when a rule stops matching.
+H.eq(R.Next("Bear", nil).action, "none",
+    "a rule that stops matching leaves the set it applied on — nothing is put back")
+H.eq(R.Next(nil, nil).action, "none", "no rule at all is the quiet case")
 
 -- ---------------------------------------------------------------------------
 -- What the engine is entitled to believe afterwards (BUG-10)
@@ -278,11 +266,6 @@ H.eq(R.Held(nil, { action = "equip", set = "Bear" }, false), nil,
 H.eq(R.Held("Tank", { action = "equip", set = "Bear" }, false), nil,
     "…and the set before it is not held either: a half-applied plan left neither of them on")
 
-H.eq(R.Held("Bear", { action = "restore" }, true), nil,
-    "a restore puts back an outfit, not a set — there is no set left to hold")
-H.eq(R.Held("Bear", { action = "restore" }, false), nil,
-    "…and a restore that failed holds nothing either, since its restore point is already spent")
-
 H.eq(R.Held("Bear", { action = "none" }, true), "Bear",
     "doing nothing changes nothing — the set that was on stays on")
 H.eq(R.Held("Bear", nil, false), "Bear",
@@ -292,7 +275,7 @@ H.eq(R.Held("Bear", nil, false), "Bear",
 -- Whether a step can be attempted at all, right now (RULE-6)
 -- ---------------------------------------------------------------------------
 --
--- The symptom: a ghost with a `restore` rule burns the whole of the driver's BUSY_LIMIT on every
+-- The symptom: a ghost with a matching rule burns the whole of the driver's BUSY_LIMIT on every
 -- qualifying event, fails, and writes a failure into the swap history — repeatedly, for the whole
 -- corpse run. Nothing is broken afterwards; the history just fills with failures that describe the
 -- addon rather than anything the player did.
@@ -327,8 +310,8 @@ H.eq(R.Defer(step, { combat = true }, { deferInCombat = false }), "now",
 H.eq(R.Defer(step, { casting = true }, {}), "now",
     "casting refuses a BUTTON, not the engine: the swap is what ends the cast")
 
-H.eq(R.Defer({ action = "restore" }, { dead = true }, {}), "dead",
-    "a restore is as impossible while dead as an equip, and it is the one the corpse run provokes")
+H.eq(R.Defer({ action = "equip", set = "Bear" }, { dead = true }, {}), "dead",
+    "…and the corpse run is what provokes it: a rule matching while dead must wait, not attempt")
 H.eq(R.Defer({ action = "none" }, { dead = true }, {}), "now",
     "doing nothing is always allowed — there is nothing to hold back")
 

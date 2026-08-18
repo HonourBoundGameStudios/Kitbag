@@ -545,9 +545,9 @@ end
 
 --- Equip an outfit that is not necessarily a saved set.
 --
--- The restore points RULE-4 remembers are exactly this: a snapshot of what you happened to be
--- wearing, which may match no saved set at all. Everything below used to live in Sets.Equip; it is
--- split out rather than duplicated so there stays exactly one code path that equips anything.
+-- A single-slot swap from a paperdoll flyout is exactly this: an outfit of one piece, matching no
+-- saved set at all. Everything below used to live in Sets.Equip; it is split out rather than
+-- duplicated so there stays exactly one code path that equips anything.
 function Sets.Apply(set, label, silent, onDone)
     -- Assigned further down, declared here because `conditions` below closes over it. A local
     -- declared AFTER a closure is a different name entirely — the closure reads a global and finds
@@ -656,7 +656,7 @@ function Sets.Apply(set, label, silent, onDone)
     end
 
     local started = Equip.Run(plan, label, function(ok, _, applied, reason)
-        -- Only a real set becomes `lastSet`. A restore point is an outfit, not a set, and recording
+        -- Only a real set becomes `lastSet`. A flyout swap is an outfit, not a set, and recording
         -- it would leave the rule engine comparing against a name no set list contains.
         if ok and char().sets[applied] then char().lastSet = applied end
         if ok then

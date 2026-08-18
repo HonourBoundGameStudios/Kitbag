@@ -1015,19 +1015,6 @@ eventFrame:OnEvent("PLAYER_REGEN_ENABLED")
 H.eq(table.concat(equipped, ", "), "Bear",
     "…and IS put on when combat ends, because the condition that chose it still holds")
 
--- The restore point, which is the case worth checking before trading a replay for a re-decision:
--- a restore is spent when it fires, so a re-decision must not be able to lose one. Nothing matches
--- now, so the step owed is the restore itself.
-G.Kitbag.char.restorePoint = { slots = { [1] = "999:0:0:0:0:0:0" } }
-form, combat = 0, true
-eventFrame:OnEvent("PLAYER_REGEN_DISABLED")
-H.eq(#applied, 0, "a restore owed during combat waits too")
-H.ok(G.Kitbag.char.restorePoint ~= nil, "…and the point is still there to go back to")
-combat = false
-eventFrame:OnEvent("PLAYER_REGEN_ENABLED")
-H.eq(#applied, 1, "…and the restore happens when combat ends")
-H.eq(G.Kitbag.char.restorePoint, nil, "…spending the point exactly once")
-
 -- Revival, which VERIFY-18 calls the likeliest failure in the whole corpse-run feature. Holding is a
 -- `return`; WAKING depends on PLAYER_ALIVE or PLAYER_UNGHOST arriving and being handled like any
 -- other event. A mock cannot prove the client SENDS them — that is what the `watched-events` check
@@ -1080,39 +1067,29 @@ H.ok(watching.PLAYER_ALIVE, "the engine watches PLAYER_ALIVE, or a held swap is 
 H.ok(watching.PLAYER_UNGHOST, "…and PLAYER_UNGHOST, which is the end of a corpse run")
 H.ok(watching.PLAYER_REGEN_ENABLED, "…and the end of combat, which is the other deferral")
 
--- VERIFY-4's first client-only half: that a form change triggers the REMEMBER at all. `Rules.Next`
--- returning `remember = true` is covered pure, and the restore point surviving a reload is covered by
--- the DB tests — but nothing has ever exercised the step between them, which is the engine capturing
--- what is WORN into `char.restorePoint` before it swaps.
+-- Restore-previous is gone (the Admiral's call), and this is the end-to-end half of proving it: the
+-- pure tests show Rules.Next never asks for a restore, and this shows the ENGINE never performs one.
 --
--- What is worn is stubbed for this, deliberately: a capture that produced an EMPTY point would still
--- be non-nil, and `Rules.Next` reads a non-nil point as "there is somewhere to go back to". That is
--- the exact failure the backlog note warns about, and it passes any assertion that only checks the
--- point exists. So the point is asserted to hold the gear that was on.
-local wornBefore = G.GetInventoryItemLink
-G.GetInventoryItemLink = function(_, slotId)
-    if slotId == 1 then return "item:777:0:0:0:0:0:0:0:60" end
-    return nil
-end
-
+-- It is asserted through `applied` — the calls to Sets.Apply, which is the path a restore took —
+-- rather than through the absence of a flag. A build that still restored would put the outfit back
+-- through that function, and counting it is the only assertion that fails when it does.
+--
+-- The rule below deliberately KEEPS its `restore = true`, standing in for data written by an older
+-- build that the migration has not walked yet: stale data has to be inert here too, not only in DB.
 G.Kitbag.char.sets.Fish = { slots = { [1] = "888:0:0:0:0:0:0" } }
 G.Kitbag.char.rules = { { set = "Fish", when = { form = 5 }, restore = true } }
-G.Kitbag.char.restorePoint = nil
 equipped, applied = {}, {}
 
 form = 5
 eventFrame:OnEvent("UPDATE_SHAPESHIFT_FORM")
-H.eq(equipped[#equipped], "Fish", "a restore rule equips its set like any other")
-H.ok(G.Kitbag.char.restorePoint ~= nil, "…and the engine remembers a restore point on the way in")
-H.eq(Kitbag.Core.ItemId(G.Kitbag.char.restorePoint.slots[1]), 777,
-    "…holding what was actually WORN, not an empty point that only looks like somewhere to go back to")
+H.eq(equipped[#equipped], "Fish", "a rule equips its set on the form change, stale flag and all")
+H.eq(G.Kitbag.char.restorePoint, nil, "…and the engine remembers nothing on the way in")
 
 form = 0
 eventFrame:OnEvent("UPDATE_SHAPESHIFT_FORM")
-H.eq(#applied, 1, "leaving the form puts back what you were wearing")
-H.eq(G.Kitbag.char.restorePoint, nil, "…and the point is spent, not left to fire again forever")
+H.eq(#applied, 0, "leaving the form puts nothing back — the set it applied simply stays on")
+H.eq(G.Kitbag.char.restorePoint, nil, "…and there is still no point stored to fire later")
 
-G.GetInventoryItemLink = wornBefore
 
 Sets.Equip, Sets.Apply = realEquip, realApply
 G.GetShapeshiftForm = function() return 0 end

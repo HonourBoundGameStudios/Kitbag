@@ -250,38 +250,24 @@ function Rules.Coerce(input)
 end
 
 -- ---------------------------------------------------------------------------
--- Restore-previous (RULE-4)
+-- What to do next
 -- ---------------------------------------------------------------------------
 
 --- What the engine should do, given what it last applied and what wins now.
 --
 --   activeSet : the set the engine put on and has not undone, or nil
 --   winner    : the rule that matches now (Rules.Match), or nil
---   hasSaved  : is there a remembered outfit to go back to?
 --
--- Returns { action = "none" | "equip" | "restore", set = <name>, remember = bool }.
+-- Returns { action = "none" | "equip", set = <name> }.
 --
--- A rule marked `restore` is a temporary swap: it puts a set on while it matches and puts back what
--- you were wearing when it stops. Restoring to a *named* set would be the easy implementation and
--- the wrong one — you were wearing whatever you were wearing, quite possibly no saved set at all.
---
--- `remember` is only true when nothing has been saved yet. The trap is a second temporary rule
--- taking over from the first: remembering again would overwrite the outfit you actually started in
--- with the one the first rule put on, and you would never get your own gear back.
-function Rules.Next(activeSet, winner, hasSaved)
-    if winner then
-        if winner.set == activeSet then return { action = "none" } end
-        return {
-            action = "equip",
-            set = winner.set,
-            remember = (winner.restore == true) and not hasSaved,
-        }
-    end
-
-    -- Nothing matches. Go back only if there is somewhere to go back to: with nothing saved,
-    -- leaving the player in the last set is honest, and guessing a set to "return" to is not.
-    if hasSaved then return { action = "restore" } end
-    return { action = "none" }
+-- A rule applies its set and the set stays on. Restore-previous (RULE-4) used to live here — a rule
+-- could put a set on while it matched and put back what you were wearing when it stopped — and it
+-- was removed at the Admiral's request. A `restore` flag left on stored data is ignored rather than
+-- obeyed: the migration takes it off, and this function never reads it, so the two cannot disagree.
+function Rules.Next(activeSet, winner)
+    if not winner then return { action = "none" } end
+    if winner.set == activeSet then return { action = "none" } end
+    return { action = "equip", set = winner.set }
 end
 
 --- What the engine may claim is on, once `step` has been attempted and answered `ok`.
@@ -302,9 +288,6 @@ end
 function Rules.Held(previous, step, ok)
     if not step then return previous end
     if step.action == "equip" then return ok and step.set or nil end
-    -- A restore puts back an outfit rather than a set, and spends its restore point either way, so
-    -- there is nothing left for the engine to hold on to.
-    if step.action == "restore" then return nil end
     return previous
 end
 

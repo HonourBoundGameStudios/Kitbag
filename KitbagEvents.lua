@@ -9,8 +9,6 @@ Kitbag = Kitbag or {}
 
 local Rules = Kitbag.Rules
 local Sets = Kitbag.Sets
-local Core = Kitbag.Core
-local Inventory = Kitbag.Inventory
 local Compat = Kitbag.Compat
 
 local Events = {}
@@ -63,8 +61,7 @@ local held = nil
 
 -- The set the engine put on and has not undone yet. Deliberately NOT saved: after a reload the
 -- engine has no idea whether the swap it remembers is still on, and re-deriving it from the first
--- event is both cheap and correct. The restore point IS saved (in Kitbag.char), because losing it
--- means the player never gets their own gear back.
+-- event is both cheap and correct.
 local active = nil
 
 -- Which of WATCHED the client actually accepted, in order: { { name =, registered = }, … }.
@@ -96,34 +93,22 @@ function Events.State()
     }
 end
 
+-- Equipping is the only thing a step can ask for now that restore-previous is gone, so this is a
+-- guard rather than a branch — an unknown action is a decision this function was never told about,
+-- and doing nothing is the only safe reading of one.
 local function perform(step)
-    local char = Kitbag.char
+    if step.action ~= "equip" then return end
 
-    if step.action == "equip" then
-        -- Remember BEFORE swapping, obviously — but note it captures what is worn, not a named set.
-        -- You were wearing whatever you were wearing, quite possibly no saved set at all, and
-        -- restoring to the nearest named set would put on gear you never chose.
-        if step.remember then
-            char.restorePoint = Core.CaptureSet(Inventory.Equipped(), "restore")
-        end
-        -- Held before the attempt as well as after it: the swap takes several frames, and without a
-        -- claim in place every event arriving meanwhile would decide to equip the same set again.
-        -- The claim is then settled by the outcome — a set that did NOT go on must not be held, or
-        -- the rule that wants it never fires again (BUG-10).
-        active = step.set
-        Sets.Equip(step.set, true, function(ok)
-            -- Settle only our own claim. A swap takes frames, and if something else has taken over
-            -- in the meantime then this attempt's outcome is no longer what the engine is holding.
-            if active == step.set then active = Rules.Held(active, step, ok) end
-        end)
-
-    elseif step.action == "restore" then
-        local point = char.restorePoint
-        -- Cleared first: if the restore itself fails there is nothing useful left to retry, and a
-        -- restore point that survives its own failure fires again on the next event forever.
-        char.restorePoint, active = nil, nil
-        if point then Sets.Apply(point, "what you were wearing", true) end
-    end
+    -- Held before the attempt as well as after it: the swap takes several frames, and without a
+    -- claim in place every event arriving meanwhile would decide to equip the same set again.
+    -- The claim is then settled by the outcome — a set that did NOT go on must not be held, or
+    -- the rule that wants it never fires again (BUG-10).
+    active = step.set
+    Sets.Equip(step.set, true, function(ok)
+        -- Settle only our own claim. A swap takes frames, and if something else has taken over in
+        -- the meantime then this attempt's outcome is no longer what the engine is holding.
+        if active == step.set then active = Rules.Held(active, step, ok) end
+    end)
 end
 
 local function apply()
@@ -139,7 +124,7 @@ local function apply()
 
     local state = Events.State()
     local winner = Rules.Match(char.rules, state)
-    local step = Rules.Next(active, winner, char.restorePoint ~= nil)
+    local step = Rules.Next(active, winner)
     if step.action == "none" then return end
 
     local defer = Rules.Defer(step, state, db.options)
@@ -168,11 +153,16 @@ end
 -- SENT is the earliest hook the client offers, so this is inherent rather than a shortcut, and
 -- ItemRack behaved the same way for the same reason.
 --
--- Second, and the reason for the grace window: that cancelled cast fires FAILED immediately. Clear
--- the condition there and the rule stops matching, the restore fires, and the pole comes straight
--- back off — the feature would undo itself within a frame of working. So a finished cast only
--- expires the condition after a pause, and casting again inside that pause holds the gear on. The
--- gear comes off when you stop, which is also the behaviour a player would describe if asked.
+-- Second, the grace window. It was built for a behaviour that no longer exists: a cancelled cast
+-- fires FAILED immediately, and while rules could restore-previous, clearing the condition there
+-- made the rule stop matching, the restore fire, and the pole come straight back off — the feature
+-- undid itself within a frame of working. Restore-previous is gone, so nothing takes the pole off
+-- any more and the window no longer prevents that.
+--
+-- It is kept deliberately rather than left in by omission: expiring the condition the instant a cast
+-- ends would flap `active` on every cast, and re-deciding on a state that changes twice a second is
+-- how an engine ends up fighting itself. But the ORIGINAL reason is now false, and a comment that
+-- goes on claiming it would be the next reader's wrong premise.
 local CAST_GRACE = 12
 
 local castExpiry = nil

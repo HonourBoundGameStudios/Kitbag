@@ -176,7 +176,6 @@ local engine = {
         autoSwap = true,
         active = "FASTHOJ+TRAVEL",
         deferred = "Tanky-Heal-PVP",
-        restorePoint = true,
         events = {
             { name = "PLAYER_ENTERING_WORLD", registered = true },
             { name = "PLAYER_MOUNT_DISPLAY_CHANGED", registered = false },
@@ -190,7 +189,6 @@ has(etext, "auto-swap: true", "…starting with the switch that turns every rule
 has(etext, "holding: FASTHOJ+TRAVEL",
     "the set the engine believes is on is named — no rule can re-fire while it is held")
 has(etext, "deferred: Tanky-Heal-PVP", "…and a step waiting for combat to end, which looks identical")
-has(etext, "restore point: held", "…and whether there is gear to come back to")
 
 has(etext, "EVENTS", "whether each watched event registered is a section of its own")
 has(etext, "PLAYER_ENTERING_WORLD", "…naming every event the engine asked for")
@@ -204,11 +202,10 @@ H.ok(etext:find("PLAYER_ENTERING_WORLD%s+registered") ~= nil,
 -- The absences again. An engine holding nothing is the normal case and must not read like an
 -- unread one: "no set is held" is the fact that clears the stale-`active` suspicion outright.
 local idle = report({ when = "now", sets = {}, engine = {
-    autoSwap = false, active = nil, deferred = nil, restorePoint = false, events = {} } })
+    autoSwap = false, active = nil, deferred = nil, events = {} } })
 has(idle, "auto-swap: false", "auto-swap being off is stated — it is a whole-addon explanation")
 has(idle, "holding: (nothing)", "an engine holding no set says so rather than omitting the line")
 has(idle, "deferred: (nothing)", "…and so does an empty deferral")
-has(idle, "restore point: (none)", "…and so does an absent restore point")
 has(idle, "(no events registered)",
     "an engine that registered nothing says so — it is why every rule would be dead")
 

@@ -133,7 +133,6 @@ local function edit(index)
     setDropdownValue(editor.setDrop, rule and rule.set or nil,
         rule and rule.set or "|cff808080choose a set|r")
     editor.priority:SetText(tostring(rule and rule.priority or 50))
-    editor.restore:SetChecked(rule and rule.restore == true)
 
     for key, widget in pairs(editor.conditions) do
         local condition = Rules.Condition(key)
@@ -172,7 +171,6 @@ local function commit()
         set = set,
         priority = priority,
         enabled = true,
-        restore = editor.restore:GetChecked() and true or nil,
         when = collect(),
     }
 
@@ -369,15 +367,6 @@ local function build()
         editor.conditions[condition.key] = widget
     end
 
-    -- A genuine two-state choice, unlike the conditions: a rule either puts your gear back or it
-    -- does not, so a tick box is the honest widget here.
-    editor.restore = CreateFrame("CheckButton", nil, pane, "UICheckButtonTemplate")
-    editor.restore:SetSize(22, 22)
-    editor.restore:SetPoint("BOTTOMLEFT", pane, "BOTTOMLEFT", 4, 4)
-    editor.restore.text = editor.restore:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    editor.restore.text:SetPoint("LEFT", editor.restore, "RIGHT", 2, 0)
-    editor.restore.text:SetText("Put back what I was wearing when this stops applying")
-
     editor.save = CreateFrame("Button", nil, pane, "UIPanelButtonTemplate")
     editor.save:SetSize(110, 22)
     editor.save:SetPoint("BOTTOMRIGHT", pane, "BOTTOMRIGHT", -4, 4)
@@ -423,9 +412,8 @@ function RulesUI.Refresh()
             if entry and entry.matched and report.chosen == rule.set then
                 marker = "|cff40ff40>|r "
             end
-            local text = string.format("%swear |cffffd100%s|r %s%s |cff808080(%d)|r",
-                marker, rule.set, Rules.Describe(rule, names),
-                rule.restore and ", then put it back" or "", rule.priority or 0)
+            local text = string.format("%swear |cffffd100%s|r %s |cff808080(%d)|r",
+                marker, rule.set, Rules.Describe(rule, names), rule.priority or 0)
             if editor.index == index then text = "|cff8fd3ff[editing]|r " .. text end
             if rule.enabled == false then text = "|cff808080" .. text .. "|r" end
             row.text:SetText(text)

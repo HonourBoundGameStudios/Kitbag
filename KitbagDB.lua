@@ -9,7 +9,7 @@ Kitbag = Kitbag or {}
 
 local DB = {}
 
-DB.SCHEMA = 2
+DB.SCHEMA = 3
 
 -- Sets and rules are per-character (CORE-6): gear is, so a set naming items this character does not
 -- own is noise, and a rule naming a set it does not have is dead. They live in one account-wide file
@@ -20,10 +20,6 @@ local function characterDefaults()
         sets = {},          -- [name] = { name =, icon =, slots = { [slotId] = key | false } }
         rules = {},         -- ordered list; see KitbagRules
         lastSet = nil,
-        -- What was worn before a `restore` rule took over (RULE-4). Saved rather than kept in
-        -- memory: a reload mid-shapeshift would otherwise strand the player in the rule's set with
-        -- no way back to their own gear.
-        restorePoint = nil,
     }
 end
 
@@ -71,6 +67,22 @@ local migrations = {
     [1] = function(db)
         db.legacy = { sets = db.sets, rules = db.rules, lastSet = db.lastSet }
         db.sets, db.rules, db.lastSet = nil, nil, nil
+    end,
+
+    -- 2 -> 3: restore-previous (RULE-4) was removed, so the two places it stored anything are
+    -- cleared. Not for the space — a flag and a small table cost nothing — but because data the
+    -- code no longer reads is data the next reader has to establish the status of, and a `restore`
+    -- flag still sitting on a rule reads as a feature that exists and is broken. `legacy` is walked
+    -- too: it holds a pre-schema-2 character's rules and is handed to whoever logs in first, so a
+    -- flag hiding in there would outlive this migration by exactly one login.
+    [2] = function(db)
+        local function strip(bucket)
+            if type(bucket) ~= "table" then return end
+            bucket.restorePoint = nil
+            for _, rule in ipairs(bucket.rules or {}) do rule.restore = nil end
+        end
+        for _, char in pairs(db.chars or {}) do strip(char) end
+        strip(db.legacy)
     end,
 }
 

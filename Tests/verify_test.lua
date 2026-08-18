@@ -236,10 +236,11 @@ H.ok(source:find("LossText", 1, true) ~= nil,
     "…it goes through Sets.LossText, the same pure function the window uses")
 
 -- A SKIP has to say which situation it is in, because the reader's next action differs completely.
--- VERIFY-4 skipped three runs saying "trigger a `restore` rule first" — and the account holds no
--- restore rule at all, so it was asking for something that could not happen. "Go and do it" and
--- "there is nothing to do it with" are opposite instructions, and a skip that gives the first when
--- the second is true sends someone off to reproduce a thing that does not exist.
+-- "Go and do it" and "there is nothing to do it with" are opposite instructions, and a skip that
+-- gives the first when the second is true sends someone off to reproduce a thing that cannot happen.
+-- That cost three sessions once, on an item since deleted along with the feature it tested. The bank
+-- check now carries the lesson and it is the same shape: the bank reads fine, but no saved set names
+-- anything in it, so "Equip a part-banked set" is impossible until one is BUILT.
 -- The same lesson one step further along. `KitbagNewSetButton` appearing in the file proves nothing —
 -- the bottom-row check names it too, just to measure it. What has to be true is that something is
 -- CLICKED: calling Sets.New directly would exercise the store and skip the wiring between the button
@@ -264,8 +265,8 @@ H.ok(source:find("added", 1, true) ~= nil,
 H.ok(source:find("bag room", 1, true) ~= nil,
     "a check proves the running build records bag room, so a BUG-13 repro cannot be wasted on a stale deploy")
 
-H.ok(source:find("no `restore` rule", 1, true) ~= nil,
-    "the restore-point skip distinguishes 'no rule exists' from 'a rule has not fired yet'")
+H.ok(source:find("build a ", 1, true) ~= nil,
+    "the part-banked skip distinguishes 'nothing to test with' from 'go and test it'")
 
 -- VERIFY-17. The item says the likeliest failure is the ROW, not the menu: UI-20 put a third button
 -- where the panel was built for two, and `UIPanelButtonTemplate` answers a label that no longer fits
@@ -318,7 +319,7 @@ H.eq(byId["copy-menu"] and byId["copy-menu"].item, "VERIFY-17",
 --
 -- `/kit verify` answers everything the addon can ask ITSELF. What it has never done is say what it
 -- cannot ask — the acts in the world that EPIC-VERIFY is actually waiting on: die, visit a banker,
--- author a `restore` rule, launch the other flavour. Those live in a backlog file the player does
+-- launch the other flavour. Those live in a backlog file the player does
 -- not have, on a machine that is not the one running the game, and the cost of that is a client
 -- session that answers four of the six things it could have.
 --
@@ -332,28 +333,44 @@ for i, act in ipairs(V.ACTS) do
     H.ok(type(act.act) == "string" and act.act ~= "", "act " .. i .. " says what to DO")
 end
 
--- An act whose check passed is done, and must not be asked for again. Exactly one act has a check
--- capable of that — a restore point can only exist if a `restore` rule was authored AND fired — and
--- the first draft of this test asserted it of the bank act too, which was wrong in the direction that
--- matters: `part-banked` names which set has gear at the bank and cannot press Equip twice, so
--- letting it retire that act would have closed the act while leaving the question open.
+-- An act whose check passed is done and must not be asked for again — and as of the restore-previous
+-- removal, NO shipped act carries `answeredBy` any more: the only one that did was retired with the
+-- feature it tested. That is worth asserting rather than leaving as an absence, because the
+-- mechanism is still live and the next act with a real check behind it has to be able to trust it.
+--
+-- So it is driven with a FIXTURE act rather than a shipped one. Asserting the mechanism through
+-- whichever act happens to carry `answeredBy` is how this test would go on passing against zero
+-- acts, measuring nothing — the same silent degradation the label-vs-icon checks were caught doing.
+local fixture = { item = "VERIFY-3", act = "A fixture act.", why = "Only this test asks for it.",
+    answeredBy = "bank" }
+V.ACTS[#V.ACTS + 1] = fixture
+
 local ANSWERED = {
     "Kitbag verification — 2026-08-18 12:00:00",
-    "PASS VERIFY-4   Restore point survives a reload  —  a restore point is stored, naming 3 slot(s)",
-    "SKIP VERIFY-3   Bank contents readable  —  no bank contents cached yet",
+    "PASS VERIFY-3   Bank contents readable  —  29 item(s) seen in the bank",
+    "SKIP VERIFY-3   A part-banked set is named, with what is at the bank  —  no set names one",
 }
 
 local session = table.concat(V.Session(ANSWERED), "\n")
 H.ok(session:find("banker", 1, true) ~= nil,
     "an act with no check behind it is always still wanted — no measurement can perform it")
-H.ok(session:find("put it back", 1, true) == nil,
-    "…while the one act a check CAN settle disappears once that check has passed")
+H.ok(session:find("A fixture act", 1, true) == nil,
+    "…while an act a check CAN settle disappears once that check has passed")
 
 local skipping = table.concat(V.Session({
-    "SKIP VERIFY-4   Restore point survives a reload  —  no `restore` rule exists on this character",
+    "SKIP VERIFY-3   Bank contents readable  —  no bank contents cached yet",
 }), "\n")
-H.ok(skipping:find("put it back", 1, true) ~= nil,
+H.ok(skipping:find("A fixture act", 1, true) ~= nil,
     "a check that SKIPPED leaves its act outstanding — a skip is the check saying it could not answer")
+
+V.ACTS[#V.ACTS] = nil
+
+-- And the count that keeps the claim above honest as acts are added.
+for _, act in ipairs(V.ACTS) do
+    H.eq(act.answeredBy, nil,
+        "no shipped act claims a check can perform it — an act retired by a check that did NOT "
+        .. "perform it is worse than no checklist at all")
+end
 
 -- With no run at all, everything is owed. The failure this prevents is the opposite of the one
 -- VERIFY-11's last question — "does the wheel scroll over the ROWS, or only over the bar" — is asked

@@ -196,7 +196,6 @@ function Debug.Report(world)
             add("  held (dead): %s — waiting for PLAYER_ALIVE/PLAYER_UNGHOST",
                 tostring(engine.heldWhileDead))
         end
-        add("  restore point: %s", engine.restorePoint and "held" or "(none)")
     end
 
     -- Whether each event actually registered. Events.Enable() registers inside pcall because no
@@ -351,12 +350,11 @@ function Debug.Capture()
     }
 
     -- The engine's own memory, and whether its events exist at all. Read here rather than inside
-    -- Events so the two facts that only the DB knows — the master switch and the restore point —
-    -- arrive in the same table as the two only Events knows, and the section cannot half-answer.
+    -- Events so the one fact only the DB knows — the master switch — arrives in the same table as
+    -- the ones only Events knows, and the section cannot half-answer.
     local engine = Events and attempt(Events.Diagnostics)
     if engine and not failed(engine) then
         engine.autoSwap = Kitbag.db and Kitbag.db.options and Kitbag.db.options.autoSwap
-        engine.restorePoint = Kitbag.char and Kitbag.char.restorePoint ~= nil
     end
     world.engine = engine
 

@@ -25,8 +25,6 @@ First release. Gear sets that actually apply.
 
 - Auto-swap on shapeshift form, combat, stealth, mounted, resting and zone.
 - `/kit why` names the rule that won **and the condition every other rule failed on**.
-- A `restore` rule puts your own gear back rather than a named set, and the restore point survives a
-  `/reload`.
 
 ### The look of it
 
