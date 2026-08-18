@@ -1552,6 +1552,28 @@ H.ok(table.concat(helped, "\n"):find("/kit session", 1, true) ~= nil,
 
 
 -- ---------------------------------------------------------------------------
+-- The two panel buttons on the bottom row are icons (UI-24)
+-- ---------------------------------------------------------------------------
+--
+-- "Options" and "Rules" are 180 pixels of the bottom row spent saying two words, on a row VERIFY-10
+-- exists because it was full. They are doors to other windows rather than things this window does,
+-- and a door is the one control an icon is unambiguously right for.
+--
+-- They had no tooltip at all before, which was survivable while the label was the explanation and is
+-- not survivable now — so the hover is asserted with the picture. That is the trade an icon makes,
+-- and it is worth stating that it makes the row BETTER understood rather than worse: "Rules" never
+-- said what a rule was for either.
+for _, entry in ipairs({
+    { button = G.KitbagRulesButton, what = "Rules" },
+    { button = G.KitbagOptionsButton, what = "Options" },
+}) do
+    H.ok(rawget(entry.button, "kitbagIcon") ~= nil,
+        entry.what .. " is an icon button, since it is a door rather than something this window does")
+    H.ok(entry.button:GetScript("OnEnter") ~= nil,
+        "…and it says where it goes on hover, which it never did while it had a label")
+end
+
+-- ---------------------------------------------------------------------------
 -- The action row's secondary buttons are icons (UI-23)
 -- ---------------------------------------------------------------------------
 --

@@ -37,6 +37,11 @@ local MAX_ROWS = 13
 local DELETE_ICON = "Interface\\Buttons\\UI-GroupLoot-Pass-Up"
 local COPY_ICON = "Interface\\Icons\\INV_Misc_GroupLooking"
 
+-- The two doors on the bottom row (UI-24). A book for the thing you read and write sentences in, and
+-- the engineering wrench for settings, which is the closest thing this client has to a cog.
+local RULES_ICON = "Interface\\Icons\\INV_Misc_Book_09"
+local OPTIONS_ICON = "Interface\\Icons\\Trade_Engineering"
+
 local CELL = 34            -- a doll cell, big enough to read an icon at a glance
 local CELL_GAP = 3
 local PITCH = CELL + CELL_GAP
@@ -1072,22 +1077,44 @@ local function build()
     -- is full at 660 wide and UIPanelButtonTemplate does not shrink a label that no longer fits — it
     -- lets it run out under the button's edge — so an overflow reads as an oddly-worded button rather
     -- than as a layout fault, and nobody files it.
-    local rulesButton = CreateFrame("Button", "KitbagRulesButton", frame, "UIPanelButtonTemplate")
-    rulesButton:SetSize(90, 22)
+    -- Both are doors to other windows rather than things this window does, which is the one kind of
+    -- control an icon is unambiguously right for — and between them they were spending 180 pixels of
+    -- a row VERIFY-10 exists because it was full (UI-24).
+    --
+    -- Neither had a tooltip while it had a label. That was survivable then and is not now, so the
+    -- hover arrives with the picture; `/kit verify` asserts the pair rather than trusting it. Worth
+    -- saying that this leaves the row better explained than it was: "Rules" never said what a rule
+    -- was for either.
+    local rulesButton = Skin.IconButton(frame, "KitbagRulesButton", RULES_ICON, 22)
     rulesButton:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -14, 14)
-    rulesButton:SetText("Rules")
     rulesButton:SetScript("OnClick", function() Kitbag.RulesUI.Toggle() end)
+    rulesButton:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_TOPRIGHT")
+        GameTooltip:AddLine("Auto-swap rules", 1, 0.82, 0)
+        GameTooltip:AddLine("Which set gets worn on its own, and when — forms, combat, stealth, " ..
+            "mounts, zones.", 0.9, 0.9, 0.9, true)
+        GameTooltip:Show()
+    end)
+    rulesButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-    local optionsButton = CreateFrame("Button", "KitbagOptionsButton", frame, "UIPanelButtonTemplate")
-    optionsButton:SetSize(90, 22)
+    local optionsButton = Skin.IconButton(frame, "KitbagOptionsButton", OPTIONS_ICON, 22)
     optionsButton:SetPoint("RIGHT", rulesButton, "LEFT", -6, 0)
-    optionsButton:SetText("Options")
     optionsButton:SetScript("OnClick", function() Kitbag.Options.Toggle() end)
+    optionsButton:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_TOPRIGHT")
+        GameTooltip:AddLine("Options", 1, 0.82, 0)
+        GameTooltip:AddLine("Auto-swap, the minimap button, the trinket bar and what Kitbag says " ..
+            "in chat.", 0.9, 0.9, 0.9, true)
+        GameTooltip:Show()
+    end)
+    optionsButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-    -- Narrower than it was, to buy the second button its room. An edit box scrolls, so a long set
-    -- name still types fine; the button row is what has a hard limit.
+    -- It was cut to 150 to buy the Options button its room, and UI-24 gave 136 of that back by
+    -- turning both doors into icons. An edit box scrolls, so a long name always typed fine — but a
+    -- box that shows the whole name is the difference between reading what you are about to save
+    -- and trusting it.
     local nameBox = CreateFrame("EditBox", "KitbagNameBox", frame, "InputBoxTemplate")
-    nameBox:SetSize(150, 20)
+    nameBox:SetSize(240, 20)
     nameBox:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 20, 15)
     nameBox:SetAutoFocus(false)
 

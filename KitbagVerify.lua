@@ -622,6 +622,11 @@ Verify.CHECKS = {
         -- UIPanelButtonTemplate never shrinks a label that no longer fits: it lets the text run out
         -- under the button's own edge. So an overflowed row reads as a button with a strangely
         -- clipped word on it, which nobody reports as "the window is too narrow".
+        --
+        -- UI-24 then bought 136 pixels back by turning Options and Rules into icons and spent most of
+        -- them widening the name box again. That is the same trade in the other direction, so the
+        -- arithmetic still has to be checked rather than assumed comfortable — and two of the five
+        -- controls now fail in a way no width can catch. See step 3.
         run = function()
             if not Kitbag.UI then return nil, "KitbagUI is not loaded" end
             local frame = _G.KitbagFrame
@@ -635,8 +640,8 @@ Verify.CHECKS = {
                 { name = "the name box", frame = _G.KitbagNameBox },
                 { name = "Save",         frame = _G.KitbagSaveButton },
                 { name = "New set",      frame = _G.KitbagNewSetButton },
-                { name = "Options",      frame = _G.KitbagOptionsButton },
-                { name = "Rules",        frame = _G.KitbagRulesButton },
+                { name = "Options",      frame = _G.KitbagOptionsButton, icon = true },
+                { name = "Rules",        frame = _G.KitbagRulesButton,   icon = true },
             }
             for _, piece in ipairs(row) do
                 if not piece.frame then
@@ -676,12 +681,29 @@ Verify.CHECKS = {
             if inLeft and inLeft < 0 then faults[#faults + 1] = "the name box runs off the left edge" end
             if inRight and inRight < 0 then faults[#faults + 1] = "Rules runs off the right edge" end
 
-            -- 3. Each label inside its own button. The silent one: the text is not clipped by the
-            -- frame, it simply draws past it, so a label that no longer fits looks like a label
-            -- somebody typed badly.
+            -- 3. Each control readable in its own right. Two failures, and which one applies depends
+            -- on whether the control has words on it.
+            --
+            -- A label is the silent one: the text is not clipped by the frame, it simply draws past
+            -- it, so a label that no longer fits looks like a label somebody typed badly. An icon
+            -- (UI-24) cannot clip and fails the other way instead — no texture is a blank square and
+            -- no tooltip is a square nobody can name, and both look deliberate. Skipping the icon
+            -- buttons here because they have no font string would leave this check reporting on a
+            -- row of five while measuring three.
             for i = 2, #row do
                 local piece = row[i]
-                local label = piece.frame.GetFontString and piece.frame:GetFontString()
+                if piece.icon then
+                    if not rawget(piece.frame, "kitbagIcon") then
+                        faults[#faults + 1] = piece.name .. " has no icon, so it is an empty square"
+                    elseif not (piece.frame.GetScript and piece.frame:GetScript("OnEnter")) then
+                        faults[#faults + 1] = piece.name ..
+                            " has an icon and no tooltip, so it cannot be read"
+                    else
+                        notes[#notes + 1] = piece.name .. " icon+tooltip"
+                    end
+                end
+                local label = not piece.icon and piece.frame.GetFontString
+                    and piece.frame:GetFontString()
                 local strWidth = label and label.GetStringWidth and label:GetStringWidth()
                 local width = piece.frame:GetWidth()
                 if strWidth and width and strWidth > width - 8 then
