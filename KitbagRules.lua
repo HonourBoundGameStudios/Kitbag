@@ -253,6 +253,31 @@ end
 -- What to do next
 -- ---------------------------------------------------------------------------
 
+--- What the engine may go on claiming is on, given what wins now.
+--
+--   activeSet : the set the engine put on and has not let go of, or nil
+--   winner    : the rule that matches now (Rules.Match), or nil
+--
+-- The set STAYS ON when a rule stops matching — that is RULE-4 and Next() is what says so. This is
+-- the other half of the same sentence, and conflating the two is what produced BUG-14: the engine
+-- stops CLAIMING it. Nothing here equips or unequips anything; it decides only what the engine is
+-- still entitled to believe it is responsible for.
+--
+-- Without it, `activeSet` was released by exactly one thing — an equip that FAILED (see Held). So a
+-- rule that fired once never fired again for the rest of the session: mount, change gear by hand,
+-- dismount, mount, and Next() answered "none" because the winner's set was still the one claimed.
+-- It read as a regression from RULE-4 because restore-previous had been releasing the claim as a
+-- side effect of putting the old outfit back, and removing the feature removed the only path that
+-- ever let go.
+--
+-- A DIFFERENT winner keeps the claim rather than clearing it: the handover is Next()'s decision, and
+-- clearing here would re-equip a set the engine already put on every time a higher-priority rule
+-- took over and stood down again.
+function Rules.Claim(activeSet, winner)
+    if not winner then return nil end
+    return activeSet
+end
+
 --- What the engine should do, given what it last applied and what wins now.
 --
 --   activeSet : the set the engine put on and has not undone, or nil
@@ -269,7 +294,6 @@ function Rules.Next(activeSet, winner)
     if winner.set == activeSet then return { action = "none" } end
     return { action = "equip", set = winner.set }
 end
-
 --- What the engine may claim is on, once `step` has been attempted and answered `ok`.
 --
 --   previous : what it was holding before the attempt

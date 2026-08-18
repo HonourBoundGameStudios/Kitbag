@@ -272,6 +272,43 @@ H.eq(R.Held("Bear", nil, false), "Bear",
     "…and so does an attempt that was never made at all")
 
 -- ---------------------------------------------------------------------------
+-- A claim only lasts as long as the rule that made it (BUG-14)
+-- ---------------------------------------------------------------------------
+--
+-- The symptom: mount, the rule fires, change gear by hand, dismount, mount again — and nothing is
+-- equipped. `/kit why` still names the rule as the winner, which is what makes it a CLAIM bug rather
+-- than a matching one.
+--
+-- The cause: `activeSet` is the set the engine believes it put on, and nothing ever took it back.
+-- Next() answers "none" whenever `winner.set == activeSet`, so once a rule had fired, that set was
+-- never equipped again for the rest of the session however much the gear changed underneath it. The
+-- only thing that released the claim was an equip that FAILED (Held, above).
+--
+-- It reads as a regression from RULE-4 because restore-previous used to release it as a side effect:
+-- a dismount with a restore point ran the restore path, and that path cleared `activeSet`. Removing
+-- the feature removed the only thing that ever let go, and nothing replaced it.
+--
+--   Claim(activeSet, winner) -> the set the engine may go on claiming is on, or nil
+--
+-- The set STAYS ON when a rule stops matching — that is RULE-4's whole point and Next() is what says
+-- so. This is the other half of the same sentence: the engine stops CLAIMING it. Those are different
+-- facts, and conflating them is what produced the bug.
+
+H.eq(R.Claim("Bear", stale), "Bear",
+    "a rule that goes on matching keeps its claim — that is what stops it re-equipping every event")
+H.eq(R.Claim("Bear", nil), nil,
+    "a rule that stops matching releases the claim, so the next time it matches it fires again")
+H.eq(R.Claim(nil, nil), nil, "nothing claimed and nothing matching stays nothing")
+H.eq(R.Claim(nil, stale), nil,
+    "…and a winner does not manufacture a claim: only an equip that WORKED may do that (Held)")
+
+-- The other winner keeps the claim intact rather than clearing it, because Next() is what decides a
+-- handover: clearing here would make the engine re-equip a set it already put on every time a
+-- higher-priority rule took over and stood down again.
+H.eq(R.Claim("Bear", { set = "Cat" }), "Bear",
+    "a DIFFERENT winner leaves the claim to Next(), which equips over it")
+
+-- ---------------------------------------------------------------------------
 -- Whether a step can be attempted at all, right now (RULE-6)
 -- ---------------------------------------------------------------------------
 --

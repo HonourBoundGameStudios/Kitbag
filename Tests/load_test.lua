@@ -1115,6 +1115,45 @@ eventFrame:OnEvent("UPDATE_SHAPESHIFT_FORM")
 H.eq(#applied, 0, "leaving the form puts nothing back — the set it applied simply stays on")
 H.eq(G.Kitbag.char.restorePoint, nil, "…and there is still no point stored to fire later")
 
+-- ---------------------------------------------------------------------------
+-- A rule that has fired once can fire again (BUG-14)
+-- ---------------------------------------------------------------------------
+--
+-- Reported from the client as "mounting used to equip a set and now does not". Driven here rather
+-- than left pure because the whole of the bug is the LIFETIME of an engine file-local: `active`
+-- survives across events, and no single call to Rules.Next can be wrong on its own.
+--
+-- The cycle below is the report verbatim — mount, change gear by hand, dismount, mount again. Every
+-- step of it passed before the fix except the last, which is the one the player performs.
+G.Kitbag.char.sets.Travel = { slots = { [1] = "999:0:0:0:0:0:0" } }
+G.Kitbag.char.rules = { { set = "Travel", when = { mounted = true } } }
+equipped = {}
+
+local mounted = false
+G.IsMounted = function() return mounted end
+
+mounted = true
+eventFrame:OnEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
+H.eq(table.concat(equipped, ", "), "Travel", "mounting equips the set the mount rule names")
+H.eq(Events.Diagnostics().active, "Travel",
+    "…and the engine claims it, which is what stops it re-equipping on every event that follows")
+
+-- The gear changes underneath the claim. Nothing tells the engine, and nothing can: the player did
+-- it by hand and the addon does not police what you are wearing.
+mounted = false
+eventFrame:OnEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
+H.eq(#equipped, 1, "dismounting puts nothing back — the set stays on, which is RULE-4's whole point")
+H.eq(Events.Diagnostics().active, nil,
+    "…but the engine lets GO of the claim, because the rule that made it has stopped matching")
+
+mounted = true
+eventFrame:OnEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
+H.eq(table.concat(equipped, ", "), "Travel, Travel",
+    "mounting a SECOND time equips the set again — before BUG-14 the claim outlived the rule and "
+    .. "that set was never put on again for the rest of the session")
+
+G.IsMounted = function() return false end
+
 
 Sets.Equip, Sets.Apply = realEquip, realApply
 G.GetShapeshiftForm = function() return 0 end

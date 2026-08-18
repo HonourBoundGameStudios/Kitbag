@@ -124,6 +124,10 @@ local function apply()
 
     local state = Events.State()
     local winner = Rules.Match(char.rules, state)
+    -- Before Next(), because Next() decides entirely from the claim: a rule that has stopped
+    -- matching must let go of the set it applied, or it can never apply it again (BUG-14). The set
+    -- itself stays on the body — that is RULE-4, and it is a different fact from this one.
+    active = Rules.Claim(active, winner)
     local step = Rules.Next(active, winner)
     if step.action == "none" then return end
 
