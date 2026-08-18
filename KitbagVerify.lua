@@ -1590,12 +1590,13 @@ Verify.ACTS = {
     },
     {
         item = "VERIFY-19", act = "Open /kit and /kit rules and look for MAGENTA squares.",
-        why = "The visual pass (UI-21..25) put seven icon buttons on screen, over six texture "
-            .. "paths, and not one of them "
+        why = "The visual pass (UI-21..27) left NO text buttons in the addon: ten icon buttons "
+            .. "over nine texture paths, and not one of them "
             .. "has ever been drawn. A wrong path in this client does not draw nothing, it renders "
             .. "missing-texture magenta — so this is a negative observation anyone can make in two "
             .. "seconds, rather than an opinion about how it looks. While there: the paperdoll's "
-            .. "preview should sit in a frame like the cells around it.",
+            .. "preview should sit in a frame like the cells around it, and dying should DIM the "
+            .. "Equip icon rather than merely stopping it responding.",
     },
     {
         item = "VERIFY-11", act = "Open any set's ICON PICKER and spin the MOUSE WHEEL over "

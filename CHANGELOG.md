@@ -35,8 +35,12 @@ First release. Gear sets that actually apply.
   on a plate.
 - The paperdoll's **character preview sits in a frame** of its own, like the nineteen slot cells
   around it.
-- **Delete, Copy, Options, Rules and the rule list's move/remove controls are icons**, each with a
-  tooltip it did not have while it had a label. The set name box got most of the freed width back.
+- **Every button in the window is an icon with a tooltip** — Equip, Delete, Copy, Save, New set,
+  Options, Rules and the rule list's move and remove controls. Most of them had no tooltip at all
+  while they had a label. The set name box took the freed width and now lines up with the list above
+  it.
+- Equip is drawn larger than the tools beside it, because with no labels left, size is what says
+  which control the window is for; it dims its own icon when you cannot swap.
 
 ### Around the edges
 
