@@ -235,7 +235,11 @@ local function onRowClick(self)
 end
 
 local function createRow(parent, index)
-    local row = CreateFrame("Button", nil, parent)
+    -- Named, as the rule list's rows are. Thirteen rows serve any number of sets, so a row is only
+    -- meaningful together with the `setName` it is currently showing — and the pair is what the
+    -- Equip and Delete buttons ultimately act through, which is the one unrecoverable act in the
+    -- addon pointed at a variable (VERIFY-8). A handle is what lets that be driven in a test.
+    local row = CreateFrame("Button", "KitbagSetRow" .. index, parent)
     row:SetHeight(ROW_HEIGHT)
     -- Per-row DATA lives in its own table, never as loose fields on the frame. A frame is a live
     -- namespace of widgets and Blizzard methods, and `row.totals = <the totals table>` silently

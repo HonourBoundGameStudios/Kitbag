@@ -51,6 +51,10 @@ local BOOL_GETTERS = {
 --
 -- Click() runs OnClick the way the client does, with the widget as self, so a handler reading
 -- `self:GetParent().ruleIndex` is exercised rather than simulated.
+-- Forward-declared here rather than beside its definition: the widget method tables below close over
+-- it, and a local declared after them is a different variable that reads nil at call time.
+local newWidget
+
 local SCRIPT_METHODS = {
     SetScript = function(self, name, fn)
         local scripts = rawget(self, "_scripts")
@@ -72,6 +76,22 @@ local SCRIPT_METHODS = {
     -- says passes or fails on an accident of naming rather than on what was drawn. What a row
     -- says is the other half of VERIFY-11's offset question — the `[editing]` tag has to land on
     -- the line the editor actually opened.
+    -- Named font strings and textures are published to _G the way CreateFrame publishes named
+    -- frames. The client does this and the mock did not, so `KitbagInspectorTitle` — the addon's
+    -- own evidence of WHICH set the inspector drew, named for exactly that reason — did not exist
+    -- outside the game, and the one question worth asking of the inspector could not be asked.
+    CreateFontString = function(self, name)
+        local child = newWidget(name)
+        rawset(child, "_parent", self)
+        if name then _G[name] = child end
+        return child
+    end,
+    CreateTexture = function(self, name)
+        local child = newWidget(name)
+        rawset(child, "_parent", self)
+        if name then _G[name] = child end
+        return child
+    end,
     SetText = function(self, text) rawset(self, "_text", text) end,
     GetText = function(self) return rawget(self, "_text") or rawget(self, "_name") or "" end,
     Click = function(self, ...)
@@ -111,7 +131,6 @@ local EVENT_METHODS = {
 }
 
 
-local newWidget
 
 local widgetMeta
 widgetMeta = {
@@ -1058,5 +1077,61 @@ H.ok(rowText:find("[editing]", 1, true) ~= nil,
 local otherText = G.KitbagRuleRow2.text:GetText()
 H.ok(otherText:find("[editing]", 1, true) == nil,
     "…and no other line claims to be the one being edited")
+
+-- ---------------------------------------------------------------------------
+-- Equip and Delete act on the SELECTED set, with the list scrolled (VERIFY-8)
+-- ---------------------------------------------------------------------------
+--
+-- UI-13 moved these two buttons out of the rows, so they read a file-local `selected` rather than the
+-- row they were pressed on. That is the addon's one unrecoverable act pointed at a variable, and from
+-- outside a stale selection is indistinguishable from a correct one: Delete removes a set that is not
+-- the one on screen, and it looks right until you count what is left. `/kit verify` has a check for
+-- it in the client; this drives the same journey outside the game, and at an OFFSET, which the client
+-- check does not do.
+--
+-- The delete goes through the popup rather than the shift-click shortcut on purpose. The name is
+-- handed to StaticPopup_Show as `data` and read back in OnAccept precisely so the answer applies to
+-- the set the question NAMED (BUG-8) — the list underneath stays live while the popup is up — and
+-- that hand-off is the part no pure test has ever exercised.
+local sets = {}
+for i = 1, 20 do
+    sets[string.format("Set%02d", i)] = { slots = { [1] = "444:0:0:0:0:0:0" } }
+end
+G.Kitbag.char = { sets = sets, rules = {}, swaps = {} }
+
+UI.Toggle()
+H.ok(G.KitbagFrame and G.KitbagFrame:IsShown(), "the main window opens, so its list is drawn")
+
+FauxScrollFrame_SetOffset(G.KitbagScrollFrame, 4)
+UI.Refresh()
+
+-- Sets are listed alphabetically, so row 1 at an offset of four is Set05. Asserted rather than
+-- assumed: if the sort ever changes, this test must fail loudly instead of quietly checking nothing.
+G.KitbagSetRow1:Click()
+H.eq(UI.Selected(), "Set05", "clicking a scrolled row selects the set that row is SHOWING")
+H.eq(G.KitbagInspectorTitle:GetText(), "Set05", "…and the inspector is headed with the same set")
+
+local asked = {}
+local realStaticPopupShow = G.StaticPopup_Show
+G.StaticPopup_Show = function(which, arg1, arg2, data)
+    asked = { which = which, arg1 = arg1, data = data }
+    return newWidget("StaticPopup1")
+end
+
+G.KitbagCopyButton:GetParent().delete:Click()
+H.eq(asked.which, "KITBAG_DELETE", "Delete asks first rather than acting")
+H.eq(asked.data, "Set05", "…and the question carries the selected set as its own data")
+
+-- The set list stays live while the popup is up, so a row clicked in between must not change the
+-- answer. This is the whole reason the name travels as `data` instead of being re-read.
+G.KitbagSetRow2:Click()
+G.StaticPopupDialogs.KITBAG_DELETE.OnAccept({}, asked.data)
+G.StaticPopup_Show = realStaticPopupShow
+
+H.ok(G.Kitbag.char.sets.Set05 == nil, "answering yes deletes the set the popup named")
+H.ok(G.Kitbag.char.sets.Set06 ~= nil,
+    "…and not the set selected while the question was up, which is the quiet way to lose the wrong one")
+H.ok(G.Kitbag.char.sets.Set01 ~= nil,
+    "…nor the set at the clicked row's own position, which is VERIFY-8's fear exactly")
 
 H.done()
