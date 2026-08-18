@@ -55,7 +55,22 @@ local BOOL_GETTERS = {
 -- it, and a local declared after them is a different variable that reads nil at call time.
 local newWidget
 
-local SCRIPT_METHODS = {
+-- Parenting is recorded in both directions. Upwards because every row button reads
+-- `self:GetParent().ruleIndex`; downwards because hiding a frame in the client hides its children and
+-- runs their OnHide, which is how the keybinding capture releases the keyboard (VERIFY-16).
+local function adopt(parent, child)
+    if not parent then return child end
+    rawset(child, "_parent", parent)
+    local children = rawget(parent, "_children")
+    if not children then children = {}; rawset(parent, "_children", children) end
+    children[#children + 1] = child
+    return child
+end
+
+
+-- Declared in two steps so the table can call its own members: Hide recurses through children.
+local SCRIPT_METHODS
+SCRIPT_METHODS = {
     SetScript = function(self, name, fn)
         local scripts = rawget(self, "_scripts")
         if not scripts then scripts = {}; rawset(self, "_scripts", scripts) end
@@ -82,13 +97,13 @@ local SCRIPT_METHODS = {
     -- outside the game, and the one question worth asking of the inspector could not be asked.
     CreateFontString = function(self, name)
         local child = newWidget(name)
-        rawset(child, "_parent", self)
+        adopt(self, child)
         if name then _G[name] = child end
         return child
     end,
     CreateTexture = function(self, name)
         local child = newWidget(name)
-        rawset(child, "_parent", self)
+        adopt(self, child)
         if name then _G[name] = child end
         return child
     end,
@@ -102,8 +117,25 @@ local SCRIPT_METHODS = {
     -- Show/Hide track, because several modules return early when their frame is hidden — KitbagUI's
     -- refresh does, and a check that ran against a hidden window once reported a FAIL naming two real
     -- sets for no reason at all (VERIFY-8). A mock that always answers "hidden" reproduces that.
-    Show = function(self) rawset(self, "_shown", true) end,
-    Hide = function(self) rawset(self, "_shown", false) end,
+    --
+    -- Hiding also reaches DOWN, the way the client does: a frame going away takes its children with
+    -- it and their OnHide scripts run. Kitbag depends on that in one place where the failure is
+    -- severe — the keybinding capture releases the keyboard from the button's OnHide, and a mock that
+    -- only hides the frame it was asked about would show that teardown passing while a real client
+    -- was left deaf (VERIFY-16).
+    Show = function(self)
+        rawset(self, "_shown", true)
+        local script = SCRIPT_METHODS.GetScript(self, "OnShow")
+        if script then script(self) end
+    end,
+    Hide = function(self)
+        rawset(self, "_shown", false)
+        local script = SCRIPT_METHODS.GetScript(self, "OnHide")
+        if script then script(self) end
+        for _, child in ipairs(rawget(self, "_children") or {}) do
+            SCRIPT_METHODS.Hide(child)
+        end
+    end,
     SetShown = function(self, shown) rawset(self, "_shown", shown and true or false) end,
     IsShown = function(self) return rawget(self, "_shown") and true or false end,
     IsVisible = function(self) return rawget(self, "_shown") and true or false end,
@@ -197,7 +229,7 @@ G.CloseDropDownMenus = function() end
 
 G.CreateFrame = function(_, name, parent, _)
     local frame = newWidget(name)
-    if parent then rawset(frame, "_parent", parent) end
+    adopt(parent, frame)
     if name then G[name] = frame end
     return frame
 end
@@ -255,6 +287,10 @@ G.IsStealthed = function() return false end
 G.IsMounted = function() return false end
 G.IsResting = function() return false end
 G.IsShiftKeyDown = function() return false end
+-- The other two modifiers, reached only by the keybinding capture (UI-12): Core.BindingKey is handed
+-- all three at once, so a missing one is a hard error the moment a key is pressed in capture mode.
+G.IsControlKeyDown = function() return false end
+G.IsAltKeyDown = function() return false end
 G.IsInInstance = function() return false, "none" end
 G.UnitBuff = function() return nil end
 G.GetSpellInfo = function() return nil end
@@ -1133,5 +1169,46 @@ H.ok(G.Kitbag.char.sets.Set06 ~= nil,
     "…and not the set selected while the question was up, which is the quiet way to lose the wrong one")
 H.ok(G.Kitbag.char.sets.Set01 ~= nil,
     "…nor the set at the clicked row's own position, which is VERIFY-8's fear exactly")
+
+-- ---------------------------------------------------------------------------
+-- Keybinding capture cannot outlive the window (VERIFY-16)
+-- ---------------------------------------------------------------------------
+--
+-- While capturing, the key button is the ONLY thing in the game receiving keystrokes: propagation is
+-- deliberately off, which is what stops binding "B" from also opening the bags. That makes leaving
+-- the mode the load-bearing half. A build that stays clamped after the window goes away does not look
+-- like an addon bug — it looks exactly like the client having locked up, and the player's next move
+-- is to kill the process, not to report anything useful.
+--
+-- The two client calls are watched by shadowing them on the button itself rather than by teaching the
+-- whole mock to record them: they are what this test is ABOUT, and a reader should be able to see
+-- what is being watched without going hunting in the mock.
+UI.Select("Set07")
+local key = G.KitbagKeyButton
+local keyboard, propagate = {}, {}
+rawset(key, "EnableKeyboard", function(_, on) keyboard[#keyboard + 1] = on end)
+rawset(key, "SetPropagateKeyboardInput", function(_, on) propagate[#propagate + 1] = on end)
+
+key:Click("LeftButton")
+H.eq(key:GetText(), "Press…", "clicking the key button enters capture mode and says so on the button")
+H.eq(keyboard[#keyboard], true, "…the button takes the keyboard")
+H.eq(propagate[#propagate], false, "…and stops the keystroke reaching the game behind it")
+
+-- Closing the window mid-capture. Not by calling the handler directly: the whole question is whether
+-- hiding the WINDOW reaches a button several frames down, which is what OnHide is registered for.
+G.KitbagFrame:Hide()
+H.eq(keyboard[#keyboard], false, "closing the window gives the keyboard back")
+H.eq(propagate[#propagate], true,
+    "…and un-clamps propagation, which is the difference between an ended mode and a dead client")
+
+-- Escape is the other way out, and it must NOT be turned into a binding. It reaches the button at all
+-- only because propagation is off, so this is the one key whose handling is a property of the mode.
+G.KitbagFrame:Show()
+UI.Refresh()
+key:Click("LeftButton")
+H.eq(keyboard[#keyboard], true, "capture can be entered again after the window was closed on it")
+key:GetScript("OnKeyDown")(key, "ESCAPE")
+H.eq(keyboard[#keyboard], false, "Escape leaves capture mode")
+H.eq(G.Kitbag.char.sets.Set07.key, nil, "…without binding Escape to anything")
 
 H.done()
