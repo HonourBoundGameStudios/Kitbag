@@ -190,6 +190,12 @@ function Debug.Report(world)
         add("  auto-swap: %s", tostring(engine.autoSwap))
         add("  holding: %s", engine.active and tostring(engine.active) or "(nothing)")
         add("  deferred: %s", engine.deferred and tostring(engine.deferred) or "(nothing)")
+        -- Only when it applies. A "(nothing)" line on every dump ever taken is noise, and this
+        -- state is readable exactly as long as the corpse run lasts (RULE-6).
+        if engine.heldWhileDead then
+            add("  held (dead): %s — waiting for PLAYER_ALIVE/PLAYER_UNGHOST",
+                tostring(engine.heldWhileDead))
+        end
         add("  restore point: %s", engine.restorePoint and "held" or "(none)")
     end
 

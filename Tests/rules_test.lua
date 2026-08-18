@@ -288,4 +288,53 @@ H.eq(R.Held("Bear", { action = "none" }, true), "Bear",
 H.eq(R.Held("Bear", nil, false), "Bear",
     "…and so does an attempt that was never made at all")
 
+-- ---------------------------------------------------------------------------
+-- Whether a step can be attempted at all, right now (RULE-6)
+-- ---------------------------------------------------------------------------
+--
+-- The symptom: a ghost with a `restore` rule burns the whole of the driver's BUSY_LIMIT on every
+-- qualifying event, fails, and writes a failure into the swap history — repeatedly, for the whole
+-- corpse run. Nothing is broken afterwards; the history just fills with failures that describe the
+-- addon rather than anything the player did.
+--
+--   Defer(step, state, options) -> "now" | "dead" | "combat"
+--
+-- The reason keys `Core.SWAP_BLOCKED`, deliberately: the engine holding off and the button greying
+-- itself are the same fact about the world, and one wording for it is the whole point of UI-19.
+
+local step = { action = "equip", set = "Fishing" }
+
+H.eq(R.Defer(step, { dead = false }, {}), "now",
+    "a live player attempts the swap")
+H.eq(R.Defer(step, { dead = true }, {}), "dead",
+    "a dead one waits instead of spending ten seconds finding out")
+
+-- Death is not an option, unlike combat: no setting makes an equip succeed while you are a ghost,
+-- so deferInCombat is not what decides this.
+H.eq(R.Defer(step, { dead = true }, { deferInCombat = false }), "dead",
+    "…with deferInCombat off, because death is a fact and not a preference")
+H.eq(R.Defer(step, { dead = true, combat = true }, { deferInCombat = true }), "dead",
+    "…and death outranks combat, which is the state that actually clears first")
+
+H.eq(R.Defer(step, { combat = true }, { deferInCombat = true }), "combat",
+    "the combat deferral is the same decision and stays here with it")
+H.eq(R.Defer(step, { combat = true }, { deferInCombat = false }), "now",
+    "…and is still the option it always was")
+
+-- The one refusal that must NOT defer. Equipping cancels the cast that triggered it — that is how
+-- the fishing-pole rule is supposed to work (RULE-3) — so treating `casting` the way CanSwap does
+-- would hold the pole back until the cast the pole was for had finished.
+H.eq(R.Defer(step, { casting = true }, {}), "now",
+    "casting refuses a BUTTON, not the engine: the swap is what ends the cast")
+
+H.eq(R.Defer({ action = "restore" }, { dead = true }, {}), "dead",
+    "a restore is as impossible while dead as an equip, and it is the one the corpse run provokes")
+H.eq(R.Defer({ action = "none" }, { dead = true }, {}), "now",
+    "doing nothing is always allowed — there is nothing to hold back")
+
+-- Total, like everything else on this path: it runs on every event, and a missing reading must not
+-- be able to stop the engine for ever.
+H.eq(R.Defer(step, nil, nil), "now", "an unreadable state acts rather than waiting for ever")
+H.eq(R.Defer(nil, { dead = true }, {}), "now", "…and so does no step at all")
+
 H.done()

@@ -24,6 +24,12 @@ local WATCHED = {
     "UPDATE_STEALTH",
     "PLAYER_UPDATE_RESTING",
     "PLAYER_MOUNT_DISPLAY_CHANGED",
+    -- Coming back to life (RULE-6). A swap held off because the player was dead has to be woken by
+    -- something, and these are the two the client offers: PLAYER_ALIVE for a resurrection or a
+    -- release, PLAYER_UNGHOST for the end of a corpse run. `KitbagUI` watches the same pair to
+    -- repaint its controls — same fact about the world, reached for two different reasons.
+    "PLAYER_ALIVE",
+    "PLAYER_UNGHOST",
     -- Buff and instance conditions (RULE-5). UNIT_AURA is noisy — it fires for every unit in the
     -- group — so OnEvent filters to the player before anything is evaluated.
     "UNIT_AURA",
@@ -45,6 +51,9 @@ local casting = nil
 
 local frame = CreateFrame("Frame")
 local pending = nil   -- a Rules.Next step deferred until combat ends
+-- What the engine declined to attempt because the player is dead (RULE-6). A label for the dump,
+-- not a queue: unlike `pending` there is nothing here to replay — see apply().
+local held = nil
 
 -- The set the engine put on and has not undone yet. Deliberately NOT saved: after a reload the
 -- engine has no idea whether the swap it remembers is still on, and re-deriving it from the first
@@ -74,6 +83,10 @@ function Events.State()
         -- matcher tests membership (see Rules.CONDITIONS).
         buff = Compat.PlayerBuffs(),
         instance = Compat.InstanceType(),
+        -- Not a condition anyone can write a rule on (it is absent from Rules.CONDITIONS) — it is
+        -- here because Rules.Defer reads the same snapshot the match was made from, and because
+        -- ActionState is the one place that asks the client this (RULE-6).
+        dead = Compat.ActionState().dead,
     }
 end
 
@@ -109,14 +122,28 @@ end
 
 local function apply()
     local db, char = Kitbag.db, Kitbag.char
+    -- Cleared before the master switch, not after: a hold the engine will never revisit because
+    -- auto-swap was turned off is a diagnostic outliving the wait it describes.
+    held = nil
     if not db.options.autoSwap then return end
 
-    local winner = Rules.Match(char.rules, Events.State())
+    local state = Events.State()
+    local winner = Rules.Match(char.rules, state)
     local step = Rules.Next(active, winner, char.restorePoint ~= nil)
     if step.action == "none" then return end
 
-    if db.options.deferInCombat and InCombatLockdown() then
+    local defer = Rules.Defer(step, state, db.options)
+    if defer == "combat" then
         pending = step
+        return
+    end
+    if defer == "dead" then
+        -- Nothing is stored to replay. Combat keeps its step because it clears in seconds and the
+        -- world it matched in is still recognisably the same one; a corpse run is minutes long and
+        -- ends somewhere else entirely — you died in bear form, released, and are now a ghost in no
+        -- form at all. PLAYER_ALIVE/PLAYER_UNGHOST run apply() like any other event, so the step is
+        -- decided from the world the player actually came back to (RULE-6).
+        held = step.set or step.action
         return
     end
     perform(step)
@@ -192,6 +219,14 @@ function frame:OnEvent(event, unit, ...)
     if event == "PLAYER_REGEN_ENABLED" and pending then
         local step = pending
         pending = nil
+        -- The way combat most often ends is that you lost it. Performing the deferred step here
+        -- would be the exact attempt-and-fail RULE-6 exists to stop, and it would arrive by the one
+        -- door that skips apply(). Dropped rather than re-queued: coming back alive runs apply()
+        -- like any other event, and a step decided before the death is not owed a second life.
+        if Rules.Defer(step, Events.State(), Kitbag.db.options) == "dead" then
+            held = step.set or step.action
+            return
+        end
         perform(step)
         return
     end
@@ -217,6 +252,9 @@ function Events.Diagnostics()
     return {
         active = active,
         deferred = pending and pending.set or nil,
+        -- The corpse-run hold. Without this the dump shows a matched rule doing nothing and looking
+        -- exactly like a rule that never fired — which is the whole reason this table exists.
+        heldWhileDead = held,
         events = registered,
     }
 end

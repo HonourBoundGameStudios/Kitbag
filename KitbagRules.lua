@@ -308,5 +308,33 @@ function Rules.Held(previous, step, ok)
     return previous
 end
 
+--- Can `step` be attempted right now, or must it wait for the world to change? Returns "now", or
+--- the reason it is being held: "dead" or "combat" (RULE-6).
+--
+-- The engine used to ask this question only of combat, and only because a setting asked it to.
+-- Death was not asked at all, so a ghost with a restoring rule attempted the swap on every
+-- qualifying event, spent the driver's whole BUSY_LIMIT discovering it was dead, and wrote a
+-- failure into the swap history — over and over, for the length of the corpse run. Nothing was
+-- broken by it; the history simply filled with entries describing the addon rather than the player.
+--
+-- Death is not behind `deferInCombat` and is not an option at all: no setting makes an equip
+-- succeed while you are a ghost, so offering one would only be offering the failure back.
+--
+-- `casting` is deliberately NOT deferred, even though `Core.CanSwap` refuses it. CanSwap answers
+-- for a control the player is about to press; this answers for the engine, and the engine's cast
+-- rule works BY cancelling the cast (RULE-3) — deferring it would hold the fishing pole back until
+-- the cast the pole was for had already finished. Same world, two different questions.
+--
+-- The reason strings key `Core.SWAP_BLOCKED`, so anything that wants to say why can.
+function Rules.Defer(step, state, options)
+    if not step or step.action == "none" then return "now" end
+    if type(state) ~= "table" then return "now" end
+    -- Death first, for the reason CanSwap orders it the same way: combat clears in seconds and
+    -- being dead does not, so naming the transient one would point the player at the wrong wait.
+    if state.dead then return "dead" end
+    if options and options.deferInCombat and state.combat then return "combat" end
+    return "now"
+end
+
 Kitbag.Rules = Rules
 return Rules
