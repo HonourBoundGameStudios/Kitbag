@@ -61,5 +61,35 @@ function Skin.Inset(frame, edge, ground)
     return frame
 end
 
+--- A square button whose whole label is a picture.
+---
+--- The recess is the same one every panel gets, so an icon button reads as part of the window rather
+--- than as a floating tile, and the icon is inset inside it: a texture drawn edge to edge on a small
+--- button loses its outline against a dark panel and stops being recognisable at 24 pixels, which is
+--- the only size that matters.
+---
+--- The CALLER must give it an OnEnter. That is not a convention this function can enforce, but it is
+--- the thing an icon costs: a text button that nobody explains is still readable, and an icon button
+--- that nobody explains is a square. `/kit verify` and Tests/load_test both assert it rather than
+--- trusting it, for exactly that reason.
+function Skin.IconButton(parent, name, texture, size)
+    size = size or 24
+
+    local button = Skin.Inset(CreateFrame("Button", name, parent))
+    button:SetSize(size, size)
+
+    local icon = button:CreateTexture(nil, "ARTWORK")
+    icon:SetPoint("TOPLEFT", 3, -3)
+    icon:SetPoint("BOTTOMRIGHT", -3, 3)
+    icon:SetTexture(texture)
+    button.kitbagIcon = icon
+
+    -- Something clickable has to look clickable, and on a button with no text the highlight is the
+    -- only affordance there is. Same texture the doll cells use, for the same reason.
+    button:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square")
+
+    return button
+end
+
 Kitbag.Skin = Skin
 return Skin

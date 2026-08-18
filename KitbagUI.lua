@@ -26,6 +26,17 @@ local UI = {}
 local ROW_HEIGHT = 26
 local MAX_ROWS = 13
 
+-- The two tools on the action row (UI-23). Both are Blizzard art that has shipped in every flavour
+-- since 1.0 rather than an expansion's icon, and both are chosen for what they mean at 24 pixels:
+-- the loot-pass X is the game's own "no" and reads as destructive without being a skull, and the
+-- group-looking icon is people, which is what a copy TO ANOTHER CHARACTER is about.
+--
+-- A path that turns out not to exist does not draw nothing — it renders as missing-texture magenta,
+-- which is about as loud as a UI fault gets. That is the useful property, and it is the same reason
+-- SLOT_ART below is written as paths rather than guarded.
+local DELETE_ICON = "Interface\\Buttons\\UI-GroupLoot-Pass-Up"
+local COPY_ICON = "Interface\\Icons\\INV_Misc_GroupLooking"
+
 local CELL = 34            -- a doll cell, big enough to read an icon at a glance
 local CELL_GAP = 3
 local PITCH = CELL + CELL_GAP
@@ -772,12 +783,16 @@ local function buildDoll(parent)
         well:Hide()
     end
 
-    -- The action row. Three buttons where there were two (UI-20), sized off the panel rather than
-    -- written down: Equip keeps the room the other two do not need, because it is the one control
-    -- here anybody presses twice. Nothing may move — the row is the last thing in the panel and
-    -- there is no space beneath it for a fourth.
+    -- The action row. One action and two tools (UI-23), sized off the panel rather than written
+    -- down. Three text buttons where the panel was built for two was UI-20's known-sharp edge, and
+    -- the shape of it said the wrong thing besides: Equip, Delete and "Copy to…" read as three
+    -- peers, when one of them is what this window is FOR and the other two are things you do to a
+    -- set now and then. Equip therefore takes everything the other two give up.
+    --
+    -- Nothing may move — the row is the last thing in the panel and there is no space beneath it
+    -- for a fourth.
     local actionRow = weaponsY - CELL - 12
-    local narrow = 80
+    local narrow = 24
     local wide = PANEL_WIDTH - 16 - 2 * (narrow + 4)
 
     panel.equip = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
@@ -802,10 +817,8 @@ local function buildDoll(parent)
     end)
     panel.equip:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-    panel.delete = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    panel.delete:SetSize(narrow, 24)
+    panel.delete = Skin.IconButton(panel, nil, DELETE_ICON, narrow)
     panel.delete:SetPoint("LEFT", panel.equip, "RIGHT", 4, 0)
-    panel.delete:SetText("Delete")
     -- Deleting asks first, in a popup, rather than demanding a modifier nobody can see (BUG-8). The
     -- guard itself was right — this is the only unrecoverable thing the window does — but it lived
     -- entirely in a chat line printed AFTER a click that appeared to do nothing, so the button read
@@ -837,10 +850,8 @@ local function buildDoll(parent)
     local copyMenu = CreateFrame("Frame", "KitbagCopyMenu", panel, "UIDropDownMenuTemplate")
     UIDropDownMenu_Initialize(copyMenu, initCopyMenu, "MENU")
 
-    panel.copy = CreateFrame("Button", "KitbagCopyButton", panel, "UIPanelButtonTemplate")
-    panel.copy:SetSize(narrow, 24)
+    panel.copy = Skin.IconButton(panel, "KitbagCopyButton", COPY_ICON, narrow)
     panel.copy:SetPoint("LEFT", panel.delete, "RIGHT", 4, 0)
-    panel.copy:SetText("Copy to…")
     panel.copy:SetScript("OnClick", function(self)
         ToggleDropDownMenu(1, nil, copyMenu, self, 0, 0)
     end)

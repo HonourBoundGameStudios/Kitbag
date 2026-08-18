@@ -1552,6 +1552,33 @@ H.ok(table.concat(helped, "\n"):find("/kit session", 1, true) ~= nil,
 
 
 -- ---------------------------------------------------------------------------
+-- The action row's secondary buttons are icons (UI-23)
+-- ---------------------------------------------------------------------------
+--
+-- Three text buttons on a row built for two is UI-20's known-sharp edge, and the shape of the row
+-- said the wrong thing about it besides: Equip, Delete and "Copy to…" were three peers, when one of
+-- them is what the window is FOR and the other two are things you do to a set occasionally. Delete
+-- and Copy are icons now, Equip takes the width they give up, and the row reads as one action with
+-- two tools beside it.
+--
+-- What icons cost is the label, and that is the whole risk: an icon button with no texture is an
+-- empty square, and an icon button with no tooltip is a square nobody can identify. Both are
+-- asserted, because both look like a deliberate design from a screenshot and neither can be read.
+local actionPanel = G.KitbagCopyButton:GetParent()
+for _, entry in ipairs({
+    { button = actionPanel.delete, what = "Delete" },
+    { button = G.KitbagCopyButton, what = "Copy" },
+}) do
+    H.ok(rawget(entry.button, "kitbagIcon") ~= nil,
+        entry.what .. " is an icon button, so the row is one action with tools beside it")
+    H.ok(entry.button:GetScript("OnEnter") ~= nil,
+        "…and it says what it is on hover, which is the only name an icon has")
+end
+
+H.ok(type(G.Kitbag.Skin.IconButton) == "function",
+    "icon buttons come from the same place the panels do, so a third cannot arrive looking different")
+
+-- ---------------------------------------------------------------------------
 -- One recessed panel, drawn the same way in every window (UI-22)
 -- ---------------------------------------------------------------------------
 --

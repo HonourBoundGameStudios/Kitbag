@@ -1151,17 +1151,19 @@ Verify.CHECKS = {
         end,
     },
     {
-        id = "copy-button", item = "VERIFY-17", label = "The action row fits its third button",
+        id = "copy-button", item = "VERIFY-17", label = "The action row fits, and its icons can be read",
         -- UI-20 put a third button on a row built for two, and the item is right that the row is the
-        -- likelier failure than the menu: Equip kept its width, so Delete is what paid for Copy. The
-        -- whole row is measured rather than the new button alone, because a check that looked only at
-        -- what arrived would report a tidy pass over the control the change actually put at risk.
+        -- likelier failure than the menu. UI-23 then relieved the crowding by making Delete and Copy
+        -- icons — which does not retire this check, it moves what it has to ask. The whole row is
+        -- measured rather than the newest control alone, because a check that looked only at what
+        -- arrived would report a tidy pass over whatever the change put at risk.
         --
-        -- Two failures, neither of which presents as a layout fault. A button running past the
+        -- Three failures, none of which presents as a layout fault. A button running past the
         -- panel's edge is clipped by the panel and simply looks short; a label too wide for its
         -- button is let out under the button's own edge by UIPanelButtonTemplate rather than being
-        -- shrunk, so it reads as an odd label. Both are arithmetic, and both are invisible to the
-        -- eye that is looking for a gap.
+        -- shrunk, so it reads as an odd label; and an icon button with no texture or no tooltip is a
+        -- neat blank square that reads as a design. All three are invisible to the eye that is
+        -- looking for a gap.
         run = function()
             local Sets = Kitbag.Sets
             if not Sets or not Sets.CopyChoices then return nil, "KitbagSets is not loaded" end
@@ -1209,8 +1211,25 @@ Verify.CHECKS = {
             local faults, notes = {}, {}
             local function round(n) return math.floor(n + 0.5) end
 
-            -- Does each label fit its own button? Copy's is fixed text, but Equip and Delete share
-            -- the row and a client with a different font would spill any of the three.
+            -- What an icon button costs is its name (UI-23). Delete and Copy have no label to
+            -- measure any more, and the failure that replaced the clipping one is worse for being
+            -- tidy: an empty square, or a square nobody can identify, both look like a deliberate
+            -- design in a screenshot. So the picture and the hover are asserted in the label's
+            -- place, rather than the label check quietly measuring one button and reporting on
+            -- three.
+            local function named(button, name)
+                if not rawget(button, "kitbagIcon") then
+                    faults[#faults + 1] = name .. " has no icon, so it is an empty square"
+                elseif not (button.GetScript and button:GetScript("OnEnter")) then
+                    faults[#faults + 1] = name .. " has an icon and no tooltip, so it cannot be read"
+                else
+                    notes[#notes + 1] = name .. " icon+tooltip"
+                end
+            end
+
+            -- Does the one remaining label fit its own button? Equip took the width the other two
+            -- gave up, so this is now the loosest fit on the row rather than the tightest — but a
+            -- client with a different font is exactly the case where "obviously fine" stops being.
             local function fits(button, name)
                 local label = button.GetFontString and button:GetFontString()
                 local strWidth = label and label.GetStringWidth and label:GetStringWidth()
@@ -1224,8 +1243,8 @@ Verify.CHECKS = {
                 end
             end
             fits(equip, "Equip")
-            fits(delete, "Delete")
-            fits(copy, "Copy to…")
+            named(delete, "Delete")
+            named(copy, "Copy")
 
             -- And do the three clear each other and the panel they sit in? The row is anchored
             -- left-to-right, so an overflow lands on the panel's right edge and nowhere else.
