@@ -767,4 +767,108 @@ G.SetBindingClick = realSetBindingClick
 G.ItemRackUser, G.ItemRackSettings = nil, nil
 H.eq(Sets.ImportItemRack().imported, 0, "no ItemRack installed imports nothing rather than erroring")
 
+-- ---------------------------------------------------------------------------
+-- A swap deferred until combat ends is re-decided, not replayed (RULE-7)
+-- ---------------------------------------------------------------------------
+--
+-- Exercised here for the reason every other write path in this file is: the deferral lives in
+-- KitbagEvents' file-locals, behind an event handler, and events are the one thing Tests/ cannot
+-- fire from pure Lua. The decision itself (Rules.Defer, Rules.Next) is pure and covered in
+-- rules_test; what had no coverage at all is the WIRING — and the wiring is where the bug was.
+--
+-- The bug: `pending` held the step decided when combat started, and PLAYER_REGEN_ENABLED performed
+-- it. So you enter combat in bear form with a Bear rule pending, drop form mid-fight, and the set
+-- goes on at the end of the fight for a condition that expired a minute ago. Nothing else in the
+-- engine works that way — every other path re-decides from the live world.
+
+local Events = G.Kitbag.Events
+local eventFrame = G.KitbagEventFrame
+H.ok(eventFrame ~= nil and eventFrame.OnEvent ~= nil,
+    "the engine's event frame is reachable, so its wiring can be driven outside the client")
+
+G.Kitbag.db = DB.Load({})
+DB.Set(G.Kitbag.db, "autoSwap", true)
+DB.Set(G.Kitbag.db, "deferInCombat", true)
+G.Kitbag.char = DB.Character(G.Kitbag.db, "Pobble - Whitemane")
+G.Kitbag.char.sets = { Bear = { slots = { [1] = "111:0:0:0:0:0:0" } } }
+G.Kitbag.char.rules = { { set = "Bear", when = { form = 1 } } }
+
+-- What the engine ASKED for, rather than what the driver managed: the driver is asynchronous and
+-- this test is about the decision reaching it at all.
+local equipped, applied = {}, {}
+local realEquip, realApply = Sets.Equip, Sets.Apply
+Sets.Equip = function(name, _, onDone)
+    equipped[#equipped + 1] = name
+    if onDone then onDone(true) end
+    return true
+end
+Sets.Apply = function(_, label) applied[#applied + 1] = label return true end
+
+local form, combat = 1, false
+G.GetShapeshiftForm = function() return form end
+G.InCombatLockdown = function() return combat end
+
+-- Combat starts with the rule matching. The swap is owed, and held.
+combat = true
+eventFrame:OnEvent("PLAYER_REGEN_DISABLED")
+H.eq(#equipped, 0, "a swap that matches during combat is not attempted while deferInCombat is on")
+H.eq(Events.Diagnostics().deferred, "Bear",
+    "…and the dump names the set it is waiting to put on, or a held swap looks like no swap at all")
+
+-- The condition expires mid-fight. This is the whole item: the world the step was decided in is
+-- gone by the time the fight ends.
+form = 0
+eventFrame:OnEvent("UPDATE_SHAPESHIFT_FORM")
+H.eq(Events.Diagnostics().deferred, nil,
+    "a swap stops being owed the moment its rule stops matching, even mid-fight — a dump naming a "
+    .. "set nobody is waiting for sends the next session looking for a swap that never comes")
+
+combat = false
+eventFrame:OnEvent("PLAYER_REGEN_ENABLED")
+H.eq(#equipped, 0,
+    "a deferred swap whose condition expired during the fight does NOT fire when combat ends")
+H.eq(Events.Diagnostics().deferred, nil, "…and nothing is left waiting behind it")
+
+-- Combat that ends BECAUSE you died, which is how most fights end. This used to be a guard written
+-- out at the handler; the re-decision above deleted it, so it is now apply() asking Rules.Defer like
+-- any other event — and that is worth asserting rather than assuming, because the failure is the
+-- exact attempt-and-fail RULE-6 exists to stop, arriving through the one door that skipped apply().
+form, combat = 1, true
+eventFrame:OnEvent("PLAYER_REGEN_DISABLED")
+H.eq(Events.Diagnostics().deferred, "Bear", "a swap is owed going into the fight")
+G.UnitIsDeadOrGhost = function() return true end
+combat = false
+eventFrame:OnEvent("PLAYER_REGEN_ENABLED")
+H.eq(#equipped, 0, "nothing is equipped at the moment you hit the floor")
+H.eq(Events.Diagnostics().heldWhileDead, "Bear",
+    "…and the dump says which set is waiting on the corpse run, not merely that nothing happened")
+G.UnitIsDeadOrGhost = nil
+
+-- The other direction, so the assertion above cannot be satisfied by a build that simply threw
+-- every deferred swap away.
+form, combat = 1, true
+eventFrame:OnEvent("PLAYER_REGEN_DISABLED")
+H.eq(Events.Diagnostics().deferred, "Bear", "a swap deferred with the rule still matching is held")
+combat = false
+eventFrame:OnEvent("PLAYER_REGEN_ENABLED")
+H.eq(table.concat(equipped, ", "), "Bear",
+    "…and IS put on when combat ends, because the condition that chose it still holds")
+
+-- The restore point, which is the case worth checking before trading a replay for a re-decision:
+-- a restore is spent when it fires, so a re-decision must not be able to lose one. Nothing matches
+-- now, so the step owed is the restore itself.
+G.Kitbag.char.restorePoint = { slots = { [1] = "999:0:0:0:0:0:0" } }
+form, combat = 0, true
+eventFrame:OnEvent("PLAYER_REGEN_DISABLED")
+H.eq(#applied, 0, "a restore owed during combat waits too")
+H.ok(G.Kitbag.char.restorePoint ~= nil, "…and the point is still there to go back to")
+combat = false
+eventFrame:OnEvent("PLAYER_REGEN_ENABLED")
+H.eq(#applied, 1, "…and the restore happens when combat ends")
+H.eq(G.Kitbag.char.restorePoint, nil, "…spending the point exactly once")
+
+Sets.Equip, Sets.Apply = realEquip, realApply
+G.GetShapeshiftForm = function() return 0 end
+G.InCombatLockdown = function() return false end
+
 H.done()

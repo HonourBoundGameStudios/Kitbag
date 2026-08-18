@@ -49,8 +49,14 @@ local WATCHED = {
 -- there is nothing to read: by the time a swap has been decided the cast is usually already over.
 local casting = nil
 
-local frame = CreateFrame("Frame")
-local pending = nil   -- a Rules.Next step deferred until combat ends
+-- Named, unlike the addon's other unshown frames, because the engine is the one part of Kitbag with
+-- nothing on screen: every other module can be reached through a window somebody can point at, and
+-- this one is a file-local behind an event handler. A name gives a dump, /kit verify and the test
+-- suite one handle on the wiring — the same reason KitbagInspectorTitle has one.
+local frame = CreateFrame("Frame", "KitbagEventFrame")
+-- The step a combat deferral is waiting on (RULE-7). A label for the dump, exactly like `held`
+-- below: it is never replayed, because apply() clears it and decides again from the live world.
+local pending = nil
 -- What the engine declined to attempt because the player is dead (RULE-6). A label for the dump,
 -- not a queue: unlike `pending` there is nothing here to replay — see apply().
 local held = nil
@@ -122,9 +128,13 @@ end
 
 local function apply()
     local db, char = Kitbag.db, Kitbag.char
-    -- Cleared before the master switch, not after: a hold the engine will never revisit because
-    -- auto-swap was turned off is a diagnostic outliving the wait it describes.
-    held = nil
+    -- Both cleared before anything is decided, and before the master switch: each describes a WAIT,
+    -- and this call is about to work out afresh whether there still is one. A hold the engine will
+    -- never revisit because auto-swap was turned off is a diagnostic outliving the wait it
+    -- describes, and a `pending` that outlives the rule that owed it names a set nobody is waiting
+    -- for. Clearing `pending` here is also what makes a combat deferral a re-decision rather than a
+    -- replay (RULE-7).
+    held, pending = nil, nil
     if not db.options.autoSwap then return end
 
     local state = Events.State()
@@ -216,20 +226,16 @@ function frame:OnEvent(event, unit, ...)
         return
     end
 
-    if event == "PLAYER_REGEN_ENABLED" and pending then
-        local step = pending
-        pending = nil
-        -- The way combat most often ends is that you lost it. Performing the deferred step here
-        -- would be the exact attempt-and-fail RULE-6 exists to stop, and it would arrive by the one
-        -- door that skips apply(). Dropped rather than re-queued: coming back alive runs apply()
-        -- like any other event, and a step decided before the death is not owed a second life.
-        if Rules.Defer(step, Events.State(), Kitbag.db.options) == "dead" then
-            held = step.set or step.action
-            return
-        end
-        perform(step)
-        return
-    end
+    -- No case for PLAYER_REGEN_ENABLED, deliberately, and that absence is RULE-7's whole fix. It
+    -- used to perform the step it had been holding since the fight started — a step decided in a
+    -- world that has since moved on, so you entered in bear form, dropped form mid-fight, and the
+    -- set went on at the end of the fight for a condition that expired a minute ago. apply()
+    -- re-decides from the live world like every other path here, and answers `none` when nothing
+    -- matches any more.
+    --
+    -- It also subsumes RULE-6's guard, which used to be written out here: combat most often ends
+    -- because you DIED, and that path reached perform() through the one door that skipped apply()
+    -- and therefore skipped Rules.Defer with it.
     apply()
 end
 
