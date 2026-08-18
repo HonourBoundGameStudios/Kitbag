@@ -1195,4 +1195,107 @@ H.ok(type(C.SWAP_BLOCKED) == "table", "the reasons carry player-facing wording")
 H.ok(type(C.SWAP_BLOCKED.dead) == "string" and type(C.SWAP_BLOCKED.casting) == "string",
     "…for every reason CanSwap can return")
 
+
+-- ---------------------------------------------------------------------------
+-- BindingKey — a keystroke composed into a binding string (UI-12)
+-- ---------------------------------------------------------------------------
+--
+-- Capturing a key is three lines of frame code; deciding what the keystroke MEANS is where the
+-- mistakes are, so that half lives here. The order of the modifiers is Blizzard's own —
+-- ALT-CTRL-SHIFT-KEY — and it is not a preference: `SetBindingClick` matches the string, so
+-- "SHIFT-ALT-E" binds a key nobody can press.
+
+H.eq(C.BindingKey("E"), "E", "an unmodified key is its own binding")
+H.eq(C.BindingKey("E", true), "SHIFT-E", "shift composes onto the front")
+H.eq(C.BindingKey("E", false, true), "CTRL-E", "so does ctrl")
+H.eq(C.BindingKey("E", false, false, true), "ALT-E", "and alt")
+H.eq(C.BindingKey("E", true, true, true), "ALT-CTRL-SHIFT-E",
+    "all three compose in Blizzard's order — SetBindingClick matches the string, so the order is "
+    .. "correctness rather than taste")
+H.eq(C.BindingKey("F12", true), "SHIFT-F12", "a named key is used as the client gives it")
+
+-- A modifier held on its own is the player part-way through a chord, not a binding. Taking it would
+-- bind SHIFT the moment they reached for SHIFT-E, and SHIFT is not a key anyone wants to lose.
+for _, mod in ipairs({ "LSHIFT", "RSHIFT", "LCTRL", "RCTRL", "LALT", "RALT" }) do
+    H.eq(C.BindingKey(mod, true), nil, mod .. " alone is a chord in progress, not a binding")
+end
+
+-- ESCAPE is refused here rather than only in the frame that captures it. It closes every window in
+-- the game, and a build where some other path could bind it is a build where the player cannot get
+-- out of the window they bound it from.
+H.eq(C.BindingKey("ESCAPE"), nil, "ESCAPE is never a binding, whatever asks")
+H.eq(C.BindingKey("ESCAPE", true, true, true), nil, "…modifiers do not make it one")
+H.eq(C.BindingKey(nil), nil, "no key at all is nil rather than an error")
+H.eq(C.BindingKey(""), nil, "an empty key is nil — the client sends one for some devices")
+
+-- ---------------------------------------------------------------------------
+-- BindingImpact — what giving a set a key would cost (UI-12)
+-- ---------------------------------------------------------------------------
+--
+-- The same shape as DeleteImpact and for the same reason: the window has to know the consequence
+-- BEFORE it acts, so the control and the act cannot disagree about what is going to happen.
+--
+-- The consequence worth knowing is that keys are exclusive. `Import.BindingPlan` settles two sets
+-- claiming one key by set name — arbitrary but stable, which is the right answer for an ItemRack
+-- import where nobody chose. It is the WRONG answer for a deliberate press: assign SHIFT-E to
+-- "Raid" while "Farm" holds it and the plan hands the key back to "Farm", so the binding the player
+-- just made silently does nothing. A deliberate act wins, and the set it took the key from is named
+-- so the player is told rather than left to find out.
+
+local KEYED = {
+    Farm = { name = "Farm", key = "SHIFT-E", slots = {} },
+    Raid = { name = "Raid", slots = {} },
+    Bank = { name = "Bank", key = "CTRL-B", slots = {} },
+}
+
+local free = C.BindingImpact(KEYED, "Raid", "SHIFT-Q")
+H.eq(free.ok, true, "a key nobody holds is simply assigned")
+H.eq(free.taken, nil, "…and takes it from nobody")
+
+local stolen = C.BindingImpact(KEYED, "Raid", "SHIFT-E")
+H.eq(stolen.ok, true, "a key another set holds is still assigned — a deliberate press wins")
+H.eq(stolen.taken, "Farm", "…and names the set it has to be taken from, so the player is told")
+
+-- The set it names must be the one that loses it. Nothing else here reads that field, so an
+-- off-by-one in the search would be invisible until someone lost a binding they never touched.
+H.eq(C.BindingImpact(KEYED, "Bank", "SHIFT-E").taken, "Farm",
+    "the loser is found by the key, not by the order of the list")
+
+local same = C.BindingImpact(KEYED, "Farm", "SHIFT-E")
+H.eq(same.ok, true, "re-pressing a set's own key is allowed")
+H.eq(same.taken, nil, "…and does not report the set as stealing from itself")
+
+local cleared = C.BindingImpact(KEYED, "Farm", nil)
+H.eq(cleared.ok, true, "clearing a key is allowed")
+H.eq(cleared.taken, nil, "…and takes nothing from anyone")
+
+H.eq(C.BindingImpact(KEYED, "Nope", "SHIFT-E").ok, false,
+    "a set that does not exist cannot be given a key")
+H.eq(C.BindingImpact(KEYED, "Nope", "SHIFT-E").why, "no-set",
+    "…and says why, distinctly, because the window and the slash command answer it differently")
+H.eq(C.BindingImpact(nil, "Farm", "SHIFT-E").ok, false, "no set list at all is not a crash")
+
+-- The impact must not be the change. A question that mutates would make the confirmation and the
+-- act the same event, and the window asks this on every redraw to draw the button's label.
+C.BindingImpact(KEYED, "Raid", "SHIFT-E")
+H.eq(KEYED.Farm.key, "SHIFT-E", "asking what a binding would cost changes nothing")
+H.eq(KEYED.Raid.key, nil, "…on either side of the exchange")
+
+
+-- Every holder, not just the first one found. An ItemRack import can leave two sets carrying one
+-- key — BindingPlan picks which of them BINDS without disturbing the losers' stored key — so
+-- clearing one and stopping would leave the other still claiming it, and the player's brand-new
+-- binding would lose the very next arbitration. Sorted, because `pairs` has no order and a chat
+-- line that names a different set on each run is worse than one that names the wrong set every time.
+local DOUBLED = {
+    Alpha = { name = "Alpha", key = "SHIFT-E", slots = {} },
+    Beta = { name = "Beta", key = "SHIFT-E", slots = {} },
+    Mine = { name = "Mine", slots = {} },
+}
+local both = C.BindingImpact(DOUBLED, "Mine", "SHIFT-E")
+H.eq(#both.takenFrom, 2, "both sets holding the key are reported, not the first one found")
+H.eq(both.takenFrom[1], "Alpha", "…in a stable order")
+H.eq(both.takenFrom[2], "Beta", "…so the same press reports the same thing twice running")
+H.eq(both.taken, "Alpha", "`taken` is the one to name in a message: the first of them")
+
 H.done()

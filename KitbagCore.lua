@@ -1034,5 +1034,73 @@ function Core.CanSwap(state)
     return true
 end
 
+-- Modifier keys that arrive on their own while a chord is still being formed. Taking one as the
+-- binding would claim SHIFT the instant the player reached for SHIFT-E, and SHIFT is not a key
+-- anyone can afford to lose to a gear set.
+local BARE_MODIFIERS = {
+    LSHIFT = true, RSHIFT = true, LCTRL = true, RCTRL = true, LALT = true, RALT = true,
+}
+
+--- A captured keystroke as a binding string — `Core.BindingKey("E", true)` is "SHIFT-E" — or nil if
+--- the keystroke cannot be one (UI-12).
+--
+-- Capturing a key is three lines of frame code. Deciding what the keystroke MEANS is where the
+-- mistakes are, so that half is here where it can be cornered.
+--
+-- The modifier order is Blizzard's, ALT-CTRL-SHIFT-KEY, and it is not a matter of taste:
+-- `SetBindingClick` matches the string it is given, so "SHIFT-ALT-E" binds a chord nobody can press
+-- and fails by doing nothing at all.
+--
+-- ESCAPE is refused HERE rather than only in the frame that captures it. Escape closes every window
+-- in the game; a build in which some other path could bind it is a build where the player cannot
+-- leave the window they bound it from.
+function Core.BindingKey(key, shift, ctrl, alt)
+    if type(key) ~= "string" or key == "" then return nil end
+    if key == "ESCAPE" or BARE_MODIFIERS[key] then return nil end
+
+    local prefix = ""
+    if alt then prefix = prefix .. "ALT-" end
+    if ctrl then prefix = prefix .. "CTRL-" end
+    if shift then prefix = prefix .. "SHIFT-" end
+    return prefix .. key
+end
+
+--- What giving `name` the key `key` would cost: { ok = bool, why = , taken = <set name or nil> }.
+--
+-- The same shape as `DeleteImpact` and for the same reason: the window has to know the consequence
+-- before it acts, so what the control says and what the act does cannot disagree.
+--
+-- The consequence worth knowing is that keys are exclusive, and that the existing arbiter answers a
+-- different question. `Import.BindingPlan` settles two sets claiming one key by set name —
+-- arbitrary but stable, which is right for an ItemRack import where nobody chose. It is wrong for a
+-- deliberate press: give "Raid" a key that "Farm" holds and the plan hands it straight back to
+-- "Farm", so the binding the player just made silently does nothing and the window shows a key that
+-- is not theirs. A deliberate act wins, and the set it was taken from is named so the player is
+-- told rather than left to discover it the next time they press it.
+--
+-- A question, never the change. The window asks this on every redraw to label the button, so an
+-- implementation that reassigned as it answered would rebind the world on a mouse-over.
+function Core.BindingImpact(sets, name, key)
+    if type(sets) ~= "table" or type(sets[name]) ~= "table" then
+        return { ok = false, why = "no-set" }
+    end
+    if key == nil then return { ok = true } end
+
+    -- Every holder, not the first one found. An ItemRack import can leave TWO sets carrying the same
+    -- key string — `BindingPlan` decides which of them binds without disturbing the losers' stored
+    -- key — so clearing one and stopping would leave the other still claiming it, and the player's
+    -- new binding would lose the very next arbitration. `pairs` has no order, so the list is sorted:
+    -- an unordered answer would make the chat line, and the test covering it, come out differently
+    -- run to run.
+    local taken = {}
+    for other, set in pairs(sets) do
+        if other ~= name and type(set) == "table" and set.key == key then
+            taken[#taken + 1] = other
+        end
+    end
+    table.sort(taken)
+    return { ok = true, taken = taken[1], takenFrom = taken }
+end
+
 Kitbag.Core = Core
 return Core

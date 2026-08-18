@@ -291,6 +291,15 @@ function Sets.ParentOf(name)
     return set and set.parent or nil
 end
 
+--- This set's keybinding, or nil (UI-12).
+--
+-- Here for the same reason `ParentOf` is: the window asks about a stored set on every redraw, and
+-- reaching into `Kitbag.char.sets` from a frame is how a second reader of the schema appears.
+function Sets.KeyOf(name)
+    local set = char().sets[name]
+    return set and set.key or nil
+end
+
 --- The sets the window may offer as this one's parent, sorted (UI-11).
 function Sets.ParentChoices(name)
     return Core.ParentChoices(char().sets, name)

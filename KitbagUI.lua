@@ -30,6 +30,7 @@ local CELL_GAP = 3
 local PITCH = CELL + CELL_GAP
 local PANEL_WIDTH = 300
 local PARENT_Y = -70       -- the inherit button, between the set's headline and the character model
+local KEY_WIDTH = 82       -- the keybinding button, sharing that row rather than taking one of its own
 
 local frame, rows, status, scroll, doll, importButton
 local selected = nil       -- the set the inspector is showing
@@ -458,6 +459,110 @@ local function onParentEnter(self)
     GameTooltip:Show()
 end
 
+-- ---------------------------------------------------------------------------
+-- The keybinding button (UI-12)
+-- ---------------------------------------------------------------------------
+--
+-- `Bindings.Set` and `Bindings.Apply` have existed since COMPAT-5 and the ItemRack import has been
+-- filling `set.key` all along; there was simply no way to assign one without importing. This is the
+-- door.
+--
+-- Capturing is a mode rather than a dialog: the button says what it is waiting for, and the next
+-- keystroke either becomes the binding or leaves the mode. A dialog would need its own frame, its
+-- own escape handling and its own answer to "what if the window closes while it is up", all to ask
+-- a question that fits on the button already there.
+
+--- True while the button is swallowing keystrokes. File-local rather than on the frame so the
+--- refresh path can see it without reaching through a widget that may not exist yet.
+local capturing = false
+
+local function stopCapture(button)
+    capturing = false
+    button:EnableKeyboard(false)
+    -- Restored, not merely turned off. While capturing, this frame is the only thing in the game
+    -- receiving keys — including the ones that open the menu and the ones that close this window —
+    -- so leaving it clamped would be indistinguishable from the client having locked up.
+    pcall(button.SetPropagateKeyboardInput, button, true)
+    UI.Refresh()
+end
+
+local function onKeyCaptured(button, key)
+    -- A modifier on its own is the player half-way through a chord: stay in the mode and wait for
+    -- the key it is modifying. Core.BindingKey is what knows which those are.
+    local binding = Core.BindingKey(key, IsShiftKeyDown(), IsControlKeyDown(), IsAltKeyDown())
+    if not binding then
+        -- Escape leaves the mode without changing anything. It reaches here rather than closing the
+        -- window because propagation is off, which is the one thing that makes this mode safe to be
+        -- in — and Core.BindingKey refuses to turn it into a binding whatever else is held down.
+        if key == "ESCAPE" then stopCapture(button) end
+        return
+    end
+
+    -- Stored before the mode ends, because ending it redraws — and a redraw that runs before the
+    -- store would put the OLD key back on the button the player is watching, for as long as it took
+    -- something else to refresh the window.
+    if selected then Kitbag.Bindings.Set(selected, binding) end
+    stopCapture(button)
+end
+
+local function onKeyEnter(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:AddLine("Keybinding", 1, 0.82, 0)
+    if capturing then
+        GameTooltip:AddLine("Press the key you want. Escape cancels.", 1, 1, 1, true)
+    else
+        GameTooltip:AddLine("Click, then press a key to bind this set. " ..
+            "Right-click to clear it.", 1, 1, 1, true)
+    end
+    -- Both halves of the promise, because both surprise people. A key another set holds is taken
+    -- from it — the alternative is a binding that silently loses an arbitration it never mentioned
+    -- — and none of this is written into the player's own bindings, so uninstalling Kitbag gives
+    -- every key back rather than leaving a set of dead ones behind.
+    GameTooltip:AddLine("A key another set already uses is taken from it.", 0.6, 0.6, 0.6, true)
+    GameTooltip:AddLine("Kitbag re-applies these each login and never writes them into your " ..
+        "saved bindings.", 0.6, 0.6, 0.6, true)
+    GameTooltip:Show()
+end
+
+local function buildKeyButton(panel, gapWidth)
+    panel.key = CreateFrame("Button", "KitbagKeyButton", panel, "UIPanelButtonTemplate")
+    panel.key:SetSize(KEY_WIDTH, 20)
+    panel.key:SetPoint("TOPRIGHT", panel, "TOP", gapWidth / 2, PARENT_Y)
+    panel.key:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+
+    panel.key:SetScript("OnClick", function(self, button)
+        if not selected then return end
+        if capturing then
+            stopCapture(self)
+            return
+        end
+        -- No redraw here: Bindings.Set changes stored state and goes through Kitbag.Refresh itself,
+        -- which is what repaints the set that lost the key as well as the one that gained it.
+        if button == "RightButton" then
+            Kitbag.Bindings.Set(selected, nil)
+            return
+        end
+
+        capturing = true
+        self:SetText("Press…")
+        self:EnableKeyboard(true)
+        -- Without this the keystroke reaches the game as well as this button, so binding "B" would
+        -- also open the bags and binding Escape would close the window out from under the mode.
+        -- Feature-detected: it is not on every flavour, and CreateFrame gives no warning for a
+        -- method that is simply absent.
+        pcall(self.SetPropagateKeyboardInput, self, false)
+    end)
+
+    panel.key:SetScript("OnKeyDown", onKeyCaptured)
+    panel.key:SetScript("OnEnter", onKeyEnter)
+    panel.key:SetScript("OnLeave", onCellLeave)
+    -- Nothing should be able to leave the game deaf. If the window goes away mid-capture — Escape
+    -- on a different frame, /reload, the close button — the mode has to end with it.
+    panel.key:SetScript("OnHide", function(self)
+        if capturing then stopCapture(self) end
+    end)
+end
+
 local function buildDoll(parent)
     local panel = CreateFrame("Frame", nil, parent)
     panel:SetPoint("TOPLEFT", parent, "TOPLEFT", 344, -34)
@@ -517,9 +622,14 @@ local function buildDoll(parent)
     local menu = CreateFrame("Frame", "KitbagParentMenu", panel, "UIDropDownMenuTemplate")
     UIDropDownMenu_Initialize(menu, initParentMenu, "MENU")
 
-    panel.inherit = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    panel.inherit:SetSize(gapWidth, 20)
-    panel.inherit:SetPoint("TOP", panel, "TOP", 0, PARENT_Y)
+    -- The inherit button gives up the right end of its row to the keybinding button (UI-12) rather
+    -- than the panel growing a row: the gap between the doll's two columns is the only real space
+    -- the window has, and everything below this line is the character model. Both are named so
+    -- `/kit verify` can measure the clearance between them — a measurement needs both edges, and
+    -- this one varies, because the left button's label is a set name.
+    panel.inherit = CreateFrame("Button", "KitbagInheritButton", panel, "UIPanelButtonTemplate")
+    panel.inherit:SetSize(gapWidth - KEY_WIDTH - 4, 20)
+    panel.inherit:SetPoint("TOPLEFT", panel, "TOP", -gapWidth / 2, PARENT_Y)
     panel.inherit:SetScript("OnClick", function(self)
         ToggleDropDownMenu(1, nil, menu, self, 0, 0)
     end)
@@ -530,9 +640,11 @@ local function buildDoll(parent)
     -- it for us; without them a long name runs out over the doll's icons on both sides.
     local label = panel.inherit:GetFontString()
     if label then
-        label:SetWidth(gapWidth - 12)
+        label:SetWidth(gapWidth - KEY_WIDTH - 16)
         pcall(label.SetWordWrap, label, false)
     end
+
+    buildKeyButton(panel, gapWidth)
 
     -- The character itself, filling what is left of the gap: the icons say WHICH items, the model
     -- says what wearing them looks like, and neither answer was available before without equipping
@@ -679,6 +791,15 @@ local function refreshDoll(name, plan, totals)
     -- last three load-time failures were described, and the old pair has existed since 1.0.
     if shown then doll.equip:Show() else doll.equip:Hide() end
     if shown then doll.delete:Show() else doll.delete:Hide() end
+
+    -- Unlike the inherit button beside it, this one shows even with nothing bound: "no keybinding"
+    -- is a state the player wants to be able to see and act on, where "nothing to inherit from" is
+    -- a fact about the list that no click could change (UI-11). Left alone while capturing, so a
+    -- refresh landing mid-mode does not wipe the prompt off the button the player is looking at.
+    if shown then doll.key:Show() else doll.key:Hide() end
+    if shown and not capturing then
+        doll.key:SetText(Sets.KeyOf(name) or "Key…")
+    end
 
     -- The inherit button appears only when it can do something: with one set saved there is nothing
     -- to inherit from, and a permanently greyed control reading "inherits: nothing" is a puzzle

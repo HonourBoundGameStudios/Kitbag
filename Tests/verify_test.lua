@@ -205,6 +205,17 @@ H.ok(byId["import-button"] ~= nil,
 H.eq(byId["import-button"] and byId["import-button"].item, "VERIFY-14",
     "…and it names the item it answers")
 
+-- VERIFY-16. The keybinding button (UI-12) took the right end of the inherit button's row rather
+-- than growing the panel a row of its own, so "do these two overlap" is a real question with a
+-- measurable answer — and it is asked on a row whose left half CHANGES WIDTH with the set name.
+-- The label half matters as much: a button showing a key the set does not hold is the exact
+-- symptom of a binding that lost an arbitration silently, which is what Bindings.Set was changed
+-- to prevent.
+H.ok(byId["key-button"] ~= nil,
+    "a check measures the keybinding button against the inherit button it shares a row with")
+H.eq(byId["key-button"] and byId["key-button"].item, "VERIFY-16",
+    "…and it names the item it answers")
+
 -- VERIFY-11's geometry half. "The bar clears the X on every row" has a specific failure the item
 -- names: the bar landing on top of every row's X reads as a DEAD BUTTON, not as a layout bug, so it
 -- gets reported as "delete doesn't work" and sends the next session into the wrong file entirely.

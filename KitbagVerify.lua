@@ -985,6 +985,72 @@ Verify.CHECKS = {
         end,
     },
     {
+        id = "key-button", item = "VERIFY-16", label = "Keybinding button reads and fits",
+        -- Two questions, and the cheap one is the more valuable. GEOMETRY: the button took the right
+        -- end of the inherit button's row instead of the panel growing a row, and the left half of
+        -- that row carries a set NAME — so the clearance between them is real, variable, and only
+        -- wrong on the characters with long names, which is nobody's test character. LABEL: a button
+        -- reading a key the set does not hold is the visible symptom of a binding that lost an
+        -- arbitration in silence, which is precisely what Bindings.Set was rewritten to stop.
+        run = function()
+            local Sets = Kitbag.Sets
+            if not Sets or not Sets.KeyOf then return nil, "KitbagSets is not loaded" end
+            local button, inherit = _G.KitbagKeyButton, _G.KitbagInheritButton
+            if not button then
+                return nil, "the button is built with the main window — open /kit once, then run this"
+            end
+            if not button:IsShown() then
+                return nil, "no set is selected, so there is nothing for it to bind — select one"
+            end
+
+            local faults, notes = {}, {}
+
+            -- The label against the stored key, read through the same accessor the window uses. A
+            -- separate reading of Kitbag.char.sets here would be a second reader of the schema and
+            -- could agree with the button while both disagreed with the truth.
+            local heading = _G.KitbagInspectorTitle
+            local title = heading and heading:GetText()
+            local stored = title and title ~= "" and Sets.KeyOf(title) or nil
+            local text = button:GetText()
+            local wanted = stored or "Key…"
+            if text ~= wanted then
+                faults[#faults + 1] = string.format("label reads %q but the set's key is %s",
+                    tostring(text), stored and ("\"" .. stored .. "\"") or "unset")
+            end
+            notes[#notes + 1] = string.format("reads %q", tostring(text))
+
+            -- Clipping. UIPanelButtonTemplate lets its text run under its own edge rather than
+            -- shrinking, so a long chord — ALT-CTRL-SHIFT-F12 is bindable — simply spills.
+            local label = button.GetFontString and button:GetFontString()
+            local strWidth = label and label.GetStringWidth and label:GetStringWidth()
+            local width = button:GetWidth()
+            if strWidth and width then
+                notes[#notes + 1] = string.format("%d wide in %d",
+                    math.floor(strWidth + 0.5), math.floor(width + 0.5))
+                if strWidth > width - 8 then
+                    faults[#faults + 1] = "the label clips its own button"
+                end
+            end
+
+            -- And the neighbour. The inherit button hides itself when there is nothing to inherit
+            -- from, so a gap can only be measured when it is actually up — and "it was hidden" is a
+            -- note rather than a pass, because a check that quietly measures nothing reads green.
+            if inherit and inherit:IsShown() and inherit:GetRight() and button:GetLeft() then
+                local gap = button:GetLeft() - inherit:GetRight()
+                notes[#notes + 1] = string.format("clears the inherit button by %d",
+                    math.floor(gap + 0.5))
+                if gap < 0 then
+                    faults[#faults + 1] = "it overlaps the inherit button beside it"
+                end
+            else
+                notes[#notes + 1] = "the inherit button is hidden, so the gap was not measured"
+            end
+
+            if #faults > 0 then return false, table.concat(faults, "; ") end
+            return true, table.concat(notes, ", ")
+        end,
+    },
+    {
         id = "rule-list-layout", item = "VERIFY-11", label = "The rule list's bar clears its X buttons",
         -- The failure this measures is not cosmetic and does not read as a layout fault. A scroll bar
         -- sitting on every row's X makes delete look BROKEN, so it gets reported as "the X does

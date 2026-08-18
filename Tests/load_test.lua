@@ -708,6 +708,50 @@ H.eq(DB.Get(G.Kitbag.db, "autoSwap"), true,
     "…and it leaves the options alone rather than re-applying ItemRack's over the player's")
 H.eq(DB.Get(G.Kitbag.db, "minimap.hide"), false, "…every one of them")
 
+-- ---------------------------------------------------------------------------
+-- Bindings.Set — assigning a key from the window (UI-12)
+-- ---------------------------------------------------------------------------
+--
+-- Exercised here for the reason the import above is: this is a WRITE path, it touches the client,
+-- and the pure half (Core.BindingImpact) can be cornered in core_test while the half that stores and
+-- binds cannot be reached anywhere else outside the game. The import's own lesson was that testing
+-- the pleasant half and calling the feature done is exactly how the sharp bug survives.
+--
+-- The behaviour that is not obvious: keys are EXCLUSIVE, and the arbiter that already existed
+-- settles a contest by set name because it was written for an import where nobody chose. Assigning
+-- CTRL-1 to DPS while HEAL holds it must take it, not queue a claim that loses.
+local Bindings = G.Kitbag.Bindings
+H.eq(G.Kitbag.char.sets.HEAL.key, "CTRL-1", "HEAL came out of the import holding CTRL-1")
+
+local ok, taken = Bindings.Set("DPS", "CTRL-1")
+H.eq(ok, true, "a key another set holds is still assignable — a deliberate press wins")
+H.eq(taken, "HEAL", "…and the set it was taken from is named, so the player can be told")
+H.eq(G.Kitbag.char.sets.DPS.key, "CTRL-1", "the key lands on the set that asked for it")
+H.eq(G.Kitbag.char.sets.HEAL.key, nil,
+    "…and is CLEARED off the old holder, or BindingPlan hands it straight back and the new "
+    .. "binding silently does nothing")
+
+-- What actually reaches the client, not merely what is stored. One binding, on the set that won it:
+-- a stale claim left behind would show up here as CTRL-1 being bound twice.
+local rebound = {}
+local realSetBindingClick = G.SetBindingClick
+G.SetBindingClick = function(key, ...)
+    rebound[#rebound + 1] = key
+    return realSetBindingClick(key, ...)
+end
+Bindings.Apply()
+H.eq(table.concat(rebound, ", "), "CTRL-1", "exactly one set is bound to the key afterwards")
+
+-- Clearing, which is the right-click on the button.
+H.eq(Bindings.Set("DPS", nil), true, "a key can be cleared")
+H.eq(G.Kitbag.char.sets.DPS.key, nil, "…and the set stops holding one")
+
+H.eq(Bindings.Set("Nope", "CTRL-9"), false, "a set that does not exist cannot be given a key")
+H.eq(G.Kitbag.char.sets.Nope, nil,
+    "…and asking does not invent the set, the way a get-or-create accessor would")
+
+G.SetBindingClick = realSetBindingClick
+
 -- No ItemRack at all is the majority case and reaches this at login. It must report rather than error.
 G.ItemRackUser, G.ItemRackSettings = nil, nil
 H.eq(Sets.ImportItemRack().imported, 0, "no ItemRack installed imports nothing rather than erroring")
