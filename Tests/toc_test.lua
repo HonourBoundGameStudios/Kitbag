@@ -74,21 +74,40 @@ local INTERFACES = {
     { toc = "Kitbag.toc",          product = "wow_classic_era", version = { 1, 15, 9 } },
     { toc = "Kitbag_Mists.toc",    product = "wow_classic",     version = { 5, 5, 4 } },
     { toc = "Kitbag_Mainline.toc", product = "wow",             version = { 12, 1, 0 } },
-    -- No Cataclysm Classic is installed here — the `wow_classic` product has moved on to Mists — so
-    -- this one is STILL a guess and is marked as such rather than being quietly asserted. 4.4.2 was
-    -- the last Cata Classic build before the Mists upgrade; it wants a reading if that flavour is
-    -- ever actually shipped.
-    { toc = "Kitbag_Cata.toc",     product = nil,               version = { 4, 4, 2 }, guessed = true },
+    -- Cataclysm Classic is not installed here and CANNOT be: the `wow_classic` product has moved on
+    -- to Mists (5.5.4 in `.build.info`), so that flavour no longer exists as a live client to read.
+    -- The number is therefore argued rather than read — 4.4.2 was Cataclysm Classic's final build
+    -- before the Mists upgrade, corroborated 2026-08-18 against the public addon record rather than
+    -- against a client — and it stays LABELLED, because promoting an argument to a reading is how a
+    -- guess stops looking like one. If Blizzard ever runs Cata Classic again, read it off .build.info
+    -- and move it up to `product`.
+    { toc = "Kitbag_Cata.toc",     product = nil,               version = { 4, 4, 2 },
+      sourced = "public record: 4.4.2 was Cataclysm Classic's last build before Mists Classic "
+          .. "replaced it; no Cata client exists to read" },
 }
 
 for _, entry in ipairs(INTERFACES) do
     local want = encode(entry.version[1], entry.version[2], entry.version[3])
     local got = readInterface(entry.toc)
-    local how = entry.guessed and "(GUESSED — no client installed to read)" or
-        ("(read off .build.info, product " .. tostring(entry.product) .. ")")
+    -- The label reports the provenance rather than a yes/no, so a run of this suite says which
+    -- numbers are readings and which are arguments — that distinction is the point.
+    local how = entry.product
+        and ("(read off .build.info, product " .. entry.product .. ")")
+        or ("(NOT read off a client — " .. tostring(entry.sourced) .. ")")
     H.eq(got, want, entry.toc .. " declares interface " .. want .. " " .. how)
 end
 
+
+-- Every number must SAY where it came from, and the three provenances are not equal. A number read
+-- off `.build.info` is a reading of the installed client. A number corroborated against the public
+-- record is an argument. A number with neither is a guess — and a guess and a reading look identical
+-- in a `.toc` file, which is the whole reason this section exists. This asserts that no entry can be
+-- added without declaring which of the three it is; the failure it prevents is a fourth flavour
+-- arriving with a plausible five-digit constant and nobody able to tell later where it came from.
+for _, entry in ipairs(INTERFACES) do
+    H.ok(entry.product ~= nil or entry.sourced ~= nil,
+        entry.toc .. " states where its interface number came from")
+end
 -- ---------------------------------------------------------------------------
 -- Parity between the flavours
 -- ---------------------------------------------------------------------------
