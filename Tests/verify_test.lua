@@ -378,4 +378,19 @@ H.eq(byId["wheel-layering"] and byId["wheel-layering"].item, "VERIFY-11",
 -- different clothes. What the check must cover is stated in KitbagVerify.lua where it can be read
 -- beside the code it constrains.
 
+-- The visual pass wants eyes, and one specific thing about it does not (UI-21..25, VERIFY-19).
+--
+-- Five new texture paths went in with the icon buttons and none of them has ever been drawn. A wrong
+-- path in this client does not draw nothing — it renders magenta — so the whole question is one look
+-- at two windows, and that loudness is exactly what makes it worth ASKING FOR rather than assuming.
+-- The act says magenta by name: "does it look right" invites an aesthetic answer, and what is wanted
+-- here is a negative observation somebody can actually make.
+local visual
+for _, act in ipairs(V.ACTS) do
+    if act.item == "VERIFY-19" then visual = act end
+end
+H.ok(visual ~= nil, "the checklist asks a person to LOOK at the windows the visual pass rebuilt")
+H.ok(visual and visual.act:lower():find("magenta", 1, true) ~= nil,
+    "…naming the loud failure, so the answer is an observation rather than an opinion")
+
 H.done()

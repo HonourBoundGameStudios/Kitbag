@@ -28,6 +28,16 @@ First release. Gear sets that actually apply.
 - A `restore` rule puts your own gear back rather than a named set, and the restore point survives a
   `/reload`.
 
+### The look of it
+
+- Every region that holds a list, a grid or a model is **recessed the same way** — one edge colour
+  and one ground, drawn from one place, so a window reads as panels rather than as controls floating
+  on a plate.
+- The paperdoll's **character preview sits in a frame** of its own, like the nineteen slot cells
+  around it.
+- **Delete, Copy, Options, Rules and the rule list's move/remove controls are icons**, each with a
+  tooltip it did not have while it had a label. The set name box got most of the freed width back.
+
 ### Around the edges
 
 - Minimap button, LDB broker, a trinket quick-use bar, a slot flyout, keybindings per set.
