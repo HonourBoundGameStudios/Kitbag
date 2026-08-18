@@ -13,6 +13,7 @@ Kitbag = Kitbag or {}
 local Core = Kitbag.Core
 local Sets = Kitbag.Sets
 local Inventory = Kitbag.Inventory
+local Skin = Kitbag.Skin
 
 local Picker = {}
 
@@ -88,16 +89,11 @@ local function build()
     frame:Hide()
     tinsert(UISpecialFrames, "KitbagPickerFrame")
 
-    frame.border = frame:CreateTexture(nil, "BACKGROUND")
-    frame.border:SetAllPoints()
-    frame.border:SetTexture("Interface\\Buttons\\WHITE8X8")
-    frame.border:SetVertexColor(0.35, 0.35, 0.35, 1)
-
-    frame.ground = frame:CreateTexture(nil, "BORDER")
-    frame.ground:SetPoint("TOPLEFT", 1, -1)
-    frame.ground:SetPoint("BOTTOMRIGHT", -1, 1)
-    frame.ground:SetTexture("Interface\\Buttons\\WHITE8X8")
-    frame.ground:SetVertexColor(0.04, 0.04, 0.04, 0.94)
+    -- The border this panel is built around, now drawn by the shared skin rather than by ten lines
+    -- of its own (UI-22). It was a neutral grey against the brass every other Kitbag region uses,
+    -- which is the exact drift a hand-written recess produces: nobody chose the difference, it was
+    -- simply typed twice.
+    Skin.Inset(frame)
 
     -- Left-aligned and width-limited rather than centred: a long set name should run out of room
     -- against the close button instead of sliding out from under it.
@@ -120,7 +116,7 @@ local function build()
     close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -2, -2)
     close:SetScript("OnClick", function() frame:Hide() end)
 
-    local grid = CreateFrame("Frame", "KitbagPickerGrid", frame)
+    local grid = Skin.Inset(CreateFrame("Frame", "KitbagPickerGrid", frame))
     grid:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD, -20)
     grid:SetSize(GRID_WIDTH, ROWS * CELL)
 

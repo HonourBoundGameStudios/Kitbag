@@ -472,7 +472,7 @@ end
 
 local MODULES = {
     "Compat", "Core", "Rules", "Import", "DB", "Inventory", "Equip", "Sets", "Debug",
-    "Events", "Icons", "Picker", "Flyout", "UI", "RulesUI", "Trinkets", "Minimap",
+    "Events", "Skin", "Icons", "Picker", "Flyout", "UI", "RulesUI", "Trinkets", "Minimap",
     "Options", "Bindings", "Broker", "Verify",
 }
 
@@ -510,7 +510,7 @@ end
 
 local EXPECTED = {
     "Compat", "Core", "Rules", "Import", "DB", "Inventory", "Equip", "Sets", "Debug",
-    "Events", "Icons", "Picker", "Flyout", "UI", "RulesUI", "Trinkets", "Minimap",
+    "Events", "Skin", "Icons", "Picker", "Flyout", "UI", "RulesUI", "Trinkets", "Minimap",
     "Options", "Bindings", "Broker", "Verify",
 }
 for _, key in ipairs(EXPECTED) do
@@ -1550,6 +1550,42 @@ G.DEFAULT_CHAT_FRAME.AddMessage = realAddMessage
 H.ok(table.concat(helped, "\n"):find("/kit session", 1, true) ~= nil,
     "â€¦and /kit help offers it, or the command exists for nobody")
 
+
+-- ---------------------------------------------------------------------------
+-- One recessed panel, drawn the same way in every window (UI-22)
+-- ---------------------------------------------------------------------------
+--
+-- Kitbag draws six regions that hold a list or a grid, and before this each of them sat directly on
+-- whatever `BasicFrameTemplateWithInset` had painted behind it — so a window was a heading, some
+-- controls, and content floating on an empty plate with no edge to say where the content began. The
+-- addon already knew how to draw a recess: every doll cell has one. It was written out by hand each
+-- time and therefore only existed in the two places somebody remembered.
+--
+-- `Skin.Inset` is that recess in one function. The point of the module is not the two textures — it
+-- is that a seventh region cannot arrive looking like none of the other six.
+--
+-- Asserted with rawget throughout. An absent field on a mock widget is manufactured into a METHOD by
+-- __index, so `rawget` is the only honest read here and the lie would be in the direction of passing.
+local Skin = G.Kitbag.Skin
+H.ok(type(Skin) == "table" and type(Skin.Inset) == "function",
+    "the addon has one way to recess a panel rather than a hand-drawn one per window")
+
+local sample = newWidget("SkinSample")
+H.ok(Skin.Inset(sample) == sample, "…and it hands the frame back, so it can wrap a CreateFrame call")
+H.ok(rawget(sample, "kitbagEdge") ~= nil, "…drawing an edge")
+H.ok(rawget(sample, "kitbagGround") ~= nil, "…and a ground inside it")
+
+-- The regions themselves. Named frames, all six, because a region nobody can name is a region
+-- nobody can measure — and the whole failure this guards against is one of them being missed, which
+-- looks like nothing at all until the window is open beside another one.
+for _, name in ipairs({
+    "KitbagSetList", "KitbagPreviewFrame", "KitbagRulesList", "KitbagRuleEditor",
+    "KitbagIconGrid", "KitbagPickerGrid", "KitbagPickerFrame",
+}) do
+    local region = G[name]
+    H.ok(region ~= nil and rawget(region, "kitbagGround") ~= nil,
+        name .. " is recessed by the shared skin rather than sitting on a bare plate")
+end
 
 -- ---------------------------------------------------------------------------
 -- The paperdoll's model well (UI-21)

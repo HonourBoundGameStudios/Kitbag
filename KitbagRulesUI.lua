@@ -16,6 +16,7 @@ local Rules = Kitbag.Rules
 local Sets = Kitbag.Sets
 local Events = Kitbag.Events
 local Compat = Kitbag.Compat
+local Skin = Kitbag.Skin
 
 local RulesUI = {}
 
@@ -264,7 +265,7 @@ local function build()
     frame.title:SetPoint("TOP", frame, "TOP", 0, -5)
     frame.title:SetText("Kitbag — auto-swap rules")
 
-    local list = CreateFrame("Frame", "KitbagRulesList", frame)
+    local list = Skin.Inset(CreateFrame("Frame", "KitbagRulesList", frame))
     list:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -32)
     -- Short of the frame's right edge, to leave the scroll bar its own room. An overlap would put
     -- the bar on top of every row's X, which reads as a dead button rather than as a layout bug.
@@ -287,8 +288,10 @@ local function build()
     hint:SetPoint("TOPRIGHT", list, "BOTTOMRIGHT", -2, -6)
     hint:SetJustifyH("LEFT")
 
-    -- The editor pane, below the list.
-    local pane = CreateFrame("Frame", nil, frame)
+    -- The editor pane, below the list. Named and recessed like every other region in the addon
+    -- (UI-22): it is where a rule is authored, and it read as a scatter of controls on the window
+    -- plate rather than as the second half of a window whose first half is a list.
+    local pane = Skin.Inset(CreateFrame("Frame", "KitbagRuleEditor", frame))
     pane:SetPoint("TOPLEFT", list, "BOTTOMLEFT", 0, -28)
     pane:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -12, 14)
 

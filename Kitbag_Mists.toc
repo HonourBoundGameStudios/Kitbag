@@ -22,6 +22,7 @@ KitbagEquip.lua
 KitbagSets.lua
 KitbagDebug.lua
 KitbagEvents.lua
+KitbagSkin.lua
 KitbagIcons.lua
 KitbagPicker.lua
 KitbagFlyout.lua

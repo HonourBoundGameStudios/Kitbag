@@ -19,6 +19,7 @@ Kitbag = Kitbag or {}
 local Sets = Kitbag.Sets
 local Equip = Kitbag.Equip
 local Core = Kitbag.Core
+local Skin = Kitbag.Skin
 
 local UI = {}
 
@@ -723,26 +724,16 @@ local function buildDoll(parent)
     -- The well the preview sits in. Every other thing this panel draws sits in something — each of
     -- the nineteen cells has a tinted edge over a dark ground — and the model had neither, so the one
     -- region of the paperdoll that is not made of squares read as a hole between two columns of them.
-    -- Same two textures as a cell, for the same reason they are textures rather than a backdrop:
-    -- identical on every flavour and cheaper than one.
+    -- Recessed by the shared skin, which is the same recess every doll cell around it has and the
+    -- same one the set list opposite has — the region is a panel, and it now says so in the words
+    -- the rest of the window uses.
     --
     -- It is the model's PARENT rather than a plate behind it. A decorative sibling looks the same in
     -- a screenshot and behaves differently in every way that matters — it would not hide with the
     -- model and would draw over or under it depending on creation order.
-    local well = CreateFrame("Frame", "KitbagPreviewFrame", panel)
+    local well = Skin.Inset(CreateFrame("Frame", "KitbagPreviewFrame", panel))
     well:SetSize(gapWidth, modelTop - weaponsY - 8)
     well:SetPoint("TOP", panel, "TOP", 0, modelTop)
-
-    well.border = well:CreateTexture(nil, "BACKGROUND")
-    well.border:SetAllPoints()
-    well.border:SetTexture("Interface\\Buttons\\WHITE8X8")
-    well.border:SetVertexColor(0.33, 0.30, 0.24, 1)
-
-    well.ground = well:CreateTexture(nil, "BORDER")
-    well.ground:SetPoint("TOPLEFT", 1, -1)
-    well.ground:SetPoint("BOTTOMRIGHT", -1, 1)
-    well.ground:SetTexture("Interface\\Buttons\\WHITE8X8")
-    well.ground:SetVertexColor(0.05, 0.05, 0.06, 1)
 
     panel.well = well
 
@@ -1035,7 +1026,9 @@ local function build()
     frame.title:SetPoint("TOP", frame, "TOP", 0, -5)
     frame.title:SetText("Kitbag")
 
-    local list = CreateFrame("Frame", nil, frame)
+    -- Named and recessed like every other region in the addon (UI-22). The rows are children of it,
+    -- so the ground draws behind them however their own selection and highlight textures are layered.
+    local list = Skin.Inset(CreateFrame("Frame", "KitbagSetList", frame))
     list:SetPoint("TOPLEFT", frame, "TOPLEFT", 14, -34)
     -- Room on the right for the scroll bar. Overlapping it would eat the rightmost few pixels of
     -- every row, which reads as a dead strip rather than as a layout bug.

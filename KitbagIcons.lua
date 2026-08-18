@@ -8,6 +8,7 @@ Kitbag = Kitbag or {}
 
 local Sets = Kitbag.Sets
 local Compat = Kitbag.Compat
+local Skin = Kitbag.Skin
 
 local Icons = {}
 
@@ -87,7 +88,7 @@ local function build()
     -- Named like the slot picker's grid, so `/kit verify` can compare this list's stacking against the
     -- other three (VERIFY-11): the wheel question is one question about a construction shared by all
     -- four lists, and this is the list a person can spin a wheel over without building anything first.
-    local grid = CreateFrame("Frame", "KitbagIconGrid", frame)
+    local grid = Skin.Inset(CreateFrame("Frame", "KitbagIconGrid", frame))
     grid:SetPoint("TOPLEFT", frame, "TOPLEFT", 16, -58)
     grid:SetSize(COLUMNS * CELL, ROWS * CELL)
 
