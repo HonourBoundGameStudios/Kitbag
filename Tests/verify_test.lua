@@ -302,6 +302,16 @@ H.ok(byId["death-watch"] ~= nil,
     "a check proves the window is actually told about dying and coming back")
 H.eq(byId["death-watch"] and byId["death-watch"].item, "VERIFY-15",
     "…and it names the item it answers")
+-- VERIFY-17's other half. The mock proves the copy menu's initialiser runs and what it builds; what
+-- it cannot prove is that Blizzard's list frame actually APPEARS when this button is clicked, or that
+-- it appears in front. The inherit menu's check answers the strata question for `DropDownList1` — it
+-- is the same frame — but "the same frame is used" is an assumption about our own code, and the
+-- cheaper reading is to open this menu and look. The failure it catches is the one that makes a
+-- feature look absent: a button that responds to a click by doing nothing visible at all.
+H.ok(byId["copy-menu"] ~= nil,
+    "a check opens the copy menu itself, rather than inferring it from the inherit menu's")
+H.eq(byId["copy-menu"] and byId["copy-menu"].item, "VERIFY-17",
+    "…and it names the item it answers")
 
 -- No source-scan guard on "it measures the neighbours too", though the first draft had one. The file
 -- already contains the word "Delete" for the delete-popup check, so a scan for it passes whatever

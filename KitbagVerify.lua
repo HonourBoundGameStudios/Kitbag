@@ -1254,6 +1254,57 @@ Verify.CHECKS = {
         end,
     },
     {
+        id = "copy-menu", item = "VERIFY-17", label = "Copy menu opens over the window",
+        -- The mock can drive this menu's initialiser and read every entry it builds — greyed clashes,
+        -- reasons, and which set each entry would copy. What it cannot do is make Blizzard's list
+        -- frame appear. So this asks the one question left: does clicking the button actually put a
+        -- menu on screen, and in front of the window rather than behind it?
+        --
+        -- The inherit menu's check measures the same `DropDownList1`, and the strata answer is
+        -- therefore already known — but "it is the same frame" is a statement about our own code, and
+        -- the failure that matters here is cheaper than strata anyway: a control that answers a click
+        -- by doing nothing visible reads as a broken feature, not as a menu behind a window.
+        run = function()
+            local Sets = Kitbag.Sets
+            if not Sets or not Sets.CopyChoices then return nil, "KitbagSets is not loaded" end
+            local menu, button = _G.KitbagCopyMenu, _G.KitbagCopyButton
+            if not (menu and button) then
+                return nil, "the menu is built with the main window — open /kit once, then run this"
+            end
+
+            -- The menu is empty on a one-character account and Blizzard does not show an empty list,
+            -- so a run there would report a fault that is really this account having one character.
+            local heading = _G.KitbagInspectorTitle
+            local title = heading and heading:GetText()
+            if not title or title == "" then
+                return nil, "no set is selected, so there is nothing to copy — select one"
+            end
+            local choices = Sets.CopyChoices(title)
+            if #choices == 0 then
+                return nil, "no other character has been seen on this account, so the menu would be "
+                    .. "empty and the button is correctly hidden"
+            end
+
+            _G.ToggleDropDownMenu(1, nil, menu, button, 0, 0)
+            local list = _G.DropDownList1
+            if not list then return false, "DropDownList1 does not exist" end
+
+            local shown = list:IsShown()
+            local detail = string.format(
+                "DropDownList1 strata %s level %s; KitbagFrame strata %s; %d target(s) offered",
+                tostring(list:GetFrameStrata()), tostring(list:GetFrameLevel()),
+                _G.KitbagFrame and tostring(_G.KitbagFrame:GetFrameStrata()) or "(not built)",
+                #choices)
+            _G.CloseDropDownMenus()
+
+            if not shown then
+                return false, "the button was clicked and no menu appeared, which reads as a dead "
+                    .. "control rather than as a menu drawn in the wrong place"
+            end
+            return true, detail
+        end,
+    },
+    {
         id = "rule-list-layout", item = "VERIFY-11", label = "The rule list's bar clears its X buttons",
         -- The failure this measures is not cosmetic and does not read as a layout fault. A scroll bar
         -- sitting on every row's X makes delete look BROKEN, so it gets reported as "the X does
