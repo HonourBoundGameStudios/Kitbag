@@ -1080,6 +1080,40 @@ H.ok(watching.PLAYER_ALIVE, "the engine watches PLAYER_ALIVE, or a held swap is 
 H.ok(watching.PLAYER_UNGHOST, "…and PLAYER_UNGHOST, which is the end of a corpse run")
 H.ok(watching.PLAYER_REGEN_ENABLED, "…and the end of combat, which is the other deferral")
 
+-- VERIFY-4's first client-only half: that a form change triggers the REMEMBER at all. `Rules.Next`
+-- returning `remember = true` is covered pure, and the restore point surviving a reload is covered by
+-- the DB tests — but nothing has ever exercised the step between them, which is the engine capturing
+-- what is WORN into `char.restorePoint` before it swaps.
+--
+-- What is worn is stubbed for this, deliberately: a capture that produced an EMPTY point would still
+-- be non-nil, and `Rules.Next` reads a non-nil point as "there is somewhere to go back to". That is
+-- the exact failure the backlog note warns about, and it passes any assertion that only checks the
+-- point exists. So the point is asserted to hold the gear that was on.
+local wornBefore = G.GetInventoryItemLink
+G.GetInventoryItemLink = function(_, slotId)
+    if slotId == 1 then return "item:777:0:0:0:0:0:0:0:60" end
+    return nil
+end
+
+G.Kitbag.char.sets.Fish = { slots = { [1] = "888:0:0:0:0:0:0" } }
+G.Kitbag.char.rules = { { set = "Fish", when = { form = 5 }, restore = true } }
+G.Kitbag.char.restorePoint = nil
+equipped, applied = {}, {}
+
+form = 5
+eventFrame:OnEvent("UPDATE_SHAPESHIFT_FORM")
+H.eq(equipped[#equipped], "Fish", "a restore rule equips its set like any other")
+H.ok(G.Kitbag.char.restorePoint ~= nil, "…and the engine remembers a restore point on the way in")
+H.eq(Kitbag.Core.ItemId(G.Kitbag.char.restorePoint.slots[1]), 777,
+    "…holding what was actually WORN, not an empty point that only looks like somewhere to go back to")
+
+form = 0
+eventFrame:OnEvent("UPDATE_SHAPESHIFT_FORM")
+H.eq(#applied, 1, "leaving the form puts back what you were wearing")
+H.eq(G.Kitbag.char.restorePoint, nil, "…and the point is spent, not left to fire again forever")
+
+G.GetInventoryItemLink = wornBefore
+
 Sets.Equip, Sets.Apply = realEquip, realApply
 G.GetShapeshiftForm = function() return 0 end
 G.InCombatLockdown = function() return false end
