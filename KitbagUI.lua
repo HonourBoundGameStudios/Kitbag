@@ -459,6 +459,64 @@ local function onParentEnter(self)
     GameTooltip:Show()
 end
 
+-- Send this set to another character (UI-20).
+--
+-- CORE-7 shipped the whole mechanism and `/kit copy Tank to Alt - Realm` was the only door to it,
+-- which is UI-11's problem again: a feature nobody finds is a feature nobody has. The menu is built
+-- from Sets.CopyChoices for the same reason the inherit menu comes from Core.ParentChoices — the
+-- window must not form its own opinion of who can be copied to and then be corrected by Sets.
+--
+-- The clash is the part a menu has to do that the command does not. `CopyTo` refuses a name the
+-- target already uses and says so in chat, which is right for something typed and wrong for
+-- something clicked: the player picks a character and is told no afterwards. Here they are greyed,
+-- with the reason on the entry, so the refusal never arrives.
+local function initCopyMenu(self, level)
+    if not selected then return end
+
+    -- The name the menu is ABOUT, captured rather than re-read on click. The list on the left stays
+    -- live while a menu is up, so a row clicked in between would otherwise send a different set than
+    -- the one the menu is headed with — the same reason the delete popup carries its name as `data`
+    -- (BUG-8). A copy is not unrecoverable the way a delete is, but "I copied the wrong set" is
+    -- discovered on another character, days later.
+    local name = selected
+
+    local info = UIDropDownMenu_CreateInfo()
+    info.text = "Copy " .. name .. " to"
+    info.isTitle = true
+    info.notCheckable = true
+    UIDropDownMenu_AddButton(info, level)
+
+    for _, choice in ipairs(Sets.CopyChoices(name)) do
+        info = UIDropDownMenu_CreateInfo()
+        -- The reason rides on the entry rather than only in a tooltip: a greyed line with no
+        -- explanation is the puzzle UI-11 was written about, and this one is easily mistaken for
+        -- "that character cannot take sets at all".
+        info.text = choice.taken
+            and (choice.key .. " |cff808080(has a set called " .. name .. ")|r")
+            or choice.key
+        info.notCheckable = true
+        info.disabled = choice.taken
+        info.func = function()
+            Sets.CopyTo(name, choice.key)
+            CloseDropDownMenus()
+        end
+        UIDropDownMenu_AddButton(info, level)
+    end
+end
+
+local function onCopyEnter(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:AddLine("Copy to another character", 1, 0.82, 0)
+    GameTooltip:AddLine("The set is written into that character's own list. They keep it after " ..
+        "you log out — nothing of theirs is touched, and nothing here changes.", 1, 1, 1, true)
+    -- Said before the copy rather than discovered after it: the alt has no parent set to inherit
+    -- from, so what travels is the whole outfit. Re-saving it over there will not behave the way
+    -- re-saving this one does.
+    GameTooltip:AddLine("The copy arrives flat: a set that inherits here is one whole outfit " ..
+        "there.", 0.6, 0.6, 0.6, true)
+    GameTooltip:Show()
+end
+
 -- ---------------------------------------------------------------------------
 -- The keybinding button (UI-12)
 -- ---------------------------------------------------------------------------
@@ -688,9 +746,17 @@ local function buildDoll(parent)
         panel.model = model
     end
 
+    -- The action row. Three buttons where there were two (UI-20), sized off the panel rather than
+    -- written down: Equip keeps the room the other two do not need, because it is the one control
+    -- here anybody presses twice. Nothing may move — the row is the last thing in the panel and
+    -- there is no space beneath it for a fourth.
+    local actionRow = weaponsY - CELL - 12
+    local narrow = 80
+    local wide = PANEL_WIDTH - 16 - 2 * (narrow + 4)
+
     panel.equip = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    panel.equip:SetSize(140, 24)
-    panel.equip:SetPoint("TOPLEFT", panel, "TOPLEFT", 8, weaponsY - CELL - 12)
+    panel.equip:SetSize(wide, 24)
+    panel.equip:SetPoint("TOPLEFT", panel, "TOPLEFT", 8, actionRow)
     panel.equip:SetText("Equip")
     panel.equip:SetScript("OnClick", function() if selected then Sets.Equip(selected) end end)
 
@@ -711,7 +777,7 @@ local function buildDoll(parent)
     panel.equip:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
     panel.delete = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    panel.delete:SetSize(140, 24)
+    panel.delete:SetSize(narrow, 24)
     panel.delete:SetPoint("LEFT", panel.equip, "RIGHT", 4, 0)
     panel.delete:SetText("Delete")
     -- Deleting asks first, in a popup, rather than demanding a modifier nobody can see (BUG-8). The
@@ -738,6 +804,22 @@ local function buildDoll(parent)
         GameTooltip:Show()
     end)
     panel.delete:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    -- Copy to another character (UI-20). Named, as the inherit and key buttons are, so `/kit verify`
+    -- can measure it: this button appears only on an account with more than one character, so on a
+    -- single-character account nobody ever looks at this end of the row.
+    local copyMenu = CreateFrame("Frame", "KitbagCopyMenu", panel, "UIDropDownMenuTemplate")
+    UIDropDownMenu_Initialize(copyMenu, initCopyMenu, "MENU")
+
+    panel.copy = CreateFrame("Button", "KitbagCopyButton", panel, "UIPanelButtonTemplate")
+    panel.copy:SetSize(narrow, 24)
+    panel.copy:SetPoint("LEFT", panel.delete, "RIGHT", 4, 0)
+    panel.copy:SetText("Copy to…")
+    panel.copy:SetScript("OnClick", function(self)
+        ToggleDropDownMenu(1, nil, copyMenu, self, 0, 0)
+    end)
+    panel.copy:SetScript("OnEnter", onCopyEnter)
+    panel.copy:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
     panel.cells = cells
     return panel
@@ -791,6 +873,11 @@ local function refreshDoll(name, plan, totals)
     -- last three load-time failures were described, and the old pair has existed since 1.0.
     if shown then doll.equip:Show() else doll.equip:Hide() end
     if shown then doll.delete:Show() else doll.delete:Hide() end
+
+    -- Copy appears only when there is somebody to copy TO (UI-20), the same rule the inherit button
+    -- follows: on a one-character account the menu would be empty, and an empty menu is a worse
+    -- answer than no button. Unlike Equip it stays live while dead — copying moves no gear (UI-19).
+    if shown and #Sets.CopyChoices(name) > 0 then doll.copy:Show() else doll.copy:Hide() end
 
     -- Unlike the inherit button beside it, this one shows even with nothing bound: "no keybinding"
     -- is a state the player wants to be able to see and act on, where "nothing to inherit from" is

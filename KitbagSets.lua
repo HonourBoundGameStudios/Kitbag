@@ -181,14 +181,24 @@ end
 -- be rejected is worse than no choice, because the rejection arrives after the click.
 --
 -- Compared by bucket identity rather than by re-reading `Compat.CharacterKey()`, so this cannot
--- disagree with the `same` refusal in `Core.CopySet` — that one is by identity too.
+-- disagree with the `same` refusal in `Core.CopySet` — that one is by identity too. The identity
+-- rule and the sort live in `Core.CopyChoices`, which the marked list below also goes through: two
+-- lists of the same characters must not be able to differ on who is on them.
 function Sets.CopyTargets()
     local out = {}
-    for key, bucket in pairs(db().chars or {}) do
-        if bucket ~= char() then out[#out + 1] = key end
+    for _, choice in ipairs(Core.CopyChoices(db().chars, char(), nil)) do
+        out[#out + 1] = choice.key
     end
-    table.sort(out)
     return out
+end
+
+--- The same characters, each marked with whether they already have a set of this name (UI-20).
+--
+-- The window needs the clash before it draws the entry, because `CopyTo` refuses one AFTER the
+-- press — fine for a typed command, and for a click it means naming a character and then being told
+-- no. One call, so the mark and the refusal cannot come from two different readings of the file.
+function Sets.CopyChoices(name)
+    return Core.CopyChoices(db().chars, char(), Core.CleanName(name))
 end
 
 --- Copy a set into another character's bucket (CORE-7).

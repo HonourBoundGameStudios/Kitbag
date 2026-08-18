@@ -996,6 +996,32 @@ function Core.CopySet(sets, name, targetSets)
     return Core.Resolve(sets, name)
 end
 
+--- Who a set can be copied to, and who already has that name (UI-20). Takes the account's whole
+--- `chars` table and the bucket doing the copying; returns `{ { key, taken }, … }`, sorted by key.
+--
+-- `CopySet` refuses a clash, which is the right answer for a typed command and the wrong one for a
+-- click: the refusal arrives after the player has already chosen the character. The menu needs the
+-- clash BEFORE it draws the entry, and it must be the same answer `CopySet` will give — hence one
+-- marked list here rather than the window forming a second opinion of its own.
+--
+-- Self is excluded rather than marked, the UI-11 rule: a choice that will be refused is worse than
+-- a shorter menu. By bucket identity, not by key, so this cannot disagree with the `same` refusal.
+function Core.CopyChoices(chars, own, name)
+    local out = {}
+    for key, bucket in pairs(type(chars) == "table" and chars or {}) do
+        if bucket ~= own then
+            -- A bucket with no `sets` yet takes anything, and so does a copy with no name to clash.
+            local sets = type(bucket) == "table" and bucket.sets or nil
+            out[#out + 1] = {
+                key = key,
+                taken = name ~= nil and type(sets) == "table" and sets[name] ~= nil,
+            }
+        end
+    end
+    table.sort(out, function(a, b) return a.key < b.key end)
+    return out
+end
+
 --- Why a swap is refused, in words the player can act on. Keyed by the reason `CanSwap` returns.
 --
 -- Kept beside the decision rather than in the frames, because a greyed control with no explanation

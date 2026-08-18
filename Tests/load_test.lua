@@ -568,6 +568,17 @@ local targets = Sets.CopyTargets()
 H.eq(table.concat(targets, ", "), "Deller - Whitemane, Rinanella - Whitemane",
     "the copy targets are the other characters the account has seen, in name order")
 
+-- The same list, marked with the clash the window has to show BEFORE the click (UI-20). Core.CopyChoices
+-- decides it and is covered there; what this asserts is that Sets asks it about the right two tables —
+-- the account's roster and THIS character's bucket. Getting either wrong gives a list that looks
+-- entirely plausible and marks the wrong people.
+local choices = Sets.CopyChoices("Raid")
+H.eq(#choices, 2, "the marked list covers the same characters as the plain one")
+H.eq(choices[1].key .. "=" .. tostring(choices[1].taken), "Deller - Whitemane=false",
+    "a character with no set of that name is offered")
+H.eq(choices[2].key .. "=" .. tostring(choices[2].taken), "Rinanella - Whitemane=true",
+    "…and one who already has that name is marked, so the menu can say so instead of refusing later")
+
 H.eq(Sets.CopyTo("Raid", "Deller - Whitemane"), true, "copying to another character succeeds")
 local landed = G.Kitbag.db.chars["Deller - Whitemane"].sets.Raid
 H.ok(landed ~= nil, "…and the set lands in THAT character's bucket")

@@ -1149,6 +1149,51 @@ H.eq(sameWhy, "same", "…named, because 'Alone already exists' would be a baffl
 H.eq(C.CopySet(nil, "Fire", {}), nil, "no source list at all is not a crash")
 H.eq(C.CopySet(family, "Fire", nil), nil, "no target list at all is not a crash")
 
+-- ---------------------------------------------------------------------------
+-- CopyChoices — who a copy can be offered to, and who already has the name (UI-20)
+-- ---------------------------------------------------------------------------
+--
+-- `CopySet` refuses a name the target already uses, which is the right answer for a typed command
+-- and the wrong one for a click: the refusal arrives AFTER the press, naming a character the player
+-- has already chosen. A menu has to know the clash before it draws the entry, so the knowledge
+-- lives here — one list, marked — rather than the window asking a second question of its own and
+-- getting an answer that could drift from the one `CopyTo` will give.
+--
+-- Self is left off entirely rather than marked, the UI-11 way: a choice that will be refused is
+-- worse than a shorter menu. Compared by BUCKET identity, not by key, so this cannot disagree with
+-- `CopySet`'s `same` refusal — that one is by identity too.
+
+local mine  = { Fire = { name = "Fire", slots = {} } }
+local alt   = { Fire = { name = "Fire", slots = {} }, Tank = { name = "Tank", slots = {} } }
+local roster = {
+    ["Pobble - Whitemane"]    = { sets = mine },
+    ["Deller - Whitemane"]    = { sets = alt },
+    ["Rinanella - Whitemane"] = { sets = {} },
+}
+
+local choices = C.CopyChoices(roster, roster["Pobble - Whitemane"], "Fire")
+H.eq(#choices, 2, "every OTHER character is a choice")
+H.eq(choices[1].key, "Deller - Whitemane", "sorted, so the menu does not reorder between opens")
+H.eq(choices[2].key, "Rinanella - Whitemane", "…all the way down")
+H.eq(choices[1].taken, true, "a character that already has a set of that name is marked")
+H.eq(choices[2].taken, false, "…and one that does not is not")
+
+local other = C.CopyChoices(roster, roster["Pobble - Whitemane"], "Tank")
+H.eq(other[1].taken, true, "the mark is about THIS name, not about having any sets at all")
+H.eq(other[2].taken, false, "…and an empty character takes anything")
+
+-- The bucket, not the key: whatever `chars` files this character under, the one thing that must
+-- never be offered is the list the copy would come FROM.
+local aliased = { A = roster["Pobble - Whitemane"], B = roster["Deller - Whitemane"] }
+local byIdentity = C.CopyChoices(aliased, roster["Pobble - Whitemane"], "Fire")
+H.eq(#byIdentity, 1, "self is excluded by bucket identity, whatever key it is filed under")
+H.eq(byIdentity[1].key, "B", "…leaving the others")
+
+H.eq(#C.CopyChoices(nil, {}, "Fire"), 0, "no roster at all is not a crash")
+H.eq(#C.CopyChoices(roster, nil, "Fire"), 3, "no own bucket excludes nobody rather than erroring")
+H.eq(C.CopyChoices(roster, roster["Pobble - Whitemane"], nil)[1].taken, false,
+    "no name at all marks nothing as taken — there is no clash to have yet")
+
 
 -- ---------------------------------------------------------------------------
 -- CanSwap — may gear move right now (UI-19)
