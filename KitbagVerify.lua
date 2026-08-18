@@ -1169,11 +1169,11 @@ Verify.CHECKS = {
                 return nil, "the button is built with the main window — open /kit once, then run this"
             end
 
-            -- The row's other two are unnamed, and are reached through the panel that owns them
-            -- rather than by being given globals of their own: they are neighbours in this
-            -- measurement, not subjects of it, and a global exists forever.
-            local panel = copy:GetParent()
-            local equip, delete = panel and panel.equip, panel and panel.delete
+            -- The row's other two are unnamed, and are reached through the row that owns them rather
+            -- than by being given globals of their own: they are neighbours in this measurement, not
+            -- subjects of it, and a global exists forever.
+            local row = copy:GetParent()
+            local equip, delete = row and row.equip, row and row.delete
             if not (equip and delete) then
                 return nil, "the action row is not built — open /kit once, then run this"
             end
@@ -1242,8 +1242,8 @@ Verify.CHECKS = {
                     round(equip:GetWidth()), round(delete:GetWidth()))
             end
 
-            -- And do the three clear each other and the panel they sit in? The row is anchored
-            -- left-to-right, so an overflow lands on the panel's right edge and nowhere else.
+            -- And do the three clear each other? The row is anchored left-to-right inside a frame
+            -- sized off their widths, so a change to any one of them shows up as an overlap here.
             local function gap(left, right, what)
                 if not (left:GetRight() and right:GetLeft()) then return end
                 local d = right:GetLeft() - left:GetRight()
@@ -1255,12 +1255,36 @@ Verify.CHECKS = {
             gap(equip, delete, "Equip|Delete")
             gap(delete, copy, "Delete|Copy")
 
-            if panel:GetRight() and copy:GetRight() then
-                local edge = panel:GetRight() - copy:GetRight()
-                notes[#notes + 1] = string.format("clears the panel edge by %d", round(edge))
-                if edge < 0 then
+            -- The measurement UI-28 moved. This used to report the row's clearance from the
+            -- inspector's right edge, which was the right question while the row lived in the corner
+            -- of that panel and is a relationship nobody cares about now — a check left measuring it
+            -- would have gone on passing while saying nothing, which is the failure the
+            -- label-vs-icon split already caught here once.
+            --
+            -- What the row has to be true of now is the SET LIST it hangs under: it acts on whichever
+            -- set is selected there, and centred under it is what says so. The addon centres it by
+            -- anchoring rather than by arithmetic, so this is the reading that would catch an anchor
+            -- pointed at the wrong frame — the one failure that construction cannot rule out. A
+            -- couple of pixels is rounding on an odd width; ten is a different frame.
+            local list = _G.KitbagSetList
+            if list and list:GetLeft() and list:GetRight() and equip:GetLeft() and copy:GetRight() then
+                local drift =
+                    ((equip:GetLeft() + copy:GetRight()) - (list:GetLeft() + list:GetRight())) / 2
+                notes[#notes + 1] = string.format("centred under the set list within %d",
+                    round(math.abs(drift)))
+                if math.abs(drift) > 4 then
                     faults[#faults + 1] = string.format(
-                        "the row runs %d past the panel's right edge", round(-edge))
+                        "the row sits %d off the set list's centre, so it is not the list's action bar",
+                        round(math.abs(drift)))
+                end
+            end
+
+            if list and list:GetBottom() and equip:GetTop() then
+                local below = list:GetBottom() - equip:GetTop()
+                notes[#notes + 1] = string.format("%d below the list", round(below))
+                if below < 0 then
+                    faults[#faults + 1] = string.format(
+                        "the row overlaps the set list by %d", round(-below))
                 end
             end
 

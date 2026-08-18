@@ -109,6 +109,31 @@ SCRIPT_METHODS = {
     end,
     SetText = function(self, text) rawset(self, "_text", text) end,
     GetText = function(self) return rawget(self, "_text") or rawget(self, "_name") or "" end,
+    -- Anchors are remembered for the reason scripts and parents are: they are an answer this suite
+    -- asks a question OF. The mock cannot lay a window out — GetLeft and GetRight answer 0 for
+    -- everything, and always will — so "is this control centred under that one" is not a sum that can
+    -- be done here. It is a question about what the frame was ANCHORED TO, and a SetPoint that
+    -- discards its arguments is a client that cannot be asked it.
+    SetPoint = function(self, point, relativeTo, relativePoint, x, y)
+        -- Blizzard's own short forms: SetPoint("CENTER"), SetPoint("TOP", parent). Normalised on the
+        -- way in rather than at every read, so an assertion never has to know which form was used.
+        if type(relativeTo) == "string" then
+            relativeTo, relativePoint, x, y = nil, relativeTo, relativePoint, x
+        end
+        local points = rawget(self, "_points")
+        if not points then points = {}; rawset(self, "_points", points) end
+        points[#points + 1] = {
+            point = point, relativeTo = relativeTo, relativePoint = relativePoint or point,
+            x = x or 0, y = y or 0,
+        }
+    end,
+    ClearAllPoints = function(self) rawset(self, "_points", {}) end,
+    GetNumPoints = function(self) return #(rawget(self, "_points") or {}) end,
+    GetPoint = function(self, index)
+        local anchor = (rawget(self, "_points") or {})[index or 1]
+        if not anchor then return nil end
+        return anchor.point, anchor.relativeTo, anchor.relativePoint, anchor.x, anchor.y
+    end,
     Click = function(self, ...)
         local scripts = rawget(self, "_scripts")
         local fn = scripts and scripts.OnClick
@@ -1233,7 +1258,7 @@ G.StaticPopup_Show = function(which, arg1, arg2, data)
     return newWidget("StaticPopup1")
 end
 
-G.KitbagCopyButton:GetParent().delete:Click()
+G.KitbagInspector.delete:Click()
 H.eq(asked.which, "KITBAG_DELETE", "Delete asks first rather than acting")
 H.eq(asked.data, "Set05", "…and the question carries the selected set as its own data")
 
@@ -1385,7 +1410,7 @@ H.ok(G.Kitbag.db.chars["Alt - Mockrealm"].sets.Healer == nil,
 -- acting on it. Both directions matter and the second is the one the item says is easy to forget:
 -- running back as a corpse is exactly when someone has time to tidy their gear sets, and editing one
 -- touches no gear at all. Disabling the whole window would have been easier and wrong.
-local panel = G.KitbagCopyButton:GetParent()
+local panel = G.KitbagInspector
 G.KitbagFrame:Show()
 UI.Select("Tank")
 
@@ -1461,7 +1486,7 @@ H.ok(menu["Child"] == nil, "…while the set itself is never offered as its own 
 -- Picking Base must both inherit and redraw. The doll's slot 1 cell has nothing of its own in it, so
 -- the inherited piece arriving is exactly the difference between the two states.
 local cell1
-for slotId, cell in pairs(G.KitbagCopyButton:GetParent().cells) do
+for slotId, cell in pairs(G.KitbagInspector.cells) do
     if slotId == 1 then cell1 = cell end
 end
 H.ok(cell1 ~= nil, "the doll has a cell for the slot the parent supplies")
@@ -1602,7 +1627,7 @@ end
 -- What icons cost is the label, and that is the whole risk: an icon button with no texture is an
 -- empty square, and an icon button with no tooltip is a square nobody can identify. Both are
 -- asserted, because both look like a deliberate design from a screenshot and neither can be read.
-local actionPanel = G.KitbagCopyButton:GetParent()
+local actionPanel = G.KitbagInspector
 for _, entry in ipairs({
     { button = actionPanel.equip, what = "Equip" },
     { button = actionPanel.delete, what = "Delete" },
@@ -1618,16 +1643,54 @@ H.ok(type(G.Kitbag.Skin.IconButton) == "function",
     "icon buttons come from the same place the panels do, so a third cannot arrive looking different")
 
 -- ---------------------------------------------------------------------------
+-- The action bar belongs to the set list (UI-28)
+-- ---------------------------------------------------------------------------
+--
+-- The three sat in the bottom corner of the inspector, which is a 300-wide panel — and once all
+-- three became icons (UI-23, UI-26) the row was 90 wide inside it. A huddle of three small squares
+-- in the corner of a panel reads as a layout that came apart, and it puts the controls a whole
+-- column away from the list of sets they act on.
+--
+-- What is asserted is the ANCHOR, not the arithmetic. The mock cannot lay a window out and never
+-- will — every edge here is 0 — so "centred" cannot be a sum done in this file. It does not need to
+-- be: centring is expressed by anchoring the row's TOP to the list's BOTTOM at an x offset of zero,
+-- which is a structural claim rather than a measured one, and a structural claim is the kind a
+-- window cannot drift away from silently. The measurement belongs in the client, where there are
+-- real edges — `/kit verify`'s `copy-button` check does it there.
+local actionRow = G.KitbagActionRow
+H.ok(actionRow ~= nil, "the set list has an action bar of its own rather than three loose buttons")
+if actionRow then
+    local point, relativeTo, relativePoint, x = actionRow:GetPoint(1)
+    H.ok(relativeTo == G.KitbagSetList,
+        "…anchored to the set list, so the controls belong to the thing they act on")
+    H.ok(point == "TOP" and relativePoint == "BOTTOM",
+        "…hanging BELOW it rather than beside it")
+    H.ok(x == 0,
+        "…and centred on it: a zero offset from TOP to BOTTOM is what centring IS, so the row " ..
+        "re-centres itself if the list or any button changes width")
+    H.ok(G.KitbagCopyButton:GetParent() == actionRow,
+        "…and the three are children of the row, so the row is what moves them, not three anchors")
+end
+
+-- The inspector keeps the handles, because the refresh reaches the three through the panel it draws
+-- (Equip greys while dead, Copy hides with nobody to copy to). Reparenting a control and losing the
+-- handle to it is a window that draws correctly and stops responding to anything.
+local inspector = G.KitbagInspector
+H.ok(inspector ~= nil, "the inspector panel is named, so a check can ask about it by name")
+H.ok(inspector and rawget(inspector, "equip") ~= nil and rawget(inspector, "delete") ~= nil,
+    "…and still holds the action row's controls, which is how the refresh greys and hides them")
+
+-- ---------------------------------------------------------------------------
 -- One recessed panel, drawn the same way in every window (UI-22)
 -- ---------------------------------------------------------------------------
 --
 -- Kitbag draws six regions that hold a list or a grid, and before this each of them sat directly on
--- whatever `BasicFrameTemplateWithInset` had painted behind it � so a window was a heading, some
+-- whatever `BasicFrameTemplateWithInset` had painted behind it � so a window was a heading, some
 -- controls, and content floating on an empty plate with no edge to say where the content began. The
 -- addon already knew how to draw a recess: every doll cell has one. It was written out by hand each
 -- time and therefore only existed in the two places somebody remembered.
 --
--- `Skin.Inset` is that recess in one function. The point of the module is not the two textures � it
+-- `Skin.Inset` is that recess in one function. The point of the module is not the two textures � it
 -- is that a seventh region cannot arrive looking like none of the other six.
 --
 -- Asserted with rawget throughout. An absent field on a mock widget is manufactured into a METHOD by
@@ -1637,12 +1700,12 @@ H.ok(type(Skin) == "table" and type(Skin.Inset) == "function",
     "the addon has one way to recess a panel rather than a hand-drawn one per window")
 
 local sample = newWidget("SkinSample")
-H.ok(Skin.Inset(sample) == sample, "�and it hands the frame back, so it can wrap a CreateFrame call")
-H.ok(rawget(sample, "kitbagEdge") ~= nil, "�drawing an edge")
-H.ok(rawget(sample, "kitbagGround") ~= nil, "�and a ground inside it")
+H.ok(Skin.Inset(sample) == sample, "�and it hands the frame back, so it can wrap a CreateFrame call")
+H.ok(rawget(sample, "kitbagEdge") ~= nil, "�drawing an edge")
+H.ok(rawget(sample, "kitbagGround") ~= nil, "�and a ground inside it")
 
 -- The regions themselves. Named frames, all six, because a region nobody can name is a region
--- nobody can measure � and the whole failure this guards against is one of them being missed, which
+-- nobody can measure � and the whole failure this guards against is one of them being missed, which
 -- looks like nothing at all until the window is open beside another one.
 for _, name in ipairs({
     "KitbagSetList", "KitbagPreviewFrame", "KitbagRulesList", "KitbagRuleEditor",
@@ -1670,7 +1733,7 @@ local previewFrame = G.KitbagPreviewFrame
 H.ok(previewFrame ~= nil, "the paperdoll's character preview is set in a frame of its own")
 H.ok(G.KitbagPreviewModel and G.KitbagPreviewModel:GetParent() == previewFrame,
     "…and the model is INSIDE it, so it hides, clips and moves with the well rather than beside it")
-H.ok(previewFrame and previewFrame:GetParent() == G.KitbagCopyButton:GetParent(),
+H.ok(previewFrame and previewFrame:GetParent() == G.KitbagInspector,
     "…and the well belongs to the inspector panel that owns the cells around it")
 
 H.done()

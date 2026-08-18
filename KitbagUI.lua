@@ -24,7 +24,13 @@ local Skin = Kitbag.Skin
 local UI = {}
 
 local ROW_HEIGHT = 26
-local MAX_ROWS = 13
+-- Twelve rather than thirteen: the action bar moved under the list (UI-28) and it had to be paid for
+-- out of somewhere. The window's height is spent to the pixel between the list, the status line, the
+-- import button and the name box, and this is the one of the four that can give a row up without
+-- losing anything — the list scrolls, and a thirteenth set was never invisible, only one row further
+-- down. Growing the window instead would have left a band of empty space under the paperdoll, which
+-- is a worse trade for a row nobody on this account has ever reached.
+local MAX_ROWS = 12
 
 -- The two tools on the action row (UI-23). Both are Blizzard art that has shipped in every flavour
 -- since 1.0 rather than an expansion's icon, and both are chosen for what they mean at 24 pixels:
@@ -657,7 +663,11 @@ local function buildKeyButton(panel, gapWidth)
 end
 
 local function buildDoll(parent)
-    local panel = CreateFrame("Frame", nil, parent)
+    -- Named, like every other region the addon draws (UI-22): a panel nobody can name is a panel no
+    -- check and no test can ask about. It went unnamed while the copy button stood in for it — a
+    -- check reached the panel through `KitbagCopyButton:GetParent()` — and UI-28 moved that button
+    -- into a row of its own, which is exactly how a stand-in stops standing for the thing.
+    local panel = CreateFrame("Frame", "KitbagInspector", parent)
     panel:SetPoint("TOPLEFT", parent, "TOPLEFT", 344, -34)
     panel:SetSize(PANEL_WIDTH, 392)
 
@@ -802,30 +812,43 @@ local function buildDoll(parent)
         well:Hide()
     end
 
-    -- The action row: one action and two tools (UI-23), all three drawn rather than spelled (UI-26).
-    --
+    panel.cells = cells
+    return panel
+end
+
+--- The action bar: one action and two tools (UI-23), all three drawn rather than spelled (UI-26).
+---
+--- It belongs to the SET LIST and hangs under it (UI-28). It used to sit in the bottom corner of the
+--- inspector, and once all three became icons the row was 90 wide inside a 300-wide panel — a huddle
+--- of small squares in the corner of a big panel, a whole column away from the list of sets it acts
+--- on. Under the list it reads as that list's action bar, which is what it is.
+---
+--- The three are children of a row frame rather than three controls anchored individually, and that
+--- is what makes "centred" structural rather than arithmetic: the row is anchored TOP-to-BOTTOM at an
+--- x offset of zero, so it re-centres itself if the list changes width or any button changes size.
+--- A hand-computed offset is the version that goes quietly wrong the day one of those moves.
+---
+--- The handles stay on the inspector `panel`, because that is what the refresh draws through — Equip
+--- greys while you are dead and Copy hides with nobody to copy to. They are on the row as well, for
+--- `/kit verify`: a check reaching a control through `GetParent()` finds the row now.
+local function buildActionRow(parent, anchor, panel)
     -- Equip is DELIBERATELY the odd one out at 34 against the tools' 24. It is the only control here
     -- anybody presses twice, and an icon-only row of three identical squares would say the three are
     -- peers — which is precisely the thing UI-23 changed the row to stop saying. With no labels left
     -- to carry the hierarchy, size is the only thing that can.
-    --
-    -- Centred rather than anchored left, because the three no longer fill the panel and a huddle in
-    -- one corner of a 300-wide panel reads as a layout that came apart. The arithmetic is off the
-    -- widths rather than written down, so the row re-centres itself if any of the three changes size.
-    --
-    -- Nothing may move BELOW here — the row is the last thing in the panel and there is no space
-    -- beneath it for a fourth.
-    local actionRow = weaponsY - CELL - 12
     local narrow = 24
     local wide = 34
     local rowWidth = wide + 4 + narrow + 4 + narrow
 
-    -- Unnamed, like Delete beside it: `/kit verify` reaches both through the panel that owns them,
-    -- and a global exists forever. Copy has one only because it appears on some accounts and not
-    -- others, which is a question a check has to be able to ask by name.
-    panel.equip = Skin.IconButton(panel, nil, EQUIP_ICON, wide)
-    panel.equip:SetPoint("TOPLEFT", panel, "TOPLEFT",
-        math.floor((PANEL_WIDTH - rowWidth) / 2), actionRow)
+    local row = CreateFrame("Frame", "KitbagActionRow", parent)
+    row:SetSize(rowWidth, wide)
+    row:SetPoint("TOP", anchor, "BOTTOM", 0, -8)
+
+    -- Unnamed, like Delete beside it: `/kit verify` reaches both through the row that owns them, and
+    -- a global exists forever. Copy has one only because it appears on some accounts and not others,
+    -- which is a question a check has to be able to ask by name.
+    panel.equip = Skin.IconButton(row, nil, EQUIP_ICON, wide)
+    panel.equip:SetPoint("LEFT", row, "LEFT", 0, 0)
     panel.equip:SetScript("OnClick", function() if selected then Sets.Equip(selected) end end)
 
     -- A permanently greyed control with no explanation is a puzzle rather than an affordance
@@ -847,7 +870,7 @@ local function buildDoll(parent)
     end)
     panel.equip:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-    panel.delete = Skin.IconButton(panel, nil, DELETE_ICON, narrow)
+    panel.delete = Skin.IconButton(row, nil, DELETE_ICON, narrow)
     panel.delete:SetPoint("LEFT", panel.equip, "RIGHT", 4, 0)
     -- Deleting asks first, in a popup, rather than demanding a modifier nobody can see (BUG-8). The
     -- guard itself was right — this is the only unrecoverable thing the window does — but it lived
@@ -877,10 +900,10 @@ local function buildDoll(parent)
     -- Copy to another character (UI-20). Named, as the inherit and key buttons are, so `/kit verify`
     -- can measure it: this button appears only on an account with more than one character, so on a
     -- single-character account nobody ever looks at this end of the row.
-    local copyMenu = CreateFrame("Frame", "KitbagCopyMenu", panel, "UIDropDownMenuTemplate")
+    local copyMenu = CreateFrame("Frame", "KitbagCopyMenu", row, "UIDropDownMenuTemplate")
     UIDropDownMenu_Initialize(copyMenu, initCopyMenu, "MENU")
 
-    panel.copy = Skin.IconButton(panel, "KitbagCopyButton", COPY_ICON, narrow)
+    panel.copy = Skin.IconButton(row, "KitbagCopyButton", COPY_ICON, narrow)
     panel.copy:SetPoint("LEFT", panel.delete, "RIGHT", 4, 0)
     panel.copy:SetScript("OnClick", function(self)
         ToggleDropDownMenu(1, nil, copyMenu, self, 0, 0)
@@ -888,8 +911,10 @@ local function buildDoll(parent)
     panel.copy:SetScript("OnEnter", onCopyEnter)
     panel.copy:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-    panel.cells = cells
-    return panel
+    -- The same three, on the row itself. `/kit verify` reaches a control's neighbours through
+    -- `GetParent()` rather than through globals of their own, and the parent is the row now.
+    row.equip, row.delete, row.copy = panel.equip, panel.delete, panel.copy
+    return row
 end
 
 --- Dress the preview in what the set would leave the player wearing.
@@ -1090,15 +1115,26 @@ local function build()
         FauxScrollFrame_OnVerticalScroll(self, offset, ROW_HEIGHT, UI.Refresh)
     end)
 
+    doll = buildDoll(frame)
+
+    -- Under the list, centred on it (UI-28). Built here rather than with the paperdoll because it is
+    -- anchored to the LIST — the controls act on whichever set is selected there, and a row of them
+    -- in the far corner of the next panel along said otherwise.
+    local actionRow = buildActionRow(frame, list, doll)
+
     -- Named so `/kit verify` can measure that the import button clears this line rather than sitting
     -- on it (VERIFY-14). The button appears between the two and only on some characters, which is
     -- exactly the layout nobody looks at on the characters where it is absent.
+    --
+    -- Below the action bar rather than directly below the list, because the bar is what has to touch
+    -- the list: this line is prose about the column, and prose reads perfectly well as its footer.
     status = frame:CreateFontString("KitbagStatusLine", "OVERLAY", "GameFontDisableSmall")
-    status:SetPoint("TOPLEFT", list, "BOTTOMLEFT", 0, -10)
+    -- Still anchored to the LIST, so it keeps the left edge it shares with the rows above it — a
+    -- left-justified line hung off a centred row would follow the row's edge instead. The drop is
+    -- measured off the bar rather than typed, so a taller bar pushes this down with it.
+    status:SetPoint("TOPLEFT", list, "BOTTOMLEFT", 0, -(8 + actionRow:GetHeight() + 6))
     status:SetWidth(316)
     status:SetJustifyH("LEFT")
-
-    doll = buildDoll(frame)
 
     -- The bottom row's four controls are NAMED so /kit verify can measure them (VERIFY-10). The row
     -- is full at 660 wide and UIPanelButtonTemplate does not shrink a label that no longer fits — it
