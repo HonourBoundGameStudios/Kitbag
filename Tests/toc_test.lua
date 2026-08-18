@@ -250,4 +250,55 @@ for _, entry in ipairs(HELD) do
     H.ok(supports and supports:find(entry.label, 1, true) == nil,
         "README does not claim support for " .. entry.label .. " — " .. entry.why)
 end
+
+-- ---------------------------------------------------------------------------
+-- The release notes, and the version they claim (SHIP-4)
+-- ---------------------------------------------------------------------------
+--
+-- A tagged release is the point at which people start INSTALLING this rather than reading it, and
+-- the first question an installer asks is "what is in it". `CHANGELOG.md` answers that — but it is
+-- the second place a version number lives, and two version numbers that can disagree will. The
+-- `.toc` is the one players actually see, so it is the reference and the changelog is checked
+-- against it: a release prepared without its notes updated fails here rather than shipping notes
+-- that describe the version before.
+
+local function topChangelogVersion()
+    local f = io.open("CHANGELOG.md", "r")
+    if not f then return nil, nil end
+    local version, date
+    for line in f:lines() do
+        -- `## [0.1.0] — 2026-08-18` — the heading is the record, not a separate metadata block that
+        -- could be right while the prose above it is wrong.
+        -- The separator is matched with `.-` rather than a character class: an em dash is three
+        -- bytes in UTF-8 and Lua's classes are per-byte, so `[—-]` matches none of it.
+        local v, d = line:match("^##%s*%[([%d%.]+)%]%s*.-(%d%d%d%d%-%d%d%-%d%d)")
+        if v and not version then version, date = v, d end
+    end
+    f:close()
+    return version, date
+end
+
+local function tocVersion(path)
+    local f = assert(io.open(path, "r"), "cannot open " .. path)
+    local found
+    for line in f:lines() do
+        found = found or line:match("^##%s*Version%s*:%s*(.-)%s*$")
+    end
+    f:close()
+    return found
+end
+
+local changelogVersion, changelogDate = topChangelogVersion()
+H.ok(changelogVersion ~= nil, "CHANGELOG.md exists and its newest entry is a '## [version] — date' heading")
+H.eq(changelogVersion, tocVersion("Kitbag.toc"),
+    "the newest CHANGELOG entry is the version Kitbag.toc ships")
+H.ok(changelogDate ~= nil and #changelogDate == 10, "…and that entry is dated")
+
+-- Every flavour agrees on the version too. package.ps1 refuses to build otherwise — CurseForge reads
+-- one .toc and would tell the players on the others they are running a version they are not — and
+-- this says the same thing at the gate rather than only at packaging time, since the gate is what
+-- runs on every commit.
+for _, entry in ipairs(INTERFACES) do
+    H.eq(tocVersion(entry.toc), tocVersion("Kitbag.toc"), entry.toc .. " declares the same version")
+end
 H.done()

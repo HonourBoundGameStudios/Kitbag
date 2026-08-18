@@ -69,7 +69,7 @@ foreach ($toc in $SHIPPED_TOCS) {
     if (-not (Test-Path $path)) { Write-Error "$toc is shipped but does not exist." }
     Copy-Item $path $staging
 }
-foreach ($doc in @("README.md", "LICENSE")) {
+foreach ($doc in @("README.md", "CHANGELOG.md", "LICENSE")) {
     $path = Join-Path $root $doc
     if (Test-Path $path) { Copy-Item $path $staging }
 }
