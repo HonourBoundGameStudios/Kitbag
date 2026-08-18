@@ -43,6 +43,27 @@ local BOOL_GETTERS = {
     IsShown = true, IsVisible = true, IsMouseOver = true, GetChecked = true,
     IsEnabled = true, IsUserPlaced = true, IsForbidden = true,
 }
+-- Event registration is REMEMBERED rather than stubbed, because it is the one client answer this
+-- suite asks a question OF. Every other method here may return a plausible nothing; a generic
+-- IsEventRegistered returning a truthy widget would make "the client accepted PLAYER_UNGHOST" pass
+-- against a frame that never asked for it, which is the exact silence the assertion exists to break.
+local EVENT_METHODS = {
+    RegisterEvent = function(self, event)
+        local events = rawget(self, "_events")
+        if not events then events = {}; rawset(self, "_events", events) end
+        events[event] = true
+    end,
+    UnregisterEvent = function(self, event)
+        local events = rawget(self, "_events")
+        if events then events[event] = nil end
+    end,
+    UnregisterAllEvents = function(self) rawset(self, "_events", {}) end,
+    IsEventRegistered = function(self, event)
+        local events = rawget(self, "_events")
+        return (events and events[event]) and true or false
+    end,
+}
+
 
 local newWidget
 
@@ -53,7 +74,9 @@ widgetMeta = {
         -- client method. Manufactured on demand and cached, so `f:SetPoint` twice is the same
         -- function and a module storing a method reference still works.
         local method
-        if NUMBER_GETTERS[key] then
+        if EVENT_METHODS[key] then
+            method = EVENT_METHODS[key]
+        elseif NUMBER_GETTERS[key] then
             method = function() return 0 end
         elseif STRING_GETTERS[key] then
             method = function(self) return rawget(self, "_name") or "MockWidget" end
@@ -870,5 +893,28 @@ H.eq(G.Kitbag.char.restorePoint, nil, "…spending the point exactly once")
 Sets.Equip, Sets.Apply = realEquip, realApply
 G.GetShapeshiftForm = function() return 0 end
 G.InCombatLockdown = function() return false end
+
+-- VERIFY-15's likeliest failure, which is the redraw and not the decision. `Core.CanSwap` is covered
+-- pure and `Compat.IsBusy` delegating to it is asserted against this mock, so a control that stays
+-- live while the player is dead is far more likely to be a window nobody TOLD about the death — and
+-- that telling is three events registered inside a pcall, because an event a flavour does not have
+-- is a hard error rather than a no. An absent one is therefore silent, and it is silent in the worst
+-- direction: PLAYER_ALIVE/PLAYER_UNGHOST are what bring the window back by itself on release, so
+-- losing them leaves the controls greyed with the player alive and nothing to press.
+--
+-- The frame is named for the reason KitbagEventFrame is: a watcher with no handle on it from outside
+-- can only be checked by dying, and the client is the one place that cannot be automated.
+local deathWatcher = G.KitbagDeathWatcher
+H.ok(deathWatcher ~= nil, "the window's death watcher is reachable from outside the file")
+for _, event in ipairs({ "PLAYER_DEAD", "PLAYER_ALIVE", "PLAYER_UNGHOST" }) do
+    H.ok(deathWatcher and deathWatcher:IsEventRegistered(event),
+        "…and the client accepted " .. event)
+end
+
+-- And the mock must be able to say NO, or the four assertions above are worth nothing: a generic
+-- IsEventRegistered handing back a truthy widget would pass every one of them against a frame that
+-- registered nothing at all. This is the discriminator for them, not a test of the client.
+H.ok(deathWatcher and not deathWatcher:IsEventRegistered("PLAYER_LEVEL_UP"),
+    "…and the mock answers NO for an event nobody asked for, which is what makes the four above mean anything")
 
 H.done()

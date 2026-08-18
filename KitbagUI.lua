@@ -1237,7 +1237,13 @@ end
 -- simply waits it out and then succeeds — which is correct behaviour, not the bug. Registering the
 -- seven spellcast events to grey a button for the length of a Frostbolt would put this frame in the
 -- middle of every combat log for no outcome anyone would notice.
-local deathWatcher = CreateFrame("Frame")
+--
+-- Named, for the reason KitbagEventFrame is (RULE-7): a watcher with no handle on it from outside
+-- can only be checked by dying, and dying is the one act `/kit verify` cannot perform. The name is
+-- what lets a check ask whether the client ACCEPTED these three — the registration is inside a
+-- pcall, so an event a flavour lacks is silent, and silent in the worst direction: PLAYER_ALIVE and
+-- PLAYER_UNGHOST are what bring the window back by itself on release (VERIFY-15).
+local deathWatcher = CreateFrame("Frame", "KitbagDeathWatcher")
 for _, event in ipairs({ "PLAYER_DEAD", "PLAYER_ALIVE", "PLAYER_UNGHOST" }) do
     pcall(deathWatcher.RegisterEvent, deathWatcher, event)
 end

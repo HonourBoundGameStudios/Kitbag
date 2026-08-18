@@ -290,6 +290,18 @@ H.ok(byId["watched-events"] ~= nil,
     "a check proves the client accepted every event the engine watches, not merely that it asked")
 H.eq(byId["watched-events"] and byId["watched-events"].item, "VERIFY-18",
     "…and it names the item it answers")
+-- VERIFY-15, whose own note says the likely failure is the REDRAW rather than the decision: the
+-- greying is Core.CanSwap and covered, so a control that stays live while the player is dead is
+-- most likely a window nobody told about the death. The telling is three events on a watcher of the
+-- window's own, registered inside a pcall — so the two halves fail in opposite and equally quiet
+-- ways. Without PLAYER_DEAD the controls stay live and offer a swap that cannot happen; without
+-- PLAYER_ALIVE/PLAYER_UNGHOST they stay greyed after a release, with nothing on screen to press and
+-- no error anywhere. Neither is visible from inside the addon's own code, and both are one question
+-- asked of the client.
+H.ok(byId["death-watch"] ~= nil,
+    "a check proves the window is actually told about dying and coming back")
+H.eq(byId["death-watch"] and byId["death-watch"].item, "VERIFY-15",
+    "…and it names the item it answers")
 
 -- No source-scan guard on "it measures the neighbours too", though the first draft had one. The file
 -- already contains the word "Delete" for the delete-popup check, so a scan for it passes whatever

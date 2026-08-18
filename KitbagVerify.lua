@@ -368,6 +368,56 @@ Verify.CHECKS = {
         end,
     },
     {
+        id = "death-watch", item = "VERIFY-15", label = "The window is told about dying and reviving",
+        -- The item's own reading: greying the controls is Core.CanSwap and is covered pure, so a
+        -- control that behaves wrongly around death is most likely a window nobody TOLD. That telling
+        -- is three events on a watcher of the window's own, registered inside a pcall because an
+        -- event a flavour does not have is a hard error — so a missing one is silent, and the two
+        -- halves are silent in opposite directions.
+        --
+        -- PLAYER_DEAD missing leaves the controls live and offering a swap that cannot happen, which
+        -- is UI-19's original complaint returning. The other pair missing is worse and stranger: the
+        -- controls stay greyed after a release, so the player is alive, well, and looking at a window
+        -- that says they cannot change gear — with nothing to click, since the repaint is the very
+        -- thing that did not arrive.
+        run = function()
+            local watcher = _G.KitbagDeathWatcher
+            if not watcher then return nil, "KitbagUI is not loaded, so nothing is watching at all" end
+
+            local asked, on = pcall(watcher.IsEventRegistered, watcher, "PLAYER_DEAD")
+            if not asked then
+                return nil, "this client will not answer IsEventRegistered, so registration cannot "
+                    .. "be established from here"
+            end
+
+            -- The two directions are reported separately rather than as a count, because the reader's
+            -- next move differs: one is "the greying never starts", the other is "the greying never
+            -- ends", and a line saying "2 of 3 registered" makes them look like the same fault.
+            local wake = {}
+            for _, event in ipairs({ "PLAYER_ALIVE", "PLAYER_UNGHOST" }) do
+                local ok, has = pcall(watcher.IsEventRegistered, watcher, event)
+                if not (ok and has) then wake[#wake + 1] = event end
+            end
+
+            if not on and #wake > 0 then
+                return false, "none of the three death events registered — the window will neither "
+                    .. "grey its controls when you die nor bring them back when you rise"
+            end
+            if not on then
+                return false, "PLAYER_DEAD did not register — the controls stay live while you are "
+                    .. "dead and will offer a swap that cannot happen (UI-19)"
+            end
+            if #wake > 0 then
+                return false, string.format(
+                    "%s did not register — the controls grey on death and never come back on "
+                    .. "release, which looks like the window having locked up",
+                    table.concat(wake, " and "))
+            end
+            return true, "PLAYER_DEAD, PLAYER_ALIVE and PLAYER_UNGHOST all registered, so the "
+                .. "window is told both when to grey its controls and when to give them back"
+        end,
+    },
+    {
         id = "tooltip-template", item = "VERIFY-2", label = "TooltipBorderedFrameTemplate exists",
         -- KitbagFlyout builds its panel from this template inside a pcall and silently falls back to
         -- a plain frame. Classic Era answered this on 2026-08-14: the template resolves, so the
