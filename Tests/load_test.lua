@@ -67,6 +67,13 @@ local SCRIPT_METHODS = {
     -- that and the handler quietly does nothing, which is a test that clicks a button and
     -- asserts against the silence that follows.
     GetParent = function(self) return rawget(self, "_parent") end,
+    -- Text is remembered too, and for a sharper reason than convenience: STRING_GETTERS makes
+    -- GetText hand back the widget's NAME, which is a string, so an assertion about what a row
+    -- says passes or fails on an accident of naming rather than on what was drawn. What a row
+    -- says is the other half of VERIFY-11's offset question — the `[editing]` tag has to land on
+    -- the line the editor actually opened.
+    SetText = function(self, text) rawset(self, "_text", text) end,
+    GetText = function(self) return rawget(self, "_text") or rawget(self, "_name") or "" end,
     Click = function(self, ...)
         local scripts = rawget(self, "_scripts")
         local fn = scripts and scripts.OnClick
@@ -1029,5 +1036,27 @@ for _, rule in ipairs(G.Kitbag.char.rules) do remaining[rule.set] = true end
 H.ok(not remaining.Rule4, "…and it is the rule the row was SHOWING that went")
 H.ok(remaining.Rule1,
     "…and not the one at the row's own position, which is the delete VERIFY-11 is afraid of")
+
+-- The other half of VERIFY-11's offset question: what the rows SAY. Clicking a row opens that rule
+-- in the editor and tags its line `[editing]`, and the tag is drawn from the same `i + offset` the
+-- buttons act on — so a build that got the arithmetic wrong would edit one rule while tagging
+-- another, which is worse than either fault alone: the player is looking at the tag, so they believe
+-- the wrong line and save their change over a rule they never opened.
+FauxScrollFrame_SetOffset(G.KitbagRulesScrollFrame, 3)
+RulesUI.Refresh()
+
+local shownRule = G.Kitbag.char.rules[4].set
+G.KitbagRuleRow1:Click()
+RulesUI.Refresh()
+
+local rowText = G.KitbagRuleRow1.text:GetText()
+H.ok(rowText:find(shownRule, 1, true) ~= nil,
+    "a scrolled row names the rule it is showing, not the rule at its own position")
+H.ok(rowText:find("[editing]", 1, true) ~= nil,
+    "…and clicking it tags THAT line, so the tag and the editor cannot name two different rules")
+
+local otherText = G.KitbagRuleRow2.text:GetText()
+H.ok(otherText:find("[editing]", 1, true) == nil,
+    "…and no other line claims to be the one being edited")
 
 H.done()
