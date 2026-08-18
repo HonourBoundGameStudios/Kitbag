@@ -267,4 +267,21 @@ H.ok(source:find("bag room", 1, true) ~= nil,
 H.ok(source:find("no `restore` rule", 1, true) ~= nil,
     "the restore-point skip distinguishes 'no rule exists' from 'a rule has not fired yet'")
 
+-- VERIFY-17. The item says the likeliest failure is the ROW, not the menu: UI-20 put a third button
+-- where the panel was built for two, and `UIPanelButtonTemplate` answers a label that no longer fits
+-- by letting it run out under its own edge rather than by shrinking it — so an overflowed row reads
+-- as a button with a slightly odd label rather than as a layout fault. That is arithmetic across
+-- three widths and a panel edge: the class of question a person is worst at and the addon is best
+-- at. Presence and absence both count, for VERIFY-14's reason — this button is hidden on a
+-- single-character account, so on such an account nobody ever looks at this end of the row at all.
+H.ok(byId["copy-button"] ~= nil,
+    "a check measures the three-button action row UI-20 crowded, and whether Copy belongs on it")
+H.eq(byId["copy-button"] and byId["copy-button"].item, "VERIFY-17",
+    "…and it names the item it answers")
+-- No source-scan guard on "it measures the neighbours too", though the first draft had one. The file
+-- already contains the word "Delete" for the delete-popup check, so a scan for it passes whatever
+-- this check does — and a guard that cannot fail is the fabricated-sentence mistake above wearing
+-- different clothes. What the check must cover is stated in KitbagVerify.lua where it can be read
+-- beside the code it constrains.
+
 H.done()

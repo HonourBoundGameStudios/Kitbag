@@ -1051,6 +1051,109 @@ Verify.CHECKS = {
         end,
     },
     {
+        id = "copy-button", item = "VERIFY-17", label = "The action row fits its third button",
+        -- UI-20 put a third button on a row built for two, and the item is right that the row is the
+        -- likelier failure than the menu: Equip kept its width, so Delete is what paid for Copy. The
+        -- whole row is measured rather than the new button alone, because a check that looked only at
+        -- what arrived would report a tidy pass over the control the change actually put at risk.
+        --
+        -- Two failures, neither of which presents as a layout fault. A button running past the
+        -- panel's edge is clipped by the panel and simply looks short; a label too wide for its
+        -- button is let out under the button's own edge by UIPanelButtonTemplate rather than being
+        -- shrunk, so it reads as an odd label. Both are arithmetic, and both are invisible to the
+        -- eye that is looking for a gap.
+        run = function()
+            local Sets = Kitbag.Sets
+            if not Sets or not Sets.CopyChoices then return nil, "KitbagSets is not loaded" end
+            local copy = _G.KitbagCopyButton
+            if not copy then
+                return nil, "the button is built with the main window — open /kit once, then run this"
+            end
+
+            -- The row's other two are unnamed, and are reached through the panel that owns them
+            -- rather than by being given globals of their own: they are neighbours in this
+            -- measurement, not subjects of it, and a global exists forever.
+            local panel = copy:GetParent()
+            local equip, delete = panel and panel.equip, panel and panel.delete
+            if not (equip and delete) then
+                return nil, "the action row is not built — open /kit once, then run this"
+            end
+
+            -- The set the doll is actually headed with, for the key-button check's reason: reading
+            -- the selection a second way here would be a second reader that could agree with the
+            -- button while both disagreed with what is on screen.
+            local heading = _G.KitbagInspectorTitle
+            local title = heading and heading:GetText()
+            if not title or title == "" then
+                return nil, "no set is selected, so the action row is not drawn — select one"
+            end
+
+            -- Presence and absence are both assertions. The button hides itself on a
+            -- single-character account, which is exactly the account on which nobody would ever
+            -- notice it lingering — so "correctly absent" is reported as a SKIP with its reason
+            -- rather than as a pass, since nothing about the ROW was measured in that case.
+            local choices = Sets.CopyChoices(title)
+            local shown = copy:IsShown()
+            if #choices == 0 then
+                if shown then
+                    return false, "there is nobody to copy to, but the button is showing anyway"
+                end
+                return nil, "no other character has been seen on this account — the button is "
+                    .. "correctly absent, and the row was not measured"
+            end
+            if not shown then
+                return false, string.format(
+                    "%d character(s) could take a copy, but the button is hidden", #choices)
+            end
+
+            local faults, notes = {}, {}
+            local function round(n) return math.floor(n + 0.5) end
+
+            -- Does each label fit its own button? Copy's is fixed text, but Equip and Delete share
+            -- the row and a client with a different font would spill any of the three.
+            local function fits(button, name)
+                local label = button.GetFontString and button:GetFontString()
+                local strWidth = label and label.GetStringWidth and label:GetStringWidth()
+                local width = button:GetWidth()
+                if not (strWidth and width) then return end
+                notes[#notes + 1] = string.format("%s %d in %d", name, round(strWidth), round(width))
+                if strWidth > width - 8 then
+                    faults[#faults + 1] = string.format(
+                        "%s's label is %d wide in a %d button, so it clips",
+                        name, round(strWidth), round(width))
+                end
+            end
+            fits(equip, "Equip")
+            fits(delete, "Delete")
+            fits(copy, "Copy to…")
+
+            -- And do the three clear each other and the panel they sit in? The row is anchored
+            -- left-to-right, so an overflow lands on the panel's right edge and nowhere else.
+            local function gap(left, right, what)
+                if not (left:GetRight() and right:GetLeft()) then return end
+                local d = right:GetLeft() - left:GetRight()
+                notes[#notes + 1] = string.format("%s %d", what, round(d))
+                if d < 0 then
+                    faults[#faults + 1] = what .. " overlap by " .. round(-d)
+                end
+            end
+            gap(equip, delete, "Equip|Delete")
+            gap(delete, copy, "Delete|Copy")
+
+            if panel:GetRight() and copy:GetRight() then
+                local edge = panel:GetRight() - copy:GetRight()
+                notes[#notes + 1] = string.format("clears the panel edge by %d", round(edge))
+                if edge < 0 then
+                    faults[#faults + 1] = string.format(
+                        "the row runs %d past the panel's right edge", round(-edge))
+                end
+            end
+
+            if #faults > 0 then return false, table.concat(faults, "; ") end
+            return true, string.format("%d target(s); %s", #choices, table.concat(notes, ", "))
+        end,
+    },
+    {
         id = "rule-list-layout", item = "VERIFY-11", label = "The rule list's bar clears its X buttons",
         -- The failure this measures is not cosmetic and does not read as a layout fault. A scroll bar
         -- sitting on every row's X makes delete look BROKEN, so it gets reported as "the X does
