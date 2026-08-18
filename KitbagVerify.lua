@@ -1359,6 +1359,65 @@ Verify.CHECKS = {
         end,
     },
     {
+        id = "wheel-layering", item = "VERIFY-11", label = "All four lists stack the same way",
+        -- The wheel is the last thing in VERIFY-11 that needs eyes, and asking it of the RULE list
+        -- costs a person eight authored rules — no character on this account has more than one, so
+        -- that list cannot even scroll. It does not have to be asked there.
+        --
+        -- Every scrolling list here is built the same way: a content frame holding the rows, and a
+        -- FauxScrollFrame SIBLING anchored over the same rectangle and created afterwards, so it
+        -- stacks above the content. That stacking is exactly what decides whether a wheel turned over
+        -- a row reaches the scroll frame or stops at the content beneath it. One construction, four
+        -- lists — so spinning the wheel over the CHEAPEST of them (the icon picker: hundreds of
+        -- entries, no setup, one click from any set) answers the question for all four.
+        --
+        -- A check cannot spin a wheel. What it can do is prove the four are really the same, which is
+        -- what makes that substitution honest — and fail the day one of them stops matching, at which
+        -- point the equivalence must stop being claimed.
+        run = function()
+            -- The set list's own frame is unnamed; its rows are not, and a row's parent IS that
+            -- frame. Reaching it through the row is better than adding a global for a frame nothing
+            -- else needs to name.
+            local setRow = _G.KitbagSetRow1
+            local LISTS = {
+                { name = "rules",  content = _G.KitbagRulesList, scroll = _G.KitbagRulesScrollFrame },
+                { name = "sets",   content = setRow and setRow:GetParent(), scroll = _G.KitbagScrollFrame },
+                { name = "picker", content = _G.KitbagPickerGrid, scroll = _G.KitbagPickerScroll },
+                { name = "icons",  content = _G.KitbagIconGrid, scroll = _G.KitbagIconScroll },
+            }
+
+            local faults, notes, seen = {}, {}, 0
+            for _, list in ipairs(LISTS) do
+                if not (list.content and list.scroll) then
+                    notes[#notes + 1] = list.name .. " not built yet"
+                else
+                    seen = seen + 1
+                    local above = list.scroll:GetFrameLevel() >= list.content:GetFrameLevel()
+                    notes[#notes + 1] = string.format("%s scroll@%d content@%d", list.name,
+                        list.scroll:GetFrameLevel(), list.content:GetFrameLevel())
+                    if not above then
+                        faults[#faults + 1] = string.format(
+                            "%s: the scroll frame sits BELOW its rows, so a wheel turned over a row "
+                            .. "reaches the rows and stops there", list.name)
+                    end
+                end
+            end
+
+            if seen == 0 then
+                return nil, "none of the lists have been built — open /kit, /kit rules and a set's "
+                    .. "icon picker once, then run this"
+            end
+            if #faults > 0 then return false, table.concat(faults, "; ") end
+            if seen < #LISTS then
+                return nil, string.format("%d of %d lists built, all stacked correctly (%s) — open "
+                    .. "the others to compare them all", seen, #LISTS, table.concat(notes, ", "))
+            end
+            return true, string.format("all %d lists stack the scroll frame above their rows (%s) — "
+                .. "so the wheel over the ICON PICKER answers VERIFY-11 for every list, and needs "
+                .. "nothing built first", seen, table.concat(notes, ", "))
+        end,
+    },
+    {
         id = "swap-record", item = "BUG-9", label = "A failed swap records why",
         -- Diagnostic rather than cosmetic, which is what makes it worth a check: a session spent
         -- reproducing the mount failure against a build that cannot record the answer reads exactly
@@ -1489,10 +1548,12 @@ Verify.ACTS = {
             .. "as one that worked, so every PASS below is weaker than it looks until this is on.",
     },
     {
-        item = "VERIFY-11", act = "Open /kit rules with nine or more rules saved and spin the "
-            .. "MOUSE WHEEL over the rows, not over the bar.",
-        why = "Nothing in Kitbag enables the wheel — it is entirely Blizzard's scroll template, and "
-            .. "the rows belong to a frame beside the scroll frame rather than inside it.",
+        item = "VERIFY-11", act = "Open any set's ICON PICKER and spin the MOUSE WHEEL over "
+            .. "the icons.",
+        why = "Nothing in Kitbag enables the wheel — it is entirely Blizzard's scroll template. "
+            .. "The icon picker is the cheapest list to ask: all four scrolling lists stack the "
+            .. "same way (see the wheel-layering check), and no character on this account has "
+            .. "more than one rule, so the rule list cannot even scroll without building eight.",
     },
     {
         item = "VERIFY-15", act = "Die, with the window open and a set selected.",

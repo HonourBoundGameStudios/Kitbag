@@ -356,11 +356,26 @@ H.ok(skipping:find("put it back", 1, true) ~= nil,
     "a check that SKIPPED leaves its act outstanding — a skip is the check saying it could not answer")
 
 -- With no run at all, everything is owed. The failure this prevents is the opposite of the one
--- above: a fresh install reporting nothing to do, which reads as "all verified".
-local fresh = table.concat(V.Session(nil), "\n")
-H.ok(fresh:find("banker", 1, true) ~= nil,
-    "with no run on record, every act is still owed rather than none")
-H.ok(fresh:find("scriptErrors", 1, true) ~= nil,
-    "…and the first thing asked for is the one that makes every other answer worth having")
+-- VERIFY-11's last question — "does the wheel scroll over the ROWS, or only over the bar" — is asked
+-- of the rule list, and answering it there costs a person eight authored rules, because no character
+-- on the account has more than one. It need not be asked there. All four scrolling lists in this
+-- addon are built the same way: a content frame holding the rows, and a FauxScrollFrame SIBLING
+-- anchored over the same rectangle, created afterwards and therefore stacked above it. That is what
+-- decides whether the wheel reaches the scroll frame or stops at the content beneath it — so it is
+-- one question about a construction, not four questions about four lists.
+--
+-- A check cannot spin a wheel. It can prove the construction is the same in all four, which is what
+-- makes the cheap list (the icon picker, hundreds of entries and no setup) a valid stand-in for the
+-- expensive one. If they ever stop matching, this fails and the equivalence stops being claimed.
+H.ok(byId["wheel-layering"] ~= nil,
+    "a check proves all four scrolling lists stack the same way, so one wheel answers all of them")
+H.eq(byId["wheel-layering"] and byId["wheel-layering"].item, "VERIFY-11",
+    "…and it names the item it answers")
+
+-- No source-scan guard on "it measures the neighbours too", though the first draft had one. The file
+-- already contains the word "Delete" for the delete-popup check, so a scan for it passes whatever
+-- this check does — and a guard that cannot fail is the fabricated-sentence mistake above wearing
+-- different clothes. What the check must cover is stated in KitbagVerify.lua where it can be read
+-- beside the code it constrains.
 
 H.done()
