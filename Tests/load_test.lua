@@ -1496,4 +1496,36 @@ H.eq(Kitbag.Sets.ParentOf("Child"), nil, "Nothing clears the parent")
 H.ok(cell1.icon:IsShown(),
     "…and the pieces that were arriving through it are KEPT, flattened into the set itself")
 
+-- The green marker, at an offset (VERIFY-11). The backlog said this one needed a person, on the
+-- grounds that the marker wants "a rule the current world actually chooses, which a mock cannot
+-- honestly stand in for". That was wrong, and worth correcting where it will be read: the world the
+-- marker is drawn from is `Events.Explain()` over `Events.State()`, and the mock decides what the
+-- state IS — that is how the engine block above drives form changes. What a mock cannot supply is a
+-- real client's answer to "what form am I in"; it can supply an answer, which is all the marker needs.
+--
+-- The marker matters because it is the window's version of `/kit why`: it says which of a dozen rules
+-- is the one currently choosing your gear. On the wrong line it is worse than absent — it accuses a
+-- rule that is doing nothing, and the player edits that one.
+G.Kitbag.char.rules = {}
+for i = 1, 12 do
+    G.Kitbag.char.rules[i] = { set = "Fish", when = { form = 20 + i }, priority = 1 }
+end
+G.GetShapeshiftForm = function() return 25 end   -- so rule 5, and only rule 5, matches
+
+if not G.KitbagRulesFrame:IsShown() then RulesUI.Toggle() end
+FauxScrollFrame_SetOffset(G.KitbagRulesScrollFrame, 4)
+RulesUI.Refresh()
+
+local MARKER = "|cff40ff40>|r"
+H.eq(G.KitbagRuleRow1.ruleIndex, 5, "with the list scrolled four down, the top row is the fifth rule")
+H.ok(G.KitbagRuleRow1.text:GetText():find(MARKER, 1, true) ~= nil,
+    "…and the marker is on that line, because rule 5 is the one the world is choosing")
+H.ok(G.KitbagRuleRow2.text:GetText():find(MARKER, 1, true) == nil,
+    "…and on no other line, or it accuses a rule that is doing nothing and the player edits that one")
+
+G.GetShapeshiftForm = function() return 0 end
+RulesUI.Refresh()
+H.ok(G.KitbagRuleRow1.text:GetText():find(MARKER, 1, true) == nil,
+    "with nothing matching, no line claims to be the rule in charge")
+
 H.done()
