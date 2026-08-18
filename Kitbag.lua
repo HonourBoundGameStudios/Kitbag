@@ -46,6 +46,9 @@ local function help()
     say("  |cffffd100/kit trinkets|r — toggle the trinket quick-use bar")
     say("  |cffffd100/kit debug|r — dump gear, bags, sets, rules and plans for a bug report")
     say("  |cffffd100/kit verify|r — check the addon's own frames and report what could not be checked")
+    -- Named next to /kit verify because they are two halves of one question: that one reports what
+    -- the addon could check, this one what only a person can.
+    say("  |cffffd100/kit session|r — what still needs a person, and why each act is wanted")
 end
 
 local function why()
@@ -133,6 +136,21 @@ local function command(input)
     elseif cmd == "minimap" then Minimap_.SetHidden(not Kitbag.db.options.minimap.hide)
     elseif cmd == "trinkets" then Kitbag.Trinkets.SetHidden(not Kitbag.db.options.trinkets.hide)
     elseif cmd == "debug" then Kitbag.Debug.Toggle()
+    elseif cmd == "session" then
+        -- The other half of `/kit verify`: what the addon CANNOT ask itself. These are acts in the
+        -- world — die, open a bank, author a rule — and they were previously written down only in a
+        -- working document on the machine that writes the code, not the one running the game. That
+        -- gap cost four skipped checks across three sessions, all asking for a `restore` rule that
+        -- did not exist on the account, which nobody at the keyboard could see.
+        --
+        -- Read from the LAST STORED RUN rather than by running the checks again: this is a question
+        -- about what is outstanding, and re-running would open and close six windows to answer it.
+        local db = Kitbag.db
+        local last = db and db.verify and db.verify[1] or nil
+        for _, line in ipairs(Kitbag.Verify.Session(last)) do Sets.Say(line) end
+        if not last then
+            Sets.Say("|cff808080(no /kit verify run on record, so everything is listed.)|r")
+        end
     elseif cmd == "verify" then
         -- The summary goes to chat so the player knows it ran and whether anything failed; the
         -- detail goes to SavedVariables, because the interesting part is longer than the chat frame

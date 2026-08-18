@@ -312,11 +312,55 @@ H.ok(byId["copy-menu"] ~= nil,
     "a check opens the copy menu itself, rather than inferring it from the inherit menu's")
 H.eq(byId["copy-menu"] and byId["copy-menu"].item, "VERIFY-17",
     "…and it names the item it answers")
+-- ---------------------------------------------------------------------------
+-- What is left that only a person can do (Verify.Session)
+-- ---------------------------------------------------------------------------
+--
+-- `/kit verify` answers everything the addon can ask ITSELF. What it has never done is say what it
+-- cannot ask — the acts in the world that EPIC-VERIFY is actually waiting on: die, visit a banker,
+-- author a `restore` rule, launch the other flavour. Those live in a backlog file the player does
+-- not have, on a machine that is not the one running the game, and the cost of that is a client
+-- session that answers four of the six things it could have.
+--
+-- So the acts are data in the addon, and this reports the ones still outstanding. PURE: it takes the
+-- lines of the last run and hands back what to do, which is the only part worth testing — the
+-- printing is a loop over the result.
+H.ok(type(V.ACTS) == "table" and #V.ACTS > 0, "the addon knows which acts are still owed to a person")
+for i, act in ipairs(V.ACTS) do
+    H.ok(type(act.item) == "string" and act.item:match("^VERIFY%-%d+$"),
+        "act " .. i .. " names the item it would answer")
+    H.ok(type(act.act) == "string" and act.act ~= "", "act " .. i .. " says what to DO")
+end
 
--- No source-scan guard on "it measures the neighbours too", though the first draft had one. The file
--- already contains the word "Delete" for the delete-popup check, so a scan for it passes whatever
--- this check does — and a guard that cannot fail is the fabricated-sentence mistake above wearing
--- different clothes. What the check must cover is stated in KitbagVerify.lua where it can be read
--- beside the code it constrains.
+-- An act whose check passed is done, and must not be asked for again. Exactly one act has a check
+-- capable of that — a restore point can only exist if a `restore` rule was authored AND fired — and
+-- the first draft of this test asserted it of the bank act too, which was wrong in the direction that
+-- matters: `part-banked` names which set has gear at the bank and cannot press Equip twice, so
+-- letting it retire that act would have closed the act while leaving the question open.
+local ANSWERED = {
+    "Kitbag verification — 2026-08-18 12:00:00",
+    "PASS VERIFY-4   Restore point survives a reload  —  a restore point is stored, naming 3 slot(s)",
+    "SKIP VERIFY-3   Bank contents readable  —  no bank contents cached yet",
+}
+
+local session = table.concat(V.Session(ANSWERED), "\n")
+H.ok(session:find("banker", 1, true) ~= nil,
+    "an act with no check behind it is always still wanted — no measurement can perform it")
+H.ok(session:find("put it back", 1, true) == nil,
+    "…while the one act a check CAN settle disappears once that check has passed")
+
+local skipping = table.concat(V.Session({
+    "SKIP VERIFY-4   Restore point survives a reload  —  no `restore` rule exists on this character",
+}), "\n")
+H.ok(skipping:find("put it back", 1, true) ~= nil,
+    "a check that SKIPPED leaves its act outstanding — a skip is the check saying it could not answer")
+
+-- With no run at all, everything is owed. The failure this prevents is the opposite of the one
+-- above: a fresh install reporting nothing to do, which reads as "all verified".
+local fresh = table.concat(V.Session(nil), "\n")
+H.ok(fresh:find("banker", 1, true) ~= nil,
+    "with no run on record, every act is still owed rather than none")
+H.ok(fresh:find("scriptErrors", 1, true) ~= nil,
+    "…and the first thing asked for is the one that makes every other answer worth having")
 
 H.done()

@@ -1528,4 +1528,26 @@ RulesUI.Refresh()
 H.ok(G.KitbagRuleRow1.text:GetText():find(MARKER, 1, true) == nil,
     "with nothing matching, no line claims to be the rule in charge")
 
+-- `/kit session` — the acts EPIC-VERIFY is waiting on, printed where the person performing them is
+-- (VERIFY-1 through 18). The list is pure and covered in verify_test; what is asserted here is the
+-- DOOR, because a command nobody can type is a checklist nobody reads: the addon's help must offer
+-- it, and the handler must actually print something.
+local said = {}
+local realAddMessage = G.DEFAULT_CHAT_FRAME.AddMessage
+G.DEFAULT_CHAT_FRAME.AddMessage = function(_, text) said[#said + 1] = tostring(text) end
+G.SlashCmdList["KITBAG"]("session")
+G.DEFAULT_CHAT_FRAME.AddMessage = realAddMessage
+
+local transcript = table.concat(said, "\n")
+H.ok(transcript:find("needs a person", 1, true) ~= nil, "/kit session prints what is still owed")
+H.ok(transcript:find("scriptErrors", 1, true) ~= nil,
+    "…starting with the one that makes every other answer worth having")
+
+local helped = {}
+G.DEFAULT_CHAT_FRAME.AddMessage = function(_, text) helped[#helped + 1] = tostring(text) end
+G.SlashCmdList["KITBAG"]("help")
+G.DEFAULT_CHAT_FRAME.AddMessage = realAddMessage
+H.ok(table.concat(helped, "\n"):find("/kit session", 1, true) ~= nil,
+    "…and /kit help offers it, or the command exists for nobody")
+
 H.done()

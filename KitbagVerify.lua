@@ -1457,5 +1457,123 @@ function Verify.Store()
     return lines
 end
 
+
+-- ---------------------------------------------------------------------------
+-- The acts a person still owes (PURE)
+-- ---------------------------------------------------------------------------
+--
+-- The checks above are everything the addon can ask ITSELF. This is the other list: the acts in the
+-- WORLD that no frame can perform — die, open a bank, author a rule, launch the other flavour.
+--
+-- They live here rather than in a working document for one reason. The document is on the machine
+-- that writes the code and the acts are performed on the machine that runs the game, and that gap
+-- has already cost sessions: four checks skipped on three consecutive runs asking for a `restore`
+-- rule that did not exist on the account, because nobody at the keyboard could see that it was the
+-- rule and not the reproduction that was missing. A checklist that ships with the addon is a
+-- checklist the person doing the work can actually read.
+--
+-- `answeredBy` names the check that would settle the act — and exactly ONE act has one, which is the
+-- honest count rather than a disappointing one. A check that measures a control is not a check that
+-- proves the act: `part-banked` names which set has gear at the bank and cannot press Equip twice,
+-- `copy-menu` opens the menu and cannot log in as the alt, `watched-events` proves the client
+-- accepted the revival events and cannot die. Each of those was written here as an `answeredBy`
+-- first and removed on reading it again — an act ticked off by a check that did not perform it is
+-- worse than no checklist, because it retires the act while leaving the question open.
+--
+-- An act whose check HAS passed is not asked for again: a list that keeps requesting what is already
+-- done is one nobody reads twice.
+Verify.ACTS = {
+    {
+        item = "VERIFY-1", act = "Type /console scriptErrors 1 before anything else.",
+        why = "Errors are OFF. A frame that was built and then threw later leaves the same trace "
+            .. "as one that worked, so every PASS below is weaker than it looks until this is on.",
+    },
+    {
+        item = "VERIFY-11", act = "Open /kit rules with nine or more rules saved and spin the "
+            .. "MOUSE WHEEL over the rows, not over the bar.",
+        why = "Nothing in Kitbag enables the wheel — it is entirely Blizzard's scroll template, and "
+            .. "the rows belong to a frame beside the scroll frame rather than inside it.",
+    },
+    {
+        item = "VERIFY-15", act = "Die, with the window open and a set selected.",
+        why = "Equip must grey and say why, the trinket bar and flyout must dim, and everything "
+            .. "that moves no gear must stay live. Then release: the window must repaint itself.",
+    },
+    {
+        item = "VERIFY-4", act = "Author a rule with `then put it back` ticked, then trigger it.",
+        why = "No `restore` rule exists on this account, so the restore point has nothing to "
+            .. "record and this cannot be reproduced at all until one is made.",
+        answeredBy = "restore-point",
+    },
+    {
+        item = "VERIFY-3", act = "Visit a banker, then Equip a part-banked set TWICE.",
+        why = "The first Equip should take what it can and say what is at the bank; the second "
+            .. "should finish it.",
+    },
+    {
+        item = "VERIFY-16", act = "Click the key button, press B, then press the key you bound.",
+        why = "The bags must NOT open — that is the whole point of clamping propagation — and the "
+            .. "key must equip the set, which is the only proof the binding string was right.",
+    },
+    {
+        item = "VERIFY-17", act = "Copy a set to an alt, then log in as that alt.",
+        why = "The menu and the row are measured by checks; that the set is really THERE on the "
+            .. "other character is not.",
+    },
+    {
+        item = "VERIFY-18", act = "Die with a rule matching, run back, and resurrect without "
+            .. "clicking anything.",
+        why = "The swap must happen by itself on revival. Check the dump's EVENTS section lists "
+            .. "PLAYER_ALIVE and PLAYER_UNGHOST registered before concluding anything from it.",
+    },
+    {
+        item = "VERIFY-6", act = "Launch Mists Classic once and type /kit.",
+        why = "The addon has been deployed there since 2026-08-14 and that client has never run it. "
+            .. "Nothing about this flavour is observed — only reasoned.",
+    },
+}
+
+--- What is still owed, given the lines of the last run. PURE — see Tests/verify_test.lua.
+---
+--- A missing run means EVERYTHING is owed, deliberately: a fresh install reporting nothing to do
+--- would read as "all verified", which is the same lie the all-skipped run above shouts about.
+function Verify.Session(lastRun)
+    local passed = {}
+    for _, line in ipairs(lastRun or {}) do
+        -- Only PASS counts. A SKIP is the check saying it could not answer, which is precisely when
+        -- the act is still wanted, and a FAIL wants it more.
+        local item, rest = line:match("^PASS%s+(%S+)%s+(.*)$")
+        if item then passed[#passed + 1] = rest end
+    end
+
+    local function isAnswered(check)
+        if not check then return false end
+        for _, entry in ipairs(Verify.CHECKS) do
+            if entry.id == check then
+                for _, rest in ipairs(passed) do
+                    if rest:find(entry.label, 1, true) then return true end
+                end
+            end
+        end
+        return false
+    end
+
+    local out = { "Kitbag — what still needs a person:" }
+    local owed = 0
+    for _, act in ipairs(Verify.ACTS) do
+        if not isAnswered(act.answeredBy) then
+            owed = owed + 1
+            out[#out + 1] = string.format("%d. |cffffd100%s|r  (%s)", owed, act.act, act.item)
+            out[#out + 1] = "   |cff808080" .. act.why .. "|r"
+        end
+    end
+
+    if owed == 0 then
+        out[#out + 1] = "nothing — every act with a check behind it has been answered. What is left "
+            .. "is judgement: see EPIC-VERIFY."
+    end
+    return out
+end
+
 Kitbag.Verify = Verify
 return Verify
