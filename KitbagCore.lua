@@ -996,5 +996,43 @@ function Core.CopySet(sets, name, targetSets)
     return Core.Resolve(sets, name)
 end
 
+--- Why a swap is refused, in words the player can act on. Keyed by the reason `CanSwap` returns.
+--
+-- Kept beside the decision rather than in the frames, because a greyed control with no explanation
+-- is a puzzle rather than an affordance (UI-11) and three frames writing their own sentence is three
+-- chances to word it differently. One reason, one sentence, everywhere it is shown.
+Core.SWAP_BLOCKED = {
+    dead = "You cannot change gear while dead.",
+    casting = "You cannot change gear while casting.",
+}
+
+--- May gear move right now? Takes a `Compat.ActionState()` reading and returns `true`, or
+--- `false, reason` where reason keys `SWAP_BLOCKED` (UI-19).
+--
+-- This is the question `Compat.IsBusy` used to answer alone, moved somewhere it can be asked BEFORE
+-- a control is drawn instead of only after one is pressed. The symptom it exists to kill: Equip
+-- looks live while you are running back as a ghost, you click it, and ten seconds of `BUSY_LIMIT`
+-- later the addon reports that you were dead the whole time. Honest, and far too late.
+--
+-- `IsBusy` delegates here rather than keeping its own copy of the rule. If the two ever drifted, the
+-- drift would be invisible in exactly one direction — a control that offers what the driver will
+-- refuse — which is the bug, not a variation of it.
+--
+-- Combat and mounted are read by `ActionState` and are deliberately not refused here. We do not know
+-- that the client blocks either, and greying a control the client would have honoured is a worse
+-- failure than the one being fixed, because nothing about it looks like a bug.
+--
+-- An unreadable state permits the swap. A missing reading is not evidence of a problem, and treating
+-- it as one would disable the controls permanently and silently on any flavour whose API we failed
+-- to call — a fault with no symptom except that Kitbag stopped working.
+function Core.CanSwap(state)
+    if type(state) ~= "table" then return true end
+    -- Death first: a cast clears itself in a second or two and death does not, so naming the
+    -- transient condition would send the player off waiting for the wrong thing to pass.
+    if state.dead then return false, "dead" end
+    if state.casting then return false, "casting" end
+    return true
+end
+
 Kitbag.Core = Core
 return Core

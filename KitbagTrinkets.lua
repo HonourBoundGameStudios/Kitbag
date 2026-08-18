@@ -29,6 +29,13 @@ local function onEnter(self)
         GameTooltip:AddLine("No trinket equipped")
         GameTooltip:AddLine("Drag the frame to move it.", 0.6, 0.6, 0.6)
     end
+    -- UI-19. Set by Refresh, which is polling anyway, so the reason is never staler than a fifth of
+    -- a second. Same sentence as the window and the flyouts, from Core.SWAP_BLOCKED — the two
+    -- conditions it names are both real here: the client refuses to USE an item while you are dead
+    -- or mid-cast exactly as it refuses to equip one.
+    if frame and frame.blocked then
+        GameTooltip:AddLine(Kitbag.Core.SWAP_BLOCKED[frame.blocked], 1, 0.5, 0.5, true)
+    end
     GameTooltip:Show()
 end
 
@@ -94,12 +101,19 @@ end
 function Trinkets.Refresh()
     if not frame or not frame:IsShown() then return end
 
+    -- Dimmed, never Disabled: these are SecureActionButtonTemplate buttons and the whole point of
+    -- fixing their attributes at creation is that this file touches nothing protected once combat
+    -- starts. A greyed-out look is the honest signal; taking the click away is not worth reaching
+    -- into secure state for.
+    local canSwap, why = Kitbag.Core.CanSwap(Kitbag.Compat.ActionState())
+    frame.blocked = (not canSwap) and why or nil
+
     for _, button in ipairs(buttons) do
         local texture = GetInventoryItemTexture("player", button.slotId)
         button.icon:SetTexture(texture or "Interface\\Buttons\\UI-EmptySlot")
         -- An empty slot shows the socket rather than being hidden: a bar with one button on Tuesday
         -- and two on Wednesday moves under the cursor, and a button that moves is a button misclicked.
-        button.icon:SetAlpha(texture and 1 or 0.35)
+        button.icon:SetAlpha(texture and (frame.blocked and 0.4 or 1) or 0.35)
 
         -- Only when it actually changes. SetCooldown restarts the swipe animation, so calling it
         -- every tick with the same numbers gives a swipe that never advances.

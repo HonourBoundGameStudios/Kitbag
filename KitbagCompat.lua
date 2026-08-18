@@ -281,11 +281,18 @@ function Compat.ConfirmBind()
 end
 
 --- Is the player currently in a state where swapping gear will be refused or wasted?
--- Casting is the one people notice: a swap mid-cast cancels it.
+--
+-- Delegates to `Core.CanSwap` rather than keeping its own copy of the rule (UI-19). This decides
+-- whether the DRIVER acts; the same answer decides whether the control offering the action is even
+-- pressable, and if the two ever drifted the drift would be invisible in exactly one direction — a
+-- button that offers what the driver will refuse. That is the bug, not a variation of it.
+--
+-- Read out of the namespace at call time, not at load: Compat loads before Core, so there is no
+-- Core to capture in a local up here.
 function Compat.IsBusy()
-    if _G.UnitIsDeadOrGhost("player") then return true end
-    if _G.UnitCastingInfo("player") or _G.UnitChannelInfo("player") then return true end
-    return false
+    local Core = Kitbag.Core
+    if not Core then return false end
+    return not Core.CanSwap(Compat.ActionState())
 end
 
 Kitbag.Compat = Compat

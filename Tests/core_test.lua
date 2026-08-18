@@ -1149,4 +1149,50 @@ H.eq(sameWhy, "same", "…named, because 'Alone already exists' would be a baffl
 H.eq(C.CopySet(nil, "Fire", {}), nil, "no source list at all is not a crash")
 H.eq(C.CopySet(family, "Fire", nil), nil, "no target list at all is not a crash")
 
+
+-- ---------------------------------------------------------------------------
+-- CanSwap — may gear move right now (UI-19)
+-- ---------------------------------------------------------------------------
+--
+-- The point of answering this here rather than in each frame: the window, the trinket bar and the
+-- paperdoll flyouts must not each grow their own opinion of what "dead" means. `Compat.IsBusy`
+-- decides whether the driver acts, and this decides whether the control offering the action is even
+-- pressable. If those two ever disagree you get back exactly the bug UI-19 describes — a button
+-- that looks live and reports failure ten seconds later.
+--
+-- Takes a `Compat.ActionState()`-shaped table, which is what makes it answerable without dying.
+
+H.ok(C.CanSwap({ combat = false, mounted = false, dead = false, casting = false }),
+    "a live, idle player may swap")
+
+local blockedDead, deadWhy = C.CanSwap({ dead = true })
+H.eq(blockedDead, false, "a dead or ghost player may not swap")
+H.eq(deadWhy, "dead", "…and says which condition stopped it, so the tooltip can explain the grey")
+
+local blockedCast, castWhy = C.CanSwap({ casting = true })
+H.eq(blockedCast, false, "a casting player may not swap — a swap mid-cast cancels the cast")
+H.eq(castWhy, "casting", "…named distinctly from death, which asks a different thing of the player")
+
+-- Combat and mounted are recorded by ActionState and are deliberately NOT blockers: we do not yet
+-- know that the client refuses either, and greying a control the client would have honoured is a
+-- worse bug than the one this fixes.
+H.ok(C.CanSwap({ combat = true, mounted = true }),
+    "combat and mounted are recorded, not refused — guessing would block swaps the client allows")
+
+-- Dead outranks casting: a cast ends by itself in a second or two and death does not, so naming the
+-- transient one would send the player off to wait for the wrong thing to pass.
+H.eq(select(2, C.CanSwap({ dead = true, casting = true })), "dead",
+    "when both hold, the durable condition is the one named")
+
+-- A state that could not be read must not grey the button. Refusing on an absent reading would
+-- disable the controls on any flavour whose API we failed to call, silently and permanently.
+H.ok(C.CanSwap(nil), "an unreadable state allows the swap rather than blocking it forever")
+H.ok(C.CanSwap({}), "an empty state is 'nothing is wrong', not 'everything is'")
+
+-- The wording lives with the decision for the same reason the decision does: three frames writing
+-- their own sentence is three chances to explain the grey differently, or not at all (UI-11).
+H.ok(type(C.SWAP_BLOCKED) == "table", "the reasons carry player-facing wording")
+H.ok(type(C.SWAP_BLOCKED.dead) == "string" and type(C.SWAP_BLOCKED.casting) == "string",
+    "…for every reason CanSwap can return")
+
 H.done()

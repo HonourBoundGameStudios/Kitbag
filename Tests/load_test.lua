@@ -373,6 +373,18 @@ H.eq(state.combat, false,
     "a condition this client cannot answer reads as false rather than erroring")
 H.eq(state.mounted, false, "…and one it can answer is answered — IsMounted is stubbed false")
 
+-- Compat.IsBusy delegating to Core.CanSwap (UI-19). Asserted against a LIVE client reading rather
+-- than by calling CanSwap with a hand-made table, because the delegation is the whole claim: the
+-- driver's decision and the greying of the button it sits behind must be one answer. Two copies of
+-- this rule would drift in exactly one direction — a control offering what the driver refuses — and
+-- that direction is the bug UI-19 exists to close.
+H.eq(G.Kitbag.Compat.IsBusy(), false, "a live, idle mock client is not busy")
+G.UnitIsDeadOrGhost = function() return true end
+H.eq(G.Kitbag.Compat.IsBusy(), true, "…and a dead one is")
+H.eq(G.Kitbag.Core.CanSwap(G.Kitbag.Compat.ActionState()), false,
+    "IsBusy and CanSwap are the same answer read from the same client, not two rules")
+G.UnitIsDeadOrGhost = nil
+
 -- Sets.Inherit clearing a parent (VERIFY-13), exercised here for exactly the reason ActionState is:
 -- Sets reads the character bucket and the client, so the mock is the only place outside the game it
 -- can be called at all — and it had NO coverage, despite being a gear-loss path. "Nothing" on the

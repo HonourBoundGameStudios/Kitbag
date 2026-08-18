@@ -46,6 +46,13 @@ end
 local function onButtonEnter(self)
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     GameTooltip:SetHyperlink(Core.ItemLink(self.key))
+    -- UI-19. The flyout still opens while you are dead — seeing which rings you own costs nothing
+    -- and is worth doing while running back — but it must not look clickable when it is not. The
+    -- sentence is Core's, so the window, the trinket bar and this frame explain the same refusal
+    -- the same way.
+    if panel and panel.blocked then
+        GameTooltip:AddLine(Core.SWAP_BLOCKED[panel.blocked], 1, 0.5, 0.5, true)
+    end
     GameTooltip:Show()
 end
 
@@ -54,6 +61,10 @@ local function onButtonLeave()
 end
 
 local function onButtonClick(self)
+    -- Refused here rather than left to the driver: clicking a dimmed button and getting a chat line
+    -- ten seconds later is the whole of UI-19, and the flyout is the surface where it is easiest to
+    -- click by reflex.
+    if panel and panel.blocked then return end
     Sets.EquipItem(self.key, self.slotId)
     hide()
 end
@@ -104,6 +115,11 @@ function Flyout.Open(slotId, anchor)
         return
     end
 
+    -- Asked once per open rather than once per button, and re-asked on every open, so the panel
+    -- cannot keep offering clicks after you have died with it up.
+    local canSwap, why = Core.CanSwap(Kitbag.Compat.ActionState())
+    panel.blocked = (not canSwap) and why or nil
+
     -- More than the panel holds is a real possibility for rings on a well-travelled character. Show
     -- what fits and say nothing clever about the rest: the set list is the tool for a big wardrobe,
     -- and a flyout that paginates is a flyout nobody can use quickly.
@@ -117,6 +133,9 @@ function Flyout.Open(slotId, anchor)
             -- An item already worn elsewhere is dimmed: clicking it is a swap between two slots
             -- rather than putting something new on, and that is worth seeing before the click.
             local shade = entry.worn and 0.55 or 1
+            -- Dimmer still when nothing can be equipped at all, so "you cannot use this right now"
+            -- reads at a glance and not only from the tooltip.
+            if panel.blocked then shade = shade * 0.5 end
             button.icon:SetVertexColor(shade, shade, shade)
             button:Show()
         else

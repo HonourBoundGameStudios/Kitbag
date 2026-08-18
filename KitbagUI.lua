@@ -582,6 +582,22 @@ local function buildDoll(parent)
     panel.equip:SetText("Equip")
     panel.equip:SetScript("OnClick", function() if selected then Sets.Equip(selected) end end)
 
+    -- A permanently greyed control with no explanation is a puzzle rather than an affordance
+    -- (UI-11), and greying Equip without saying why would trade one bad experience for another. The
+    -- sentence comes from Core.SWAP_BLOCKED so this frame, the trinket bar and the flyouts cannot
+    -- word the same refusal three different ways.
+    panel.equip:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:AddLine("Wear the selected set")
+        if panel.blocked then
+            GameTooltip:AddLine(Core.SWAP_BLOCKED[panel.blocked], 1, 0.5, 0.5, true)
+        elseif Equip.IsRunning() then
+            GameTooltip:AddLine("A swap is already running.", 1, 0.5, 0.5, true)
+        end
+        GameTooltip:Show()
+    end)
+    panel.equip:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
     panel.delete = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     panel.delete:SetSize(140, 24)
     panel.delete:SetPoint("LEFT", panel.equip, "RIGHT", 4, 0)
@@ -686,7 +702,16 @@ local function refreshDoll(name, plan, totals)
     end
 
     doll.title:SetText(name)
-    if Equip.IsRunning() then doll.equip:Disable() else doll.equip:Enable() end
+    -- UI-19. A control that cannot work says so BEFORE it is pressed. Equip used to look live while
+    -- you ran back as a ghost; the click then spent the driver's whole BUSY_LIMIT before reporting
+    -- that you had been dead the entire time — honest, and ten seconds too late.
+    --
+    -- Only the controls that move items go quiet. The list, the inspector, the picker, the rule
+    -- editor and the options panel stay live, because running back as a ghost is exactly when
+    -- someone has time to tidy their sets, and editing one touches no gear at all.
+    local canSwap, why = Core.CanSwap(Kitbag.Compat.ActionState())
+    doll.blocked = (not canSwap) and why or nil
+    if Equip.IsRunning() or not canSwap then doll.equip:Disable() else doll.equip:Enable() end
 
     local cells = Core.Doll(Sets.Resolve(name), plan)
     dressModel(cells)
@@ -995,6 +1020,20 @@ function UI.Refresh()
         importButton:Hide()
     end
 end
+
+-- Dying and coming back changes whether Equip may be pressed, and nothing else in the addon redraws
+-- the window for it (UI-19). A watcher of its own rather than an addition to KitbagEvents' WATCHED
+-- list: that list feeds the rule engine, and death is not a condition any rule matches on.
+--
+-- Death only. A cast also blocks a swap, but it clears itself in a second or two and the driver
+-- simply waits it out and then succeeds — which is correct behaviour, not the bug. Registering the
+-- seven spellcast events to grey a button for the length of a Frostbolt would put this frame in the
+-- middle of every combat log for no outcome anyone would notice.
+local deathWatcher = CreateFrame("Frame")
+for _, event in ipairs({ "PLAYER_DEAD", "PLAYER_ALIVE", "PLAYER_UNGHOST" }) do
+    pcall(deathWatcher.RegisterEvent, deathWatcher, event)
+end
+deathWatcher:SetScript("OnEvent", function() UI.Refresh() end)
 
 function UI.Toggle()
     if not frame then build() end
