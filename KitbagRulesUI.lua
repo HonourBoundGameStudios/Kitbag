@@ -185,7 +185,10 @@ end
 -- ---------------------------------------------------------------------------
 
 local function createRow(parent, index)
-    local row = CreateFrame("Button", nil, parent)
+    -- Named, like the buttons it carries. Eight rows serve any number of rules, so a row means
+    -- nothing without the `ruleIndex` it is currently showing — and that pairing is the one
+    -- thing in this file no pure test could reach until the row had a handle (VERIFY-11).
+    local row = CreateFrame("Button", "KitbagRuleRow" .. index, parent)
     row:SetHeight(ROW_HEIGHT)
     row:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -(index - 1) * ROW_HEIGHT)
     row:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, -(index - 1) * ROW_HEIGHT)
@@ -205,10 +208,12 @@ local function createRow(parent, index)
     row.text:SetPoint("RIGHT", row, "RIGHT", -96, 0)
     row.text:SetJustifyH("LEFT")
 
-    -- `suffix` names the button, which only the X asks for: `/kit verify` measures the scroll bar
-    -- against it (VERIFY-11), because a bar sitting on top of every row's X reads as a dead button
-    -- rather than as a layout fault — and "delete doesn't work" sends the next session to the wrong
-    -- file entirely.
+    -- `suffix` names the button, and all three ask for one now. The X carries the older reason:
+    -- `/kit verify` measures the scroll bar against it (VERIFY-11), because a bar sitting on top of
+    -- every row's X reads as a dead button rather than as a layout fault, and "delete doesn't work"
+    -- sends the next session to the wrong file entirely. ^ and v are named so the same tests can
+    -- drive them: all three share this closure, so what is really under test is whether a click
+    -- resolves to the RULE the row is showing rather than to the row's own position.
     local function tinyButton(label, offset, delta, suffix)
         local button = CreateFrame("Button",
             suffix and ("KitbagRuleRow" .. index .. suffix) or nil, row, "UIPanelButtonTemplate")
@@ -230,8 +235,8 @@ local function createRow(parent, index)
         return button
     end
 
-    row.up = tinyButton("^", -70, -1)
-    row.down = tinyButton("v", -44, 1)
+    row.up = tinyButton("^", -70, -1, "Up")
+    row.down = tinyButton("v", -44, 1, "Down")
     row.remove = tinyButton("X", -4, 0, "Remove")
 
     row:SetScript("OnClick", function(self) edit(self.ruleIndex) end)

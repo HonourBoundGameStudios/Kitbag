@@ -43,6 +43,45 @@ local BOOL_GETTERS = {
     IsShown = true, IsVisible = true, IsMouseOver = true, GetChecked = true,
     IsEnabled = true, IsUserPlaced = true, IsForbidden = true,
 }
+-- Scripts and shown-state are REMEMBERED for the reason event registration is: they are answers this
+-- suite asks questions of. A generic SetScript that discards its handler makes every button in the
+-- addon undrivable from here, which leaves the wiring between a click and the index it acts on — the
+-- one part of the UI that pure tests cannot reach and the one part EPIC-VERIFY keeps asking about —
+-- checkable only by a person clicking it in the client.
+--
+-- Click() runs OnClick the way the client does, with the widget as self, so a handler reading
+-- `self:GetParent().ruleIndex` is exercised rather than simulated.
+local SCRIPT_METHODS = {
+    SetScript = function(self, name, fn)
+        local scripts = rawget(self, "_scripts")
+        if not scripts then scripts = {}; rawset(self, "_scripts", scripts) end
+        scripts[name] = fn
+    end,
+    GetScript = function(self, name)
+        local scripts = rawget(self, "_scripts")
+        return scripts and scripts[name] or nil
+    end,
+    HasScript = function() return true end,
+    -- Parenting is real, not manufactured. Every row button in the addon reads
+    -- `self:GetParent().ruleIndex` — a GetParent handing back a fresh widget answers nil to
+    -- that and the handler quietly does nothing, which is a test that clicks a button and
+    -- asserts against the silence that follows.
+    GetParent = function(self) return rawget(self, "_parent") end,
+    Click = function(self, ...)
+        local scripts = rawget(self, "_scripts")
+        local fn = scripts and scripts.OnClick
+        if fn then return fn(self, ...) end
+    end,
+    -- Show/Hide track, because several modules return early when their frame is hidden — KitbagUI's
+    -- refresh does, and a check that ran against a hidden window once reported a FAIL naming two real
+    -- sets for no reason at all (VERIFY-8). A mock that always answers "hidden" reproduces that.
+    Show = function(self) rawset(self, "_shown", true) end,
+    Hide = function(self) rawset(self, "_shown", false) end,
+    SetShown = function(self, shown) rawset(self, "_shown", shown and true or false) end,
+    IsShown = function(self) return rawget(self, "_shown") and true or false end,
+    IsVisible = function(self) return rawget(self, "_shown") and true or false end,
+}
+
 -- Event registration is REMEMBERED rather than stubbed, because it is the one client answer this
 -- suite asks a question OF. Every other method here may return a plausible nothing; a generic
 -- IsEventRegistered returning a truthy widget would make "the client accepted PLAYER_UNGHOST" pass
@@ -74,7 +113,9 @@ widgetMeta = {
         -- client method. Manufactured on demand and cached, so `f:SetPoint` twice is the same
         -- function and a module storing a method reference still works.
         local method
-        if EVENT_METHODS[key] then
+        if SCRIPT_METHODS[key] then
+            method = SCRIPT_METHODS[key]
+        elseif EVENT_METHODS[key] then
             method = EVENT_METHODS[key]
         elseif NUMBER_GETTERS[key] then
             method = function() return 0 end
@@ -128,11 +169,22 @@ G.UIDropDownMenu_CreateInfo = function() return {} end
 G.ToggleDropDownMenu = function() end
 G.CloseDropDownMenus = function() end
 
-G.CreateFrame = function(_, name, _, _)
+G.CreateFrame = function(_, name, parent, _)
     local frame = newWidget(name)
+    if parent then rawset(frame, "_parent", parent) end
     if name then G[name] = frame end
     return frame
 end
+
+-- Blizzard's FauxScrollFrame, which is the mechanism behind both scrolling lists in the addon: the
+-- rows stay put and the data moves through them. The offset is kept ON the frame the way the real one
+-- keeps it, so a test can scroll a list by calling the same function the client's scroll bar calls
+-- and then drive the rows at that offset — which is the whole of what VERIFY-11 has never been able
+-- to exercise outside the game.
+G.FauxScrollFrame_SetOffset = function(frame, offset) rawset(frame, "_offset", offset or 0) end
+G.FauxScrollFrame_GetOffset = function(frame) return rawget(frame, "_offset") or 0 end
+G.FauxScrollFrame_Update = function() end
+G.FauxScrollFrame_OnVerticalScroll = function() end
 
 G.hooksecurefunc = function() end
 G.tinsert = table.insert
@@ -282,7 +334,15 @@ H.ok(type(G.Kitbag) == "table", "the Kitbag namespace exists after every module 
 -- Given a character that has a failed swap on record, so the swap-record check has something real to
 -- report rather than falling straight into its "nothing attempted yet" branch. Set BEFORE the run,
 -- because the check reads it at call time.
-Kitbag.char = Kitbag.char or {}
+-- A db and a character bucket, built with the shipped DB.Load rather than by hand. The checks reach
+-- much further into the addon now that the mock remembers Show/Hide — a frame that answers "hidden"
+-- to everything sends most of them down their early-return path, where they touch nothing and prove
+-- nothing — and several of them read the db as soon as they get past that. This is what they would
+-- find on a real login, minus the gear.
+Kitbag.db = Kitbag.DB.Load({})
+Kitbag.char = Kitbag.DB.Character(Kitbag.db, "Mock - Mockrealm")
+Kitbag.char.sets = { Mock = { slots = { [1] = "444:0:0:0:0:0:0" } } }
+Kitbag.char.rules = {}
 Kitbag.char.swaps = { {
     set = "FASTHOJ+TRAVEL", ok = false, reason = "stuck on Off hand",
     when = "2026-08-16 12:04:31",
@@ -916,5 +976,58 @@ end
 -- registered nothing at all. This is the discriminator for them, not a test of the client.
 H.ok(deathWatcher and not deathWatcher:IsEventRegistered("PLAYER_LEVEL_UP"),
     "…and the mock answers NO for an event nobody asked for, which is what makes the four above mean anything")
+
+-- ---------------------------------------------------------------------------
+-- The rule list's row buttons, with the list SCROLLED (VERIFY-11)
+-- ---------------------------------------------------------------------------
+--
+-- Eight rows serve any number of rules, so every row button has to address the RULE and not itself.
+-- That arithmetic is sound by construction — each closure reads `self:GetParent().ruleIndex` — but
+-- "by construction" is what the window's own refresh was said to be before it turned out to return
+-- early while hidden, and VERIFY-11 has said for three sessions that none of this has ever been
+-- exercised at an offset. The failure is not subtle and it is unrecoverable: X at the top of a
+-- scrolled list deletes a rule the player cannot see, and it looks exactly right until they count.
+--
+-- Driven through the buttons rather than through table.remove for the new-set check's reason: calling
+-- the store proves the store works and says nothing about the wiring between a click and an index,
+-- which is the entire question here.
+local RulesUI = G.Kitbag.RulesUI
+
+G.Kitbag.char.rules = {}
+for i = 1, 12 do
+    G.Kitbag.char.rules[i] = { set = "Rule" .. i, when = { combat = true }, priority = i }
+end
+
+RulesUI.Toggle()
+H.ok(G.KitbagRulesFrame and G.KitbagRulesFrame:IsShown(),
+    "the rule editor opens, so its list is actually drawn")
+
+-- Scrolled four rules down: row 1 is now rule 5. An offset of zero would pass every assertion below
+-- against code that ignored the offset entirely, which is precisely the bug being hunted.
+FauxScrollFrame_SetOffset(G.KitbagRulesScrollFrame, 4)
+RulesUI.Refresh()
+
+local topRow = G.KitbagRuleRow1
+H.eq(topRow and topRow.ruleIndex, 5, "the top row addresses the fifth rule once the list is scrolled")
+
+G.KitbagRuleRow1Up:Click()
+H.eq(G.Kitbag.char.rules[4].set, "Rule5",
+    "^ on the top row moves the rule that row is showing, not the rule the row is numbered")
+H.eq(G.Kitbag.char.rules[5].set, "Rule4", "…and the one it swapped with came down to meet it")
+
+RulesUI.Refresh()
+G.KitbagRuleRow1Remove:Click()
+H.eq(#G.Kitbag.char.rules, 11, "X removes exactly one rule")
+
+-- WHICH one is the whole question, and it has to be asked so that only the right answer passes. The
+-- top row is showing Rule4 by now (the ^ above swapped it up into index 5), so Rule4 must be the one
+-- that went and Rule1 — the rule a row-index-only reading would have taken — must still be there.
+-- The first draft of this asserted `rules[5].set == "Rule6"`, which is true after deleting the WRONG
+-- rule as well: proved by breaking the offset arithmetic on purpose and watching it stay green.
+local remaining = {}
+for _, rule in ipairs(G.Kitbag.char.rules) do remaining[rule.set] = true end
+H.ok(not remaining.Rule4, "…and it is the rule the row was SHOWING that went")
+H.ok(remaining.Rule1,
+    "…and not the one at the row's own position, which is the delete VERIFY-11 is afraid of")
 
 H.done()
