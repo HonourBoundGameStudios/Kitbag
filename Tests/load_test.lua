@@ -1552,6 +1552,30 @@ H.ok(table.concat(helped, "\n"):find("/kit session", 1, true) ~= nil,
 
 
 -- ---------------------------------------------------------------------------
+-- A rule row's three controls are icons (UI-25)
+-- ---------------------------------------------------------------------------
+--
+-- "^", "v" and "X" on 24-pixel buttons, and only one of the three is a symbol: `v` is the letter vee
+-- standing in for an arrow it does not look like, which is why the pair reads as a typo until you
+-- have clicked one. None of the three had a tooltip either, so the list offered no way at all to
+-- learn that the order of the rows is what decides ties.
+--
+-- The behaviour underneath is unchanged and is asserted elsewhere in this file, at a scroll offset:
+-- what these two assertions add is that the control can still be identified now that its label is
+-- gone. An unnamed square is the failure an icon introduces, and it is the one that looks tidy.
+if not G.KitbagRulesFrame:IsShown() then RulesUI.Toggle() end
+for _, entry in ipairs({
+    { button = G.KitbagRuleRow1Up,     what = "Move up" },
+    { button = G.KitbagRuleRow1Down,   what = "Move down" },
+    { button = G.KitbagRuleRow1Remove, what = "Remove" },
+}) do
+    H.ok(rawget(entry.button, "kitbagIcon") ~= nil,
+        entry.what .. " is drawn rather than spelled, which is what a 24-pixel button has room for")
+    H.ok(entry.button:GetScript("OnEnter") ~= nil,
+        "…and it says what it does on hover, which none of the three ever did")
+end
+
+-- ---------------------------------------------------------------------------
 -- The two panel buttons on the bottom row are icons (UI-24)
 -- ---------------------------------------------------------------------------
 --

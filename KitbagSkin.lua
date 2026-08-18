@@ -72,11 +72,11 @@ end
 --- the thing an icon costs: a text button that nobody explains is still readable, and an icon button
 --- that nobody explains is a square. `/kit verify` and Tests/load_test both assert it rather than
 --- trusting it, for exactly that reason.
-function Skin.IconButton(parent, name, texture, size)
-    size = size or 24
+function Skin.IconButton(parent, name, texture, width, height)
+    width = width or 24
 
     local button = Skin.Inset(CreateFrame("Button", name, parent))
-    button:SetSize(size, size)
+    button:SetSize(width, height or width)
 
     local icon = button:CreateTexture(nil, "ARTWORK")
     icon:SetPoint("TOPLEFT", 3, -3)

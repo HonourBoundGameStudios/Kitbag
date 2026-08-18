@@ -23,6 +23,13 @@ local RulesUI = {}
 local ROW_HEIGHT = 22
 local MAX_ROWS = 8
 
+-- A rule row's three controls (UI-25). Blizzard's own scroll-bar arrows and the loot-pass X — art
+-- that has shipped in every flavour since 1.0, and the same X the inspector's Delete uses, so the
+-- one destructive control in either window is the same picture in both.
+local UP_ICON = "Interface\\Buttons\\Arrow-Up-Up"
+local DOWN_ICON = "Interface\\Buttons\\Arrow-Down-Up"
+local REMOVE_ICON = "Interface\\Buttons\\UI-GroupLoot-Pass-Up"
+
 local frame, rows, hint, scroll
 local editor = nil      -- { index = n | nil, set = "…", priority = n, values = { … }, widgets = … }
 
@@ -215,12 +222,23 @@ local function createRow(parent, index)
     -- sends the next session to the wrong file entirely. ^ and v are named so the same tests can
     -- drive them: all three share this closure, so what is really under test is whether a click
     -- resolves to the RULE the row is showing rather than to the row's own position.
-    local function tinyButton(label, offset, delta, suffix)
-        local button = CreateFrame("Button",
-            suffix and ("KitbagRuleRow" .. index .. suffix) or nil, row, "UIPanelButtonTemplate")
-        button:SetSize(24, 18)
+    --
+    -- Icons rather than text since UI-25, and the pair of arrows is why: only one of "^", "v" and
+    -- "X" was ever a symbol — `v` is the letter vee standing in for an arrow it does not resemble,
+    -- so the two read as a typo until one has been clicked. None of the three had a tooltip either,
+    -- which left the list with no way of saying that the ORDER of these rows is what decides ties.
+    -- That sentence is the most useful thing on this window and it now has somewhere to live.
+    local function tinyButton(texture, tip, offset, delta, suffix)
+        local button = Skin.IconButton(row,
+            suffix and ("KitbagRuleRow" .. index .. suffix) or nil, texture, 24, 18)
         button:SetPoint("RIGHT", row, "RIGHT", offset, 0)
-        button:SetText(label)
+        button:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:AddLine(tip[1], 1, 0.82, 0)
+            GameTooltip:AddLine(tip[2], 0.9, 0.9, 0.9, true)
+            GameTooltip:Show()
+        end)
+        button:SetScript("OnLeave", function() GameTooltip:Hide() end)
         button:SetScript("OnClick", function(self)
             local index = self:GetParent().ruleIndex
             if delta == 0 then
@@ -236,9 +254,16 @@ local function createRow(parent, index)
         return button
     end
 
-    row.up = tinyButton("^", -70, -1, "Up")
-    row.down = tinyButton("v", -44, 1, "Down")
-    row.remove = tinyButton("X", -4, 0, "Remove")
+    row.up = tinyButton(UP_ICON,
+        { "Move up", "Rules are tried top to bottom, so an earlier rule wins a tie." },
+        -70, -1, "Up")
+    row.down = tinyButton(DOWN_ICON,
+        { "Move down", "Rules are tried top to bottom, so a later rule only wins where none above " ..
+          "it matches." },
+        -44, 1, "Down")
+    row.remove = tinyButton(REMOVE_ICON,
+        { "Delete this rule", "Gone at once — the set it names is not touched." },
+        -4, 0, "Remove")
 
     row:SetScript("OnClick", function(self) edit(self.ruleIndex) end)
     return row
