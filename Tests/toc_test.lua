@@ -156,4 +156,98 @@ else
     print("  # skipped: no io.popen, cannot list the project root")
 end
 
+
+-- ---------------------------------------------------------------------------
+-- Which flavours the release zip actually ships (SHIP-4)
+-- ---------------------------------------------------------------------------
+--
+-- A `.toc` in the repo is a file. A `.toc` in the zip is a promise: the client picks its flavour off
+-- the suffix, so shipping `Kitbag_Mainline.toc` tells every Retail player this addon runs there. Two
+-- of the four flavours have never had a single frame drawn on them — Retail was never launched, and
+-- Cataclysm Classic no longer EXISTS as a client to launch — so the zip and the repo are deliberately
+-- not the same set, and this is the check that keeps that deliberate rather than forgotten.
+--
+-- A flavour joins SHIPPED when there is evidence the addon has RUN on it, not when the file exists.
+-- The held flavours stay in the repo and stay under every parity check above, so they cannot rot
+-- while they wait.
+
+local SHIPPED = {
+    { toc = "Kitbag.toc",       label = "Classic Era",
+      why = "loaded, drawn and equipping in a live 1.15.9 client, repeatedly" },
+    { toc = "Kitbag_Mists.toc", label = "Mists Classic",
+      why = "deployed to its AddOns folder, interface read off .build.info, identical file list" },
+}
+
+local HELD = {
+    { toc = "Kitbag_Mainline.toc", label = "Retail",
+      why = "never launched — the interface number is read, but the C_Item/C_Spell shims are "
+          .. "reasoned rather than observed" },
+    { toc = "Kitbag_Cata.toc",     label = "Cataclysm",
+      why = "no client exists to run it on; the interface number is argued, not read" },
+}
+
+-- Nothing may be silently neither. A fifth flavour arriving with a plausible .toc must be sorted
+-- into one list or the other, with a reason, before the gate goes green again.
+for _, entry in ipairs(INTERFACES) do
+    local sorted
+    for _, s in ipairs(SHIPPED) do if s.toc == entry.toc then sorted = "shipped" end end
+    for _, h in ipairs(HELD) do if h.toc == entry.toc then sorted = "held back" end end
+    H.ok(sorted ~= nil, entry.toc .. " is either shipped or held back, deliberately")
+end
+
+for _, entry in ipairs(SHIPPED) do
+    local f = io.open(entry.toc, "r")
+    H.ok(f ~= nil, entry.toc .. " ships — " .. entry.why)
+    if f then f:close() end
+end
+
+-- package.ps1 is what actually fills the zip, so the list is read out of it rather than restated
+-- here. A restatement would agree with this test forever and with the zip never.
+local function shippedTocsInPackager()
+    local f = assert(io.open("package.ps1", "r"), "cannot open package.ps1")
+    local body = f:read("*a")
+    f:close()
+    local block = body:match("%$SHIPPED_TOCS%s*=%s*@%((.-)%)")
+    H.ok(block ~= nil, "package.ps1 declares $SHIPPED_TOCS")
+    local found = {}
+    for name in tostring(block):gmatch("Kitbag[%w_]*%.toc") do found[#found + 1] = name end
+    return found
+end
+
+local packaged = shippedTocsInPackager()
+H.eq(#packaged, #SHIPPED, "package.ps1 ships exactly " .. #SHIPPED .. " flavour(s)")
+for _, entry in ipairs(SHIPPED) do
+    local inZip = false
+    for _, name in ipairs(packaged) do if name == entry.toc then inZip = true end end
+    H.ok(inZip, "package.ps1 puts " .. entry.toc .. " in the zip")
+end
+for _, entry in ipairs(HELD) do
+    local inZip = false
+    for _, name in ipairs(packaged) do if name == entry.toc then inZip = true end end
+    H.ok(not inZip, "package.ps1 keeps " .. entry.toc .. " OUT of the zip — " .. entry.why)
+end
+
+-- And the README must claim the same set. This is the drift that was actually found: the README said
+-- two flavours while the zip carried four, and the reader who believes the README is the one who is
+-- right. A support claim nobody can check is how an addon acquires a flavour it never tested.
+local function supportLine()
+    local f = assert(io.open("README.md", "r"), "cannot open README.md")
+    local line
+    for l in f:lines() do
+        if l:match("^Supports%s") then line = l end
+    end
+    f:close()
+    return line
+end
+
+local supports = supportLine()
+H.ok(supports ~= nil, "README states which flavours are supported, on a line starting 'Supports'")
+for _, entry in ipairs(SHIPPED) do
+    H.ok(supports and supports:find(entry.label, 1, true) ~= nil,
+        "README claims support for " .. entry.label)
+end
+for _, entry in ipairs(HELD) do
+    H.ok(supports and supports:find(entry.label, 1, true) == nil,
+        "README does not claim support for " .. entry.label .. " — " .. entry.why)
+end
 H.done()

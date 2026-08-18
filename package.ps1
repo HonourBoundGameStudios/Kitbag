@@ -5,6 +5,9 @@
 # Classic Era plus Kitbag_Mists / Kitbag_Cata / Kitbag_Mainline — which is why the names have to be
 # Blizzard's vocabulary and not ours.
 #
+# It does NOT ship every .toc in the repo. A .toc in the zip is a promise that the addon runs on that
+# flavour, and two of the four have never had a frame drawn on them. See $SHIPPED_TOCS below.
+#
 #   .\package.ps1                 # -> dist\Kitbag-0.1.0.zip
 #   .\package.ps1 -OutDir build
 #
@@ -47,10 +50,25 @@ $zip = Join-Path $out "Kitbag-$version.zip"
 if (Test-Path $staging) { Remove-Item $staging -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $staging | Out-Null
 
+# The flavours this release ships. A flavour joins this list when there is evidence the addon has RUN
+# on it — not when its .toc exists. Retail has never been launched (its interface number is read off
+# .build.info, but the C_Item/C_Spell shims are reasoned rather than observed) and Cataclysm Classic
+# no longer exists as a client at all, so both stay in the repo, under every parity check in
+# Tests/toc_test.lua, and out of the zip. That test reads this list rather than restating it, and
+# also holds the README's "Supports …" line to the same set.
+$SHIPPED_TOCS = @(
+    "Kitbag.toc"        # Classic Era
+    "Kitbag_Mists.toc"  # Mists Classic
+)
+
 # Only what the client loads. The test suite, the working notes and the scripts are the workshop,
 # not the product; nobody installing an addon wants them in their AddOns folder.
 Copy-Item (Join-Path $root "*.lua") $staging
-Copy-Item (Join-Path $root "*.toc") $staging
+foreach ($toc in $SHIPPED_TOCS) {
+    $path = Join-Path $root $toc
+    if (-not (Test-Path $path)) { Write-Error "$toc is shipped but does not exist." }
+    Copy-Item $path $staging
+}
 foreach ($doc in @("README.md", "LICENSE")) {
     $path = Join-Path $root $doc
     if (Test-Path $path) { Copy-Item $path $staging }
