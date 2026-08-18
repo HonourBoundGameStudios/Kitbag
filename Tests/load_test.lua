@@ -1028,6 +1028,58 @@ eventFrame:OnEvent("PLAYER_REGEN_ENABLED")
 H.eq(#applied, 1, "…and the restore happens when combat ends")
 H.eq(G.Kitbag.char.restorePoint, nil, "…spending the point exactly once")
 
+-- Revival, which VERIFY-18 calls the likeliest failure in the whole corpse-run feature. Holding is a
+-- `return`; WAKING depends on PLAYER_ALIVE or PLAYER_UNGHOST arriving and being handled like any
+-- other event. A mock cannot prove the client SENDS them — that is what the `watched-events` check
+-- exists for — but it can prove that when one arrives, the swap the corpse run held is decided again
+-- from the world the player came back to rather than being left on the floor with the corpse.
+--
+-- Last in this block on purpose: it leaves the engine believing a set is on, and the assertions above
+-- are about a world where nothing is.
+G.Kitbag.char.sets.Cat = { slots = { [1] = "222:0:0:0:0:0:0" } }
+G.Kitbag.char.rules = { { set = "Cat", when = { form = 3 } } }
+equipped = {}
+
+form, combat = 3, false
+G.UnitIsDeadOrGhost = function() return true end
+eventFrame:OnEvent("UPDATE_SHAPESHIFT_FORM")
+H.eq(#equipped, 0, "a rule that matches while you are dead is held, not attempted")
+H.eq(Events.Diagnostics().heldWhileDead, "Cat", "…and the dump names what it is holding")
+
+G.UnitIsDeadOrGhost = nil
+eventFrame:OnEvent("PLAYER_ALIVE")
+H.eq(equipped[#equipped], "Cat", "PLAYER_ALIVE performs the swap the corpse run was holding")
+H.eq(Events.Diagnostics().heldWhileDead, nil,
+    "…and the dump stops naming a corpse run it is no longer on")
+
+-- The other event of the pair, driven separately rather than assumed equivalent. They are two
+-- registrations reaching one handler, and a build that woke on only one of them would look exactly
+-- like the assertion above passing — PLAYER_UNGHOST is the end of a corpse RUN, PLAYER_ALIVE is a
+-- resurrection or a release, and a player who runs back gets only the second.
+G.Kitbag.char.sets.Owl = { slots = { [1] = "333:0:0:0:0:0:0" } }
+G.Kitbag.char.rules = { { set = "Owl", when = { form = 4 } } }
+equipped = {}
+form = 4
+G.UnitIsDeadOrGhost = function() return true end
+eventFrame:OnEvent("UPDATE_SHAPESHIFT_FORM")
+H.eq(#equipped, 0, "dead again, and the next swap is held too")
+G.UnitIsDeadOrGhost = nil
+eventFrame:OnEvent("PLAYER_UNGHOST")
+H.eq(equipped[#equipped], "Owl", "PLAYER_UNGHOST wakes it as well, which is the end of a corpse run")
+
+-- And that the engine ASKED for those two at all, which the block above deliberately does not prove:
+-- it drives OnEvent by name, so it would pass just as happily against a build that never registered
+-- them and therefore never hears them in the client. `/kit verify`'s `watched-events` check answers
+-- this in the client; this answers the half that does not need one — that the pair is on the list the
+-- engine hands to RegisterEvent. Removing either from WATCHED reds it, and nothing else in the suite
+-- notices.
+Events.Enable()
+local watching = {}
+for _, e in ipairs(Events.Diagnostics().events) do watching[e.name] = e.registered end
+H.ok(watching.PLAYER_ALIVE, "the engine watches PLAYER_ALIVE, or a held swap is never woken")
+H.ok(watching.PLAYER_UNGHOST, "…and PLAYER_UNGHOST, which is the end of a corpse run")
+H.ok(watching.PLAYER_REGEN_ENABLED, "…and the end of combat, which is the other deferral")
+
 Sets.Equip, Sets.Apply = realEquip, realApply
 G.GetShapeshiftForm = function() return 0 end
 G.InCombatLockdown = function() return false end
