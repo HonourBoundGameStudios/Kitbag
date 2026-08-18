@@ -1211,4 +1211,35 @@ key:GetScript("OnKeyDown")(key, "ESCAPE")
 H.eq(keyboard[#keyboard], false, "Escape leaves capture mode")
 H.eq(G.Kitbag.char.sets.Set07.key, nil, "…without binding Escape to anything")
 
+-- ---------------------------------------------------------------------------
+-- The Import button takes itself away on the same refresh (VERIFY-14)
+-- ---------------------------------------------------------------------------
+--
+-- The one control in the window whose ABSENCE is as load-bearing as its presence. Its count and its
+-- fit are `/kit verify` checks already; the import itself is covered above. What was left is the
+-- join: pressing it must bring the sets across AND the button must be gone on the redraw the import
+-- itself triggers, rather than lingering until some unrelated event refreshes the window. A button
+-- still offering an import that has already happened invites a second press, and a second press is
+-- the case that used to re-apply ItemRack's options over choices made since.
+G.Kitbag.char = { sets = {}, rules = {}, swaps = {} }
+G.ItemRackUser = {
+    Sets = {
+        HEAL = { equip = { [1] = IR_HELM }, icon = 135019, key = "CTRL-1" },
+        DPS  = { equip = { [10] = IR_GLOVES } },
+        ["~Unequip"] = { equip = {} },
+    },
+}
+
+UI.Refresh()
+local importButton = G.KitbagImportButton
+H.ok(importButton:IsShown(), "the button offers the import while there is one to make")
+H.eq(importButton:GetText(), "Import 2 sets from ItemRack",
+    "…naming the count the tests pin, so a different number means the window reads another world")
+
+importButton:Click()
+H.ok(G.Kitbag.char.sets.HEAL ~= nil, "pressing it brings the sets across")
+H.ok(G.Kitbag.char.sets.DPS ~= nil, "…all of them")
+H.ok(not importButton:IsShown(),
+    "…and the button is gone on the import's OWN refresh, not at the next unrelated one")
+
 H.done()
