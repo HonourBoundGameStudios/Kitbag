@@ -1584,25 +1584,32 @@ for _, entry in ipairs({
 end
 
 -- ---------------------------------------------------------------------------
--- The two panel buttons on the bottom row are icons (UI-24)
+-- The bottom row is icons (UI-24, UI-27)
 -- ---------------------------------------------------------------------------
 --
--- "Options" and "Rules" are 180 pixels of the bottom row spent saying two words, on a row VERIFY-10
--- exists because it was full. They are doors to other windows rather than things this window does,
--- and a door is the one control an icon is unambiguously right for.
+-- Four controls, and they divide cleanly: Options and Rules are DOORS to other windows, Save and New
+-- set are things this window DOES. A door is the control an icon is unambiguously right for. The
+-- other two are the interesting half, because their labels were carrying real meaning — "Save what
+-- I'm wearing" is a whole sentence, and it is the sentence that stops the button being read as "save
+-- the set I have selected", which is a different and destructive thing.
 --
--- They had no tooltip at all before, which was survivable while the label was the explanation and is
--- not survivable now — so the hover is asserted with the picture. That is the trade an icon makes,
--- and it is worth stating that it makes the row BETTER understood rather than worse: "Rules" never
--- said what a rule was for either.
+-- So the tooltip is asserted here as the load-bearing part rather than as a formality. Two of these
+-- four had no tooltip at all before, on the grounds that the label was the explanation; that trade
+-- only works while there is a label.
 for _, entry in ipairs({
-    { button = G.KitbagRulesButton, what = "Rules" },
-    { button = G.KitbagOptionsButton, what = "Options" },
+    { button = G.KitbagRulesButton,   what = "Rules",
+      why = "a door to another window, which is what an icon is unambiguously right for" },
+    { button = G.KitbagOptionsButton, what = "Options",
+      why = "a door to another window, which is what an icon is unambiguously right for" },
+    { button = G.KitbagSaveButton,    what = "Save",
+      why = "the label was a sentence, and a sentence is exactly what a tooltip is for" },
+    { button = G.KitbagNewSetButton,  what = "New set",
+      why = "the label was a sentence, and a sentence is exactly what a tooltip is for" },
 }) do
     H.ok(rawget(entry.button, "kitbagIcon") ~= nil,
-        entry.what .. " is an icon button, since it is a door rather than something this window does")
+        entry.what .. " is an icon button — " .. entry.why)
     H.ok(entry.button:GetScript("OnEnter") ~= nil,
-        "…and it says where it goes on hover, which it never did while it had a label")
+        "…and it explains itself on hover, which is the only thing left that can")
 end
 
 -- ---------------------------------------------------------------------------

@@ -43,6 +43,14 @@ local EQUIP_ICON = "Interface\\Icons\\INV_Chest_Plate06"
 local DELETE_ICON = "Interface\\Buttons\\UI-GroupLoot-Pass-Up"
 local COPY_ICON = "Interface\\Icons\\INV_Misc_GroupLooking"
 
+-- The two acts on the bottom row (UI-27). A parchment for writing down what you have on, and
+-- Blizzard's own plus glyph — the one in the quest log and the tradeskill list — for making an empty
+-- one. The plus is the only genuinely universal symbol in this whole set and it is spent on the
+-- control that most needed it, since "New set" and "Save" are otherwise the pair a player is likeliest
+-- to confuse.
+local SAVE_ICON = "Interface\\Icons\\INV_Misc_Note_01"
+local NEW_ICON = "Interface\\Buttons\\UI-PlusButton-Up"
+
 -- The two doors on the bottom row (UI-24). A book for the thing you read and write sentences in, and
 -- the engineering wrench for settings, which is the closest thing this client has to a cog.
 local RULES_ICON = "Interface\\Icons\\INV_Misc_Book_09"
@@ -1128,12 +1136,16 @@ local function build()
     end)
     optionsButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-    -- It was cut to 150 to buy the Options button its room, and UI-24 gave 136 of that back by
-    -- turning both doors into icons. An edit box scrolls, so a long name always typed fine — but a
-    -- box that shows the whole name is the difference between reading what you are about to save
-    -- and trusting it.
+    -- It was cut to 150 to buy the Options button its room; UI-24 and UI-27 turned all four of the
+    -- row's buttons into icons and handed back nearly 300 pixels between them. An edit box scrolls,
+    -- so a long name always typed fine — but a box that shows the whole name is the difference
+    -- between reading what you are about to save and trusting it.
+    --
+    -- 306 lines its right edge up with the list above it. It sits at 20 where the list sits at 14
+    -- because InputBoxTemplate insets its own border by about five pixels a side, which is the same
+    -- correction the import button applies with its -6.
     local nameBox = CreateFrame("EditBox", "KitbagNameBox", frame, "InputBoxTemplate")
-    nameBox:SetSize(240, 20)
+    nameBox:SetSize(306, 20)
     nameBox:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 20, 15)
     nameBox:SetAutoFocus(false)
 
@@ -1192,10 +1204,26 @@ local function build()
         preferredIndex = 3,
     }
 
-    local save = CreateFrame("Button", "KitbagSaveButton", frame, "UIPanelButtonTemplate")
-    save:SetSize(150, 22)
+    -- An icon since UI-27, and this is the one on the row where that trade costs something real.
+    -- "Save what I'm wearing" was a whole sentence, and it was the sentence that stopped this being
+    -- read as "save the set I have selected" — a different act, and a destructive one, since it is
+    -- the selected set that would be overwritten. The tooltip has to carry that, so it says what is
+    -- captured, from where, and under what name, in that order.
+    local save = Skin.IconButton(frame, "KitbagSaveButton", SAVE_ICON, 22)
     save:SetPoint("LEFT", nameBox, "RIGHT", 10, 0)
-    save:SetText("Save what I'm wearing")
+    save:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_TOPRIGHT")
+        GameTooltip:AddLine("Save what you are wearing", 1, 0.82, 0)
+        GameTooltip:AddLine("Captures every slot you have equipped right now, under the name in " ..
+            "the box beside this.", 0.9, 0.9, 0.9, true)
+        -- Said before the press, because it is a reassurance and a reassurance that arrives after
+        -- the fact is no use to somebody deciding whether to press. Same reasoning as the import
+        -- button's tooltip.
+        GameTooltip:AddLine("Re-saving over a set asks first if it would drop pieces you picked " ..
+            "by hand.", 0.5, 0.5, 0.5, true)
+        GameTooltip:Show()
+    end)
+    save:SetScript("OnLeave", function() GameTooltip:Hide() end)
     save:SetScript("OnClick", function()
         local name = nameFromBox()
         if not name then return end
@@ -1212,10 +1240,20 @@ local function build()
 
     -- The other way in (UI-16). Saving what you are wearing cannot make a set out of gear that is
     -- still in the bank; an empty set plus the slot picker can.
-    local blank = CreateFrame("Button", "KitbagNewSetButton", frame, "UIPanelButtonTemplate")
-    blank:SetSize(90, 22)
+    local blank = Skin.IconButton(frame, "KitbagNewSetButton", NEW_ICON, 22)
     blank:SetPoint("LEFT", save, "RIGHT", 6, 0)
-    blank:SetText("New set")
+    blank:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_TOPRIGHT")
+        GameTooltip:AddLine("New empty set", 1, 0.82, 0)
+        GameTooltip:AddLine("Makes a set with nothing in it, under the name in the box beside " ..
+            "this, and selects it.", 0.9, 0.9, 0.9, true)
+        -- The reason this button exists at all, and it is not obvious from the act: saving what you
+        -- are wearing cannot build a set out of gear that is sitting in the bank.
+        GameTooltip:AddLine("This is how a set gets built out of gear you are not wearing — click " ..
+            "the paperdoll slots to fill it in.", 0.5, 0.5, 0.5, true)
+        GameTooltip:Show()
+    end)
+    blank:SetScript("OnLeave", function() GameTooltip:Hide() end)
     blank:SetScript("OnClick", function()
         local name = nameFromBox()
         if name then created(Sets.New(name)) end

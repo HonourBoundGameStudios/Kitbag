@@ -623,10 +623,11 @@ Verify.CHECKS = {
         -- under the button's own edge. So an overflowed row reads as a button with a strangely
         -- clipped word on it, which nobody reports as "the window is too narrow".
         --
-        -- UI-24 then bought 136 pixels back by turning Options and Rules into icons and spent most of
-        -- them widening the name box again. That is the same trade in the other direction, so the
-        -- arithmetic still has to be checked rather than assumed comfortable — and two of the five
-        -- controls now fail in a way no width can catch. See step 3.
+        -- UI-24 and UI-27 then turned all four buttons into icons and spent most of what that freed
+        -- on widening the name box again. That is the same trade in the other direction, so the
+        -- arithmetic still has to be checked rather than assumed comfortable — and every button on
+        -- the row now fails in a way no width can catch. See step 3, which keeps the label arm for
+        -- the day a text button comes back rather than deleting a branch that would then be missed.
         run = function()
             if not Kitbag.UI then return nil, "KitbagUI is not loaded" end
             local frame = _G.KitbagFrame
@@ -638,8 +639,8 @@ Verify.CHECKS = {
             -- reader wants the numbers in.
             local row = {
                 { name = "the name box", frame = _G.KitbagNameBox },
-                { name = "Save",         frame = _G.KitbagSaveButton },
-                { name = "New set",      frame = _G.KitbagNewSetButton },
+                { name = "Save",         frame = _G.KitbagSaveButton,    icon = true },
+                { name = "New set",      frame = _G.KitbagNewSetButton,  icon = true },
                 { name = "Options",      frame = _G.KitbagOptionsButton, icon = true },
                 { name = "Rules",        frame = _G.KitbagRulesButton,   icon = true },
             }
