@@ -719,12 +719,39 @@ local function buildDoll(parent)
     -- Guarded: `DressUpModel` and `TryOn` are ancient, but a flavour that lacks either would take
     -- the whole window down at build time, and the panel reads perfectly well without a model.
     local modelTop = PARENT_Y - 26
+
+    -- The well the preview sits in. Every other thing this panel draws sits in something — each of
+    -- the nineteen cells has a tinted edge over a dark ground — and the model had neither, so the one
+    -- region of the paperdoll that is not made of squares read as a hole between two columns of them.
+    -- Same two textures as a cell, for the same reason they are textures rather than a backdrop:
+    -- identical on every flavour and cheaper than one.
+    --
+    -- It is the model's PARENT rather than a plate behind it. A decorative sibling looks the same in
+    -- a screenshot and behaves differently in every way that matters — it would not hide with the
+    -- model and would draw over or under it depending on creation order.
+    local well = CreateFrame("Frame", "KitbagPreviewFrame", panel)
+    well:SetSize(gapWidth, modelTop - weaponsY - 8)
+    well:SetPoint("TOP", panel, "TOP", 0, modelTop)
+
+    well.border = well:CreateTexture(nil, "BACKGROUND")
+    well.border:SetAllPoints()
+    well.border:SetTexture("Interface\\Buttons\\WHITE8X8")
+    well.border:SetVertexColor(0.33, 0.30, 0.24, 1)
+
+    well.ground = well:CreateTexture(nil, "BORDER")
+    well.ground:SetPoint("TOPLEFT", 1, -1)
+    well.ground:SetPoint("BOTTOMRIGHT", -1, 1)
+    well.ground:SetTexture("Interface\\Buttons\\WHITE8X8")
+    well.ground:SetVertexColor(0.05, 0.05, 0.06, 1)
+
+    panel.well = well
+
     -- Named, unlike every other frame here: a model that renders nothing looks identical to a model
     -- that was never created, and a name is the only way to tell the two apart from a `/run` line.
-    local ok, model = pcall(CreateFrame, "DressUpModel", "KitbagPreviewModel", panel)
+    local ok, model = pcall(CreateFrame, "DressUpModel", "KitbagPreviewModel", well)
     if ok and model and model.TryOn then
-        model:SetSize(gapWidth, modelTop - weaponsY - 8)
-        model:SetPoint("TOP", panel, "TOP", 0, modelTop)
+        model:SetPoint("TOPLEFT", well, "TOPLEFT", 1, -1)
+        model:SetPoint("BOTTOMRIGHT", well, "BOTTOMRIGHT", -1, 1)
         model:EnableMouse(true)
         model:SetScript("OnMouseDown", function(self) self.dragX = GetCursorPosition() end)
         model:SetScript("OnMouseUp", function(self) self.dragX = nil end)
@@ -748,6 +775,10 @@ local function buildDoll(parent)
             self.dressed = nil
         end)
         panel.model = model
+    else
+        -- A bordered box with nothing in it is worse than no box: on a flavour without DressUpModel
+        -- the well would read as a preview that failed rather than as a panel that never offered one.
+        well:Hide()
     end
 
     -- The action row. Three buttons where there were two (UI-20), sized off the panel rather than

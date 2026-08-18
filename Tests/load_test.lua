@@ -1550,4 +1550,25 @@ G.DEFAULT_CHAT_FRAME.AddMessage = realAddMessage
 H.ok(table.concat(helped, "\n"):find("/kit session", 1, true) ~= nil,
     "…and /kit help offers it, or the command exists for nobody")
 
+
+-- ---------------------------------------------------------------------------
+-- The paperdoll's model well (UI-21)
+-- ---------------------------------------------------------------------------
+--
+-- Every other thing the inspector draws sits in something: each of the nineteen cells has a tinted
+-- border and a dark ground, and the panel itself lives inside the window's frame. The character
+-- preview had neither — a lit model floating on the window's inset with no edge — so the one part of
+-- the paperdoll that is not made of squares read as an unfinished hole between two columns of them.
+--
+-- The frame is asserted as the model's PARENT rather than as a frame that happens to overlap it. A
+-- decorative sibling would look identical in a screenshot and behave differently in every way that
+-- matters: it would not hide with the model, it would not clip it, and its border would draw
+-- underneath or above depending on creation order. Parenting is the claim worth pinning.
+local previewFrame = G.KitbagPreviewFrame
+H.ok(previewFrame ~= nil, "the paperdoll's character preview is set in a frame of its own")
+H.ok(G.KitbagPreviewModel and G.KitbagPreviewModel:GetParent() == previewFrame,
+    "…and the model is INSIDE it, so it hides, clips and moves with the well rather than beside it")
+H.ok(previewFrame and previewFrame:GetParent() == G.KitbagCopyButton:GetParent(),
+    "…and the well belongs to the inspector panel that owns the cells around it")
+
 H.done()
