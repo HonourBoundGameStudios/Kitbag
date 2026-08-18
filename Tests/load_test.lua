@@ -1350,4 +1350,64 @@ UI.Refresh()
 H.ok(panel.equip:IsEnabled(), "coming back to life gives Equip back")
 H.ok(rawget(panel, "blocked") == nil, "…and the window stops holding a reason it no longer has")
 
+-- ---------------------------------------------------------------------------
+-- The inherit menu ticks the real parent, and picking one redraws (VERIFY-13)
+-- ---------------------------------------------------------------------------
+--
+-- `/kit verify` counts the check textures on Blizzard's list frame in the client. This asks the other
+-- side of the same question — the info tables the menu is BUILT from — and adds the two halves a
+-- drawn menu cannot show: that a child is never offered as its own parent (the loop `Sets.Inherit`
+-- would refuse, so the menu must not offer it in the first place), and that picking an entry actually
+-- changes the set and repaints the doll with the inherited pieces in it.
+G.Kitbag.char = { sets = {
+    Base   = { slots = { [1] = "444:0:0:0:0:0:0" } },
+    Child  = { slots = { [2] = "555:0:0:0:0:0:0" } },
+}, rules = {}, swaps = {} }
+G.KitbagFrame:Show()
+UI.Select("Child")
+
+local function openInheritMenu()
+    local captured = {}
+    local realAdd = G.UIDropDownMenu_AddButton
+    G.UIDropDownMenu_AddButton = function(info, level)
+        captured[#captured + 1] = info
+        return realAdd(info, level)
+    end
+    G.KitbagInheritButton:Click()
+    G.UIDropDownMenu_AddButton = realAdd
+    local byText = {}
+    for _, info in ipairs(captured) do byText[tostring(info.text)] = info end
+    return byText
+end
+
+local menu = openInheritMenu()
+H.ok(menu["Nothing"] ~= nil, "the menu offers Nothing, which is how the pieces are given back")
+H.ok(menu["Nothing"].checked == true, "…ticked, because a set inheriting from nothing HAS a parent: nil")
+H.ok(menu["Base"] ~= nil, "…and the other set is offered as a parent")
+H.ok(menu["Base"].checked == false, "…unticked, since it is not the parent yet")
+H.ok(menu["Child"] == nil, "…while the set itself is never offered as its own parent")
+
+-- Picking Base must both inherit and redraw. The doll's slot 1 cell has nothing of its own in it, so
+-- the inherited piece arriving is exactly the difference between the two states.
+local cell1
+for slotId, cell in pairs(G.KitbagCopyButton:GetParent().cells) do
+    if slotId == 1 then cell1 = cell end
+end
+H.ok(cell1 ~= nil, "the doll has a cell for the slot the parent supplies")
+H.ok(not cell1.icon:IsShown(), "…and it is empty before the set inherits anything")
+
+menu["Base"].func()
+H.eq(Kitbag.Sets.ParentOf("Child"), "Base", "picking a set really does set the parent")
+H.ok(cell1.icon:IsShown(),
+    "…and the doll is redrawn with the inherited piece in it, rather than at the next unrelated refresh")
+
+local after = openInheritMenu()
+H.ok(after["Base"].checked == true, "reopening the menu ticks the parent it now has")
+H.ok(after["Nothing"].checked == false, "…and Nothing is no longer the answer")
+
+after["Nothing"].func()
+H.eq(Kitbag.Sets.ParentOf("Child"), nil, "Nothing clears the parent")
+H.ok(cell1.icon:IsShown(),
+    "…and the pieces that were arriving through it are KEPT, flattened into the set itself")
+
 H.done()
