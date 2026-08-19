@@ -11,8 +11,8 @@
 -- cells come from Core.Doll and are therefore plan-derived — an off hand that a two-hander is about
 -- to free shows as being emptied even though the set never mentions that slot.
 --
--- Its neighbours own the rest: KitbagRulesUI the rule editor, KitbagFlyout the per-slot menus on
--- Blizzard's own character sheet, KitbagIcons the icon picker.
+-- Its neighbours own the rest: KitbagFlyout the per-slot menus on Blizzard's own character sheet,
+-- KitbagIcons the icon picker.
 
 Kitbag = Kitbag or {}
 
@@ -57,9 +57,8 @@ local COPY_ICON = "Interface\\Icons\\INV_Misc_GroupLooking"
 local SAVE_ICON = "Interface\\Icons\\INV_Misc_Note_01"
 local NEW_ICON = "Interface\\Buttons\\UI-PlusButton-Up"
 
--- The two doors on the bottom row (UI-24). A book for the thing you read and write sentences in, and
--- the engineering wrench for settings, which is the closest thing this client has to a cog.
-local RULES_ICON = "Interface\\Icons\\INV_Misc_Book_09"
+-- The door on the bottom row (UI-24): the engineering wrench for settings, which is the closest
+-- thing this client has to a cog.
 local OPTIONS_ICON = "Interface\\Icons\\Trade_Engineering"
 
 local CELL = 34            -- a doll cell, big enough to read an icon at a glance
@@ -272,7 +271,7 @@ local function onRowClick(self)
 end
 
 local function createRow(parent, index)
-    -- Named, as the rule list's rows are. Thirteen rows serve any number of sets, so a row is only
+    -- Named, so a check can measure them. Thirteen rows serve any number of sets, so a row is only
     -- meaningful together with the `setName` it is currently showing — and the pair is what the
     -- Equip and Delete buttons ultimately act through, which is the one unrecoverable act in the
     -- addon pointed at a variable (VERIFY-8). A handle is what lets that be driven in a test.
@@ -1006,9 +1005,9 @@ local function refreshDoll(name, plan, totals)
     -- you ran back as a ghost; the click then spent the driver's whole BUSY_LIMIT before reporting
     -- that you had been dead the entire time — honest, and ten seconds too late.
     --
-    -- Only the controls that move items go quiet. The list, the inspector, the picker, the rule
-    -- editor and the options panel stay live, because running back as a ghost is exactly when
-    -- someone has time to tidy their sets, and editing one touches no gear at all.
+    -- Only the controls that move items go quiet. The list, the inspector, the picker and the
+    -- options panel stay live, because running back as a ghost is exactly when someone has time to
+    -- tidy their sets, and editing one touches no gear at all.
     local canSwap, why = Core.CanSwap(Kitbag.Compat.ActionState())
     doll.blocked = (not canSwap) and why or nil
     -- SetIconEnabled rather than Enable/Disable: with no label on the button, the picture is the only
@@ -1070,9 +1069,8 @@ local function build()
     -- the same shelf Blizzard's character sheet and bags sit on: they interleaved with the game's
     -- UI and with each other by creation order, which is not an order anyone can predict. One
     -- deliberate stack instead — the main window above the game's frames, the panels it opens
-    -- (rules, options, icon picker) in DIALOG above that. `SetToplevel` is what raises a window
-    -- when it is clicked, so two Kitbag windows in the same strata cannot get stuck the wrong way
-    -- round. This also matters for the character preview: a 3D model is drawn in its strata's own
+    -- (options, icon picker) in DIALOG above that. `SetToplevel` is what raises a window when it is
+    -- clicked, so two Kitbag windows in the same strata cannot get stuck the wrong way round. This also matters for the character preview: a 3D model is drawn in its strata's own
     -- pass, and anything sitting above it hides it completely rather than partially.
     frame:SetFrameStrata("HIGH")
     frame:SetToplevel(true)
@@ -1136,46 +1134,37 @@ local function build()
     status:SetWidth(316)
     status:SetJustifyH("LEFT")
 
-    -- The bottom row's four controls are NAMED so /kit verify can measure them (VERIFY-10). The row
-    -- is full at 660 wide and UIPanelButtonTemplate does not shrink a label that no longer fits — it
+    -- The bottom row's controls are NAMED so /kit verify can measure them (VERIFY-10). The row is
+    -- full at 660 wide and UIPanelButtonTemplate does not shrink a label that no longer fits — it
     -- lets it run out under the button's edge — so an overflow reads as an oddly-worded button rather
     -- than as a layout fault, and nobody files it.
-    -- Both are doors to other windows rather than things this window does, which is the one kind of
-    -- control an icon is unambiguously right for — and between them they were spending 180 pixels of
-    -- a row VERIFY-10 exists because it was full (UI-24).
+    -- Options is a door to another window rather than something this window does, which is the one
+    -- kind of control an icon is unambiguously right for — and it was spending 90 pixels of a row
+    -- VERIFY-10 exists because it was full (UI-24).
     --
-    -- Neither had a tooltip while it had a label. That was survivable then and is not now, so the
-    -- hover arrives with the picture; `/kit verify` asserts the pair rather than trusting it. Worth
-    -- saying that this leaves the row better explained than it was: "Rules" never said what a rule
-    -- was for either.
-    local rulesButton = Skin.IconButton(frame, "KitbagRulesButton", RULES_ICON, 22)
-    rulesButton:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -14, 14)
-    rulesButton:SetScript("OnClick", function() Kitbag.RulesUI.Toggle() end)
-    rulesButton:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_TOPRIGHT")
-        GameTooltip:AddLine("Auto-swap rules", 1, 0.82, 0)
-        GameTooltip:AddLine("Which set gets worn on its own, and when — forms, combat, stealth, " ..
-            "mounts, zones.", 0.9, 0.9, 0.9, true)
-        GameTooltip:Show()
-    end)
-    rulesButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
-
+    -- It had no tooltip while it had a label. That was survivable then and is not now, so the hover
+    -- arrives with the picture; `/kit verify` asserts the pair rather than trusting it.
+    --
+    -- The Rules button stood to its right until the engine was shelved (see Icebox/). Options simply
+    -- inherits that corner rather than sitting where it did with a gap beside it: a control anchored
+    -- to a button that no longer exists is a layout that breaks silently, and a hole in the row reads
+    -- as something failing to draw.
     local optionsButton = Skin.IconButton(frame, "KitbagOptionsButton", OPTIONS_ICON, 22)
-    optionsButton:SetPoint("RIGHT", rulesButton, "LEFT", -6, 0)
+    optionsButton:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -14, 14)
     optionsButton:SetScript("OnClick", function() Kitbag.Options.Toggle() end)
     optionsButton:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_TOPRIGHT")
         GameTooltip:AddLine("Options", 1, 0.82, 0)
-        GameTooltip:AddLine("Auto-swap, the minimap button, the trinket bar and what Kitbag says " ..
-            "in chat.", 0.9, 0.9, 0.9, true)
+        GameTooltip:AddLine("The minimap button, the trinket bar and what Kitbag says in chat.",
+            0.9, 0.9, 0.9, true)
         GameTooltip:Show()
     end)
     optionsButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-    -- It was cut to 150 to buy the Options button its room; UI-24 and UI-27 turned all four of the
-    -- row's buttons into icons and handed back nearly 300 pixels between them. An edit box scrolls,
-    -- so a long name always typed fine — but a box that shows the whole name is the difference
-    -- between reading what you are about to save and trusting it.
+    -- It was cut to 150 to buy the Options button its room; UI-24 and UI-27 turned the row's buttons
+    -- into icons and handed back nearly 300 pixels between them. An edit box scrolls, so a long name
+    -- always typed fine — but a box that shows the whole name is the difference between reading what
+    -- you are about to save and trusting it.
     --
     -- 306 lines its right edge up with the list above it. It sits at 20 where the list sits at 14
     -- because InputBoxTemplate insets its own border by about five pixels a side, which is the same
@@ -1389,17 +1378,17 @@ function UI.Refresh()
 end
 
 -- Dying and coming back changes whether Equip may be pressed, and nothing else in the addon redraws
--- the window for it (UI-19). A watcher of its own rather than an addition to KitbagEvents' WATCHED
--- list: that list feeds the rule engine, and death is not a condition any rule matches on.
+-- the window for it (UI-19). A watcher of its own, and now the only one in the addon: the rule
+-- engine that used to keep its own event list is shelved in Icebox/.
 --
 -- Death only. A cast also blocks a swap, but it clears itself in a second or two and the driver
 -- simply waits it out and then succeeds — which is correct behaviour, not the bug. Registering the
 -- seven spellcast events to grey a button for the length of a Frostbolt would put this frame in the
 -- middle of every combat log for no outcome anyone would notice.
 --
--- Named, for the reason KitbagEventFrame is (RULE-7): a watcher with no handle on it from outside
--- can only be checked by dying, and dying is the one act `/kit verify` cannot perform. The name is
--- what lets a check ask whether the client ACCEPTED these three — the registration is inside a
+-- Named, and for a reason: a watcher with no handle on it from outside can only be checked by dying,
+-- and dying is the one act `/kit verify` cannot perform. The name is what lets a check ask whether
+-- the client ACCEPTED these three — the registration is inside a
 -- pcall, so an event a flavour lacks is silent, and silent in the worst direction: PLAYER_ALIVE and
 -- PLAYER_UNGHOST are what bring the window back by itself on release (VERIFY-15).
 local deathWatcher = CreateFrame("Frame", "KitbagDeathWatcher")

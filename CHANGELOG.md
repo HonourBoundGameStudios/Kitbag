@@ -3,6 +3,16 @@
 All notable changes to Kitbag. The version here is the one in `Kitbag.toc` — the number players
 actually see — and `Tests/toc_test.lua` holds the two together.
 
+## [Unreleased]
+
+### Changed
+
+- **Auto-swap rules are shelved.** The rule engine, its editor, the event wiring and the Rules
+  button are in `Icebox/` and nothing loads them, so Kitbag changes gear only when you ask it to.
+  `/kit rules` and `/kit why` are gone with them, as are the two auto-swap options. **Rules you
+  saved are untouched** in your SavedVariables — nothing was migrated away — and `Icebox/README.md`
+  lists everything that has to come back with the engine.
+
 ## [0.1.0] — 2026-08-18
 
 First release. Gear sets that actually apply.

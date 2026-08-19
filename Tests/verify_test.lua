@@ -216,14 +216,6 @@ H.ok(byId["key-button"] ~= nil,
 H.eq(byId["key-button"] and byId["key-button"].item, "VERIFY-16",
     "…and it names the item it answers")
 
--- VERIFY-11's geometry half. "The bar clears the X on every row" has a specific failure the item
--- names: the bar landing on top of every row's X reads as a DEAD BUTTON, not as a layout bug, so it
--- gets reported as "delete doesn't work" and sends the next session into the wrong file entirely.
-H.ok(byId["rule-list-layout"] ~= nil,
-    "a check measures whether the rule list's scroll bar lands on the X it would disable")
-H.eq(byId["rule-list-layout"] and byId["rule-list-layout"].item, "VERIFY-11",
-    "…and it names the item it answers")
-
 -- SHIP-6's lesson applied to a check rather than to a whitelist: an instrument must DERIVE what it
 -- shows, not restate it. The overwrite check used to hand StaticPopup a sentence written by hand,
 -- which proves the popup draws and says nothing whatever about VERIFY-12's actual question — whether
@@ -280,17 +272,6 @@ H.ok(byId["copy-button"] ~= nil,
 H.eq(byId["copy-button"] and byId["copy-button"].item, "VERIFY-17",
     "…and it names the item it answers")
 
--- VERIFY-18's wake-up half, which the item itself says is the likelier failure. Holding a swap while
--- the player is dead is a `return` and is covered pure; waking depends on PLAYER_ALIVE/PLAYER_UNGHOST
--- ARRIVING, and Events.Enable registers inside pcall precisely because an event a flavour does not
--- have is a hard error — so an absent one is silent, and silence is indistinguishable from a rule
--- that never matched. The addon already records which events the client accepted; comparing that
--- against what it asked for is two readings agreeing, not a judgement, so nobody should be reading
--- fifteen lines of a dump by eye to do it.
-H.ok(byId["watched-events"] ~= nil,
-    "a check proves the client accepted every event the engine watches, not merely that it asked")
-H.eq(byId["watched-events"] and byId["watched-events"].item, "VERIFY-18",
-    "…and it names the item it answers")
 -- VERIFY-15, whose own note says the likely failure is the REDRAW rather than the decision: the
 -- greying is Core.CanSwap and covered, so a control that stays live while the player is dead is
 -- most likely a window nobody told about the death. The telling is three events on a watcher of the

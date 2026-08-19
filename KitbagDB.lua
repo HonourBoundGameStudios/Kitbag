@@ -132,10 +132,10 @@ end
 -- `invert` is for the flags stored as "hide": nobody wants a tick box labelled "hide the minimap
 -- button" that is ticked when the button is visible.
 DB.OPTIONS = {
-    { path = "autoSwap",      label = "Let rules swap my gear",
-      hint = "Turn this off to keep every rule without any of them firing." },
-    { path = "deferInCombat", label = "Wait until combat ends before swapping",
-      hint = "Most gear cannot be changed in combat anyway." },
+    -- `autoSwap` and `deferInCombat` are deliberately ABSENT while the rule engine is shelved (see
+    -- Icebox/). Their defaults stay in the stored table so a player's setting survives the shelving,
+    -- but a checkbox for an engine that no longer loads is a control that does nothing — which is
+    -- worse than a missing one, because it looks like the feature is merely switched off.
     { path = "announce",      label = "Say in chat when a set is equipped" },
     { path = "flyouts",       label = "Show alternatives when I hover a paperdoll slot" },
     { path = "autoConfirmBind", label = "Bind items for me when a set needs it",

@@ -1,4 +1,4 @@
--- KitbagSets — the service the UI, the slash commands and the rule engine all go through.
+-- KitbagSets — the service the UI and the slash commands both go through.
 --
 -- Thin by design: it reads the world (Inventory), decides (Core), and performs (Equip). It owns no
 -- logic of its own beyond storage and the user-facing report, so there is exactly one code path
@@ -527,12 +527,13 @@ function Sets.Overview()
     return out
 end
 
---- Equip a set. `silent` suppresses the chat report for rule-driven swaps, which would otherwise
---- narrate every shapeshift.
+--- Equip a set. `silent` suppresses the chat report for a swap nobody asked for by name — the
+--- paperdoll flyout's one-slot outfit is the caller that uses it today, and the shelved rule engine
+--- (Icebox/) was the other.
 ---
 --- `onDone(ok)` fires exactly once, on every path, including the ones that refuse before touching
 --- anything. The return value cannot carry that: equipping is asynchronous, so it says only whether
---- the attempt started, and the rule engine needs to know whether the gear went ON (BUG-10).
+--- the attempt STARTED, not whether the gear went on (BUG-10).
 function Sets.Equip(name, silent, onDone)
     local set = resolved(name)
     if not set then
@@ -630,8 +631,8 @@ function Sets.Apply(set, label, silent, onDone)
             say("|cffffd100%s|r is empty — |cff808080click a slot in the window to fill it in.|r",
                 label)
         end
-        -- Nothing to do counts as done. A set that names no slots can never "go on", and reporting
-        -- it as a failure would have the rule engine retry it on every event for ever.
+        -- Nothing to do counts as done. A set that names no slots can never "go on", so reporting it
+        -- as a failure would give every caller something to retry that can never succeed.
         return done(true, "the set names no slots")
     end
 
@@ -656,8 +657,8 @@ function Sets.Apply(set, label, silent, onDone)
     end
 
     local started = Equip.Run(plan, label, function(ok, _, applied, reason)
-        -- Only a real set becomes `lastSet`. A flyout swap is an outfit, not a set, and recording
-        -- it would leave the rule engine comparing against a name no set list contains.
+        -- Only a real set becomes `lastSet`. A flyout swap is an outfit, not a set, and recording it
+        -- would leave the window and the broker naming a set no set list contains.
         if ok and char().sets[applied] then char().lastSet = applied end
         if ok then
             if not silent and db().options.announce then say("equipped |cffffd100%s|r.", applied) end

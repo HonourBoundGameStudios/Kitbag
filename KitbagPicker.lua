@@ -83,7 +83,7 @@ local function build()
     frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
     frame:SetClampedToScreen(true)
     -- DIALOG, above the main window it is opened from, and toplevel so two Kitbag panels cannot get
-    -- stuck the wrong way round. Same stack the icon picker and the rule editor are in.
+    -- stuck the wrong way round. Same stack the icon picker and the options panel are in.
     frame:SetFrameStrata("DIALOG")
     frame:SetToplevel(true)
     frame:Hide()

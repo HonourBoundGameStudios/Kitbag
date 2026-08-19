@@ -7,8 +7,12 @@ and are referenced by path, never `@import`ed.
 ## Project Overview
 
 **Kitbag** is a gear-set manager for **World of Warcraft Classic** — the job ItemRack used to do,
-rebuilt. Save what you're wearing as a named set, swap it back in one click, and let rules swap it
-for you on form/combat/stealth/zone.
+rebuilt. Save what you're wearing as a named set and swap it back in one click.
+
+**Auto-swap rules are SHELVED** (2026-08-18). `KitbagRules.lua`, `KitbagEvents.lua` and
+`KitbagRulesUI.lua` live in `Icebox/`, no `.toc` lists them, and nothing calls them. Stored rules and
+the schema are untouched. Read `Icebox/README.md` before touching anything rule-shaped — it lists
+every call site that came out with them.
 
 - **Stack:** Lua 5.1 (the WoW runtime), Blizzard FrameXML. No XML files, no libraries, no build step
   — the client compiles the Lua at load and you iterate with `/reload`.
@@ -24,14 +28,13 @@ only be tested by wearing the bug.
 | File | Role |
 |---|---|
 | `KitbagCore.lua` | **PURE.** Item identity, set capture, the equip planner. No WoW API. |
-| `KitbagRules.lua` | **PURE.** Which set wins for a given world state, and `Explain()` for why. |
 | `KitbagCompat.lua` | **The only file allowed to branch on the game flavour.** |
 | `KitbagDB.lua` | SavedVariables schema, defaults, migrations. |
 | `KitbagInventory.lua` | Reads the client into the plain tables the planner takes. No decisions. |
 | `KitbagEquip.lua` | Performs a plan: one action per frame, verify each, bounded retries. |
-| `KitbagSets.lua` | The one code path that equips a set. UI, slash and rules all go through it. |
-| `KitbagEvents.lua` | Events in, state snapshot out, hands it to `KitbagRules`. |
+| `KitbagSets.lua` | The one code path that equips a set. UI and slash both go through it. |
 | `KitbagUI.lua` / `KitbagMinimap.lua` | The window and its launcher. |
+| `Icebox/` | **Shelved, never loaded.** The rule engine and its editor — see `Icebox/README.md`. |
 | `Kitbag.lua` | Bootstrap: load order, SavedVariables handoff, slash commands. Loads last. |
 
 ## The Process — NON-NEGOTIABLE
@@ -65,7 +68,7 @@ pwsh -File deploy.ps1                           # copy into the WoW AddOns folde
 pwsh -File deploy.ps1 -WowPath "D:\WoW\_classic_era_"
 ```
 
-In-game: `/reload` to pick up changes, `/kit` to open, `/kit why` to see which rule is choosing.
+In-game: `/reload` to pick up changes, `/kit` to open, `/kit debug` then `/reload` for a dump.
 Enable Lua errors while developing: `/console scriptErrors 1` (or run BugSack).
 
 `Tests/` is **not** shipped — `deploy.ps1` copies only `*.lua` at the root and `*.toc`.

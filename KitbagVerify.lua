@@ -150,13 +150,6 @@ Verify.CHECKS = {
         end,
     },
     {
-        id = "rules-window", item = "VERIFY-1", label = "Rule editor draws",
-        run = function()
-            if not Kitbag.RulesUI then return nil, "KitbagRulesUI is not loaded" end
-            return inspect(Kitbag.RulesUI.Toggle, "KitbagRulesFrame")
-        end,
-    },
-    {
         id = "options-window", item = "VERIFY-2", label = "Options panel draws",
         run = function()
             if not Kitbag.Options then return nil, "KitbagOptions is not loaded" end
@@ -289,56 +282,6 @@ Verify.CHECKS = {
                 table.concat(lines, "; "),
                 Inventory.IsBankOpen() and "OPEN, so a second Equip can complete these" or "shut",
                 parts[1].name)
-        end,
-    },
-    {
-        id = "watched-events", item = "VERIFY-18", label = "The client accepted every watched event",
-        -- The engine ASKS for fifteen events inside a pcall, because an event a flavour does not have
-        -- is a hard error rather than a no. What it gets is a separate question, and the gap between
-        -- the two is silent: a rule conditioning on an event the client never sends looks exactly
-        -- like a rule that never matched, which is BUG-9's shape and cost a session once already.
-        --
-        -- Events.Enable already records the answer per event; this only compares the record against
-        -- what was asked for, which is why it is a check and not a person reading fifteen lines of a
-        -- dump. PLAYER_ALIVE and PLAYER_UNGHOST are called out by name because their failure is a
-        -- different and worse thing than a condition that never matches: they are what WAKES a swap
-        -- held off through a corpse run (RULE-6), so losing them does not mean a rule never fires —
-        -- it means gear that was deliberately held is never given back.
-        run = function()
-            local Events = Kitbag.Events
-            if not Events or not Events.Diagnostics then return nil, "KitbagEvents is not loaded" end
-
-            local watched = Events.Diagnostics().events or {}
-            if #watched == 0 then
-                -- Enable() runs unconditionally at PLAYER_LOGIN — it is not behind the auto-swap
-                -- option, which gates whether a matched rule ACTS and not whether the client is
-                -- listened to. So an empty record means the login handler did not reach here at
-                -- all, which is a much larger fault than a switched-off feature.
-                return nil, "the engine has never registered anything — Events.Enable() did not "
-                    .. "run, which happens at PLAYER_LOGIN and is not optional"
-            end
-
-            local WAKE = { PLAYER_ALIVE = true, PLAYER_UNGHOST = true }
-            local missing, wake = {}, {}
-            for _, e in ipairs(watched) do
-                if not e.registered then
-                    missing[#missing + 1] = tostring(e.name)
-                    if WAKE[e.name] then wake[#wake + 1] = tostring(e.name) end
-                end
-            end
-
-            if #wake > 0 then
-                return false, string.format(
-                    "%s did not register — a swap held while dead (RULE-6) would never be woken, "
-                    .. "and the gear would simply stay off", table.concat(wake, " and "))
-            end
-            if #missing > 0 then
-                return false, string.format(
-                    "%d of %d events did not register: %s — any rule conditioning on one of those "
-                    .. "will silently never match", #missing, #watched, table.concat(missing, ", "))
-            end
-            return true, string.format("all %d watched events registered, including the "
-                .. "PLAYER_ALIVE/PLAYER_UNGHOST pair the corpse-run wake-up needs", #watched)
         end,
     },
     {
@@ -597,7 +540,7 @@ Verify.CHECKS = {
         -- under the button's own edge. So an overflowed row reads as a button with a strangely
         -- clipped word on it, which nobody reports as "the window is too narrow".
         --
-        -- UI-24 and UI-27 then turned all four buttons into icons and spent most of what that freed
+        -- UI-24 and UI-27 then turned the buttons into icons and spent most of what that freed
         -- on widening the name box again. That is the same trade in the other direction, so the
         -- arithmetic still has to be checked rather than assumed comfortable — and every button on
         -- the row now fails in a way no width can catch. See step 3, which keeps the label arm for
@@ -616,7 +559,6 @@ Verify.CHECKS = {
                 { name = "Save",         frame = _G.KitbagSaveButton,    icon = true },
                 { name = "New set",      frame = _G.KitbagNewSetButton,  icon = true },
                 { name = "Options",      frame = _G.KitbagOptionsButton, icon = true },
-                { name = "Rules",        frame = _G.KitbagRulesButton,   icon = true },
             }
             for _, piece in ipairs(row) do
                 if not piece.frame then
@@ -654,7 +596,7 @@ Verify.CHECKS = {
             local inRight = row[#row].frame:GetRight() and frame:GetRight()
                 and (frame:GetRight() - row[#row].frame:GetRight())
             if inLeft and inLeft < 0 then faults[#faults + 1] = "the name box runs off the left edge" end
-            if inRight and inRight < 0 then faults[#faults + 1] = "Rules runs off the right edge" end
+            if inRight and inRight < 0 then faults[#faults + 1] = "Options runs off the right edge" end
 
             -- 3. Each control readable in its own right. Two failures, and which one applies depends
             -- on whether the control has words on it.
@@ -663,8 +605,8 @@ Verify.CHECKS = {
             -- it, so a label that no longer fits looks like a label somebody typed badly. An icon
             -- (UI-24) cannot clip and fails the other way instead — no texture is a blank square and
             -- no tooltip is a square nobody can name, and both look deliberate. Skipping the icon
-            -- buttons here because they have no font string would leave this check reporting on a
-            -- row of five while measuring three.
+            -- buttons here because they have no font string would leave this check reporting on the
+            -- whole row while measuring only part of it.
             for i = 2, #row do
                 local piece = row[i]
                 if piece.icon then
@@ -1344,45 +1286,6 @@ Verify.CHECKS = {
         end,
     },
     {
-        id = "rule-list-layout", item = "VERIFY-11", label = "The rule list's bar clears its X buttons",
-        -- The failure this measures is not cosmetic and does not read as a layout fault. A scroll bar
-        -- sitting on every row's X makes delete look BROKEN, so it gets reported as "the X does
-        -- nothing" and the next session goes hunting in the click handler, which is fine.
-        run = function()
-            local RulesUI = Kitbag.RulesUI
-            if not RulesUI then return nil, "KitbagRulesUI is not loaded" end
-            local list = _G.KitbagRulesList
-            local x    = _G.KitbagRuleRow1Remove
-            local bar  = _G.KitbagRulesScrollFrameScrollBar
-            if not (list and x) then
-                return nil, "the rule list is built with the editor — open /kit rules once, then run this"
-            end
-            if not bar then return false, "the rule list has no scroll bar frame to measure" end
-
-            local rules = Kitbag.char and Kitbag.char.rules or {}
-            local count = #rules
-
-            local clearance = bar:GetLeft() and x:GetRight() and (bar:GetLeft() - x:GetRight())
-            if not clearance then
-                return nil, "the rule editor has not been laid out yet — open /kit rules, then run this"
-            end
-
-            -- Whether the bar is SHOWN depends on the rule count, but its position does not, so the
-            -- clearance is worth measuring either way. Reporting the count with it is what lets a
-            -- reader tell "measured with the bar up" from "measured with it hidden".
-            local shown = bar:IsShown()
-            local detail = string.format("bar clears row 1's X by %d (%d rule(s), bar %s)",
-                clearance, count, shown and "showing" or "hidden")
-
-            if clearance < 0 then
-                return false, string.format(
-                    "the scroll bar overlaps row 1's X by %d — delete will read as a dead button "
-                    .. "(%d rule(s), bar %s)", -clearance, count, shown and "showing" or "hidden")
-            end
-            return true, detail
-        end,
-    },
-    {
         id = "scroll-clamp", item = "VERIFY-11", label = "A shrinking list cannot go blank",
         -- Pure arithmetic, but run HERE too: the pure test proves ScrollOffset is right, and this
         -- proves the client is running a build that contains it.
@@ -1398,28 +1301,28 @@ Verify.CHECKS = {
         end,
     },
     {
-        id = "wheel-layering", item = "VERIFY-11", label = "All four lists stack the same way",
-        -- The wheel is the last thing in VERIFY-11 that needs eyes, and asking it of the RULE list
-        -- costs a person eight authored rules — no character on this account has more than one, so
-        -- that list cannot even scroll. It does not have to be asked there.
+        id = "wheel-layering", item = "VERIFY-11", label = "All three lists stack the same way",
+        -- The wheel is the last thing in VERIFY-11 that needs eyes.
         --
         -- Every scrolling list here is built the same way: a content frame holding the rows, and a
         -- FauxScrollFrame SIBLING anchored over the same rectangle and created afterwards, so it
         -- stacks above the content. That stacking is exactly what decides whether a wheel turned over
-        -- a row reaches the scroll frame or stops at the content beneath it. One construction, four
+        -- a row reaches the scroll frame or stops at the content beneath it. One construction, three
         -- lists — so spinning the wheel over the CHEAPEST of them (the icon picker: hundreds of
-        -- entries, no setup, one click from any set) answers the question for all four.
+        -- entries, no setup, one click from any set) answers the question for all three.
         --
-        -- A check cannot spin a wheel. What it can do is prove the four are really the same, which is
-        -- what makes that substitution honest — and fail the day one of them stops matching, at which
-        -- point the equivalence must stop being claimed.
+        -- A check cannot spin a wheel. What it can do is prove the three are really the same, which
+        -- is what makes that substitution honest — and fail the day one of them stops matching, at
+        -- which point the equivalence must stop being claimed.
+        --
+        -- The rule list was a fourth, and went to Icebox/ with the engine. It was already the one
+        -- nobody could scroll — no character on this account has ever had more than one rule.
         run = function()
             -- The set list's own frame is unnamed; its rows are not, and a row's parent IS that
             -- frame. Reaching it through the row is better than adding a global for a frame nothing
             -- else needs to name.
             local setRow = _G.KitbagSetRow1
             local LISTS = {
-                { name = "rules",  content = _G.KitbagRulesList, scroll = _G.KitbagRulesScrollFrame },
                 { name = "sets",   content = setRow and setRow:GetParent(), scroll = _G.KitbagScrollFrame },
                 { name = "picker", content = _G.KitbagPickerGrid, scroll = _G.KitbagPickerScroll },
                 { name = "icons",  content = _G.KitbagIconGrid, scroll = _G.KitbagIconScroll },
@@ -1443,8 +1346,8 @@ Verify.CHECKS = {
             end
 
             if seen == 0 then
-                return nil, "none of the lists have been built — open /kit, /kit rules and a set's "
-                    .. "icon picker once, then run this"
+                return nil, "none of the lists have been built — open /kit and a set's icon picker "
+                    .. "once, then run this"
             end
             if #faults > 0 then return false, table.concat(faults, "; ") end
             if seen < #LISTS then
@@ -1561,7 +1464,7 @@ end
 -- ---------------------------------------------------------------------------
 --
 -- The checks above are everything the addon can ask ITSELF. This is the other list: the acts in the
--- WORLD that no frame can perform — die, open a bank, author a rule, launch the other flavour.
+-- WORLD that no frame can perform — die, open a bank, launch the other flavour.
 --
 -- They live here rather than in a working document for one reason. The document is on the machine
 -- that writes the code and the acts are performed on the machine that runs the game, and that gap
@@ -1587,7 +1490,7 @@ Verify.ACTS = {
             .. "as one that worked, so every PASS below is weaker than it looks until this is on.",
     },
     {
-        item = "VERIFY-19", act = "Open /kit and /kit rules and look for MAGENTA squares.",
+        item = "VERIFY-19", act = "Open /kit and look for MAGENTA squares.",
         why = "The visual pass (UI-21..27) left NO text buttons in the addon: ten icon buttons "
             .. "over nine texture paths, and not one of them "
             .. "has ever been drawn. A wrong path in this client does not draw nothing, it renders "
@@ -1600,9 +1503,8 @@ Verify.ACTS = {
         item = "VERIFY-11", act = "Open any set's ICON PICKER and spin the MOUSE WHEEL over "
             .. "the icons.",
         why = "Nothing in Kitbag enables the wheel — it is entirely Blizzard's scroll template. "
-            .. "The icon picker is the cheapest list to ask: all four scrolling lists stack the "
-            .. "same way (see the wheel-layering check), and no character on this account has "
-            .. "more than one rule, so the rule list cannot even scroll without building eight.",
+            .. "The icon picker is the cheapest list to ask: all three scrolling lists stack the "
+            .. "same way (see the wheel-layering check), so one spin answers for all of them.",
     },
     {
         item = "VERIFY-15", act = "Die, with the window open and a set selected.",
@@ -1623,12 +1525,6 @@ Verify.ACTS = {
         item = "VERIFY-17", act = "Copy a set to an alt, then log in as that alt.",
         why = "The menu and the row are measured by checks; that the set is really THERE on the "
             .. "other character is not.",
-    },
-    {
-        item = "VERIFY-18", act = "Die with a rule matching, run back, and resurrect without "
-            .. "clicking anything.",
-        why = "The swap must happen by itself on revival. Check the dump's EVENTS section lists "
-            .. "PLAYER_ALIVE and PLAYER_UNGHOST registered before concluding anything from it.",
     },
     {
         item = "VERIFY-6", act = "Launch Mists Classic once and type /kit.",

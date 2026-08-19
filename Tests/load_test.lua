@@ -496,8 +496,8 @@ end
 -- Source-scanned rather than executed, because the whole point is code that does not run at load.
 
 local MODULES = {
-    "Compat", "Core", "Rules", "Import", "DB", "Inventory", "Equip", "Sets", "Debug",
-    "Events", "Skin", "Icons", "Picker", "Flyout", "UI", "RulesUI", "Trinkets", "Minimap",
+    "Compat", "Core", "Import", "DB", "Inventory", "Equip", "Sets", "Debug",
+    "Skin", "Icons", "Picker", "Flyout", "UI", "Trinkets", "Minimap",
     "Options", "Bindings", "Broker", "Verify",
 }
 
@@ -534,8 +534,8 @@ for _, name in ipairs(tocOrder("Kitbag.toc")) do
 end
 
 local EXPECTED = {
-    "Compat", "Core", "Rules", "Import", "DB", "Inventory", "Equip", "Sets", "Debug",
-    "Events", "Skin", "Icons", "Picker", "Flyout", "UI", "RulesUI", "Trinkets", "Minimap",
+    "Compat", "Core", "Import", "DB", "Inventory", "Equip", "Sets", "Debug",
+    "Skin", "Icons", "Picker", "Flyout", "UI", "Trinkets", "Minimap",
     "Options", "Bindings", "Broker", "Verify",
 }
 for _, key in ipairs(EXPECTED) do
@@ -954,310 +954,6 @@ G.ItemRackUser, G.ItemRackSettings = nil, nil
 H.eq(Sets.ImportItemRack().imported, 0, "no ItemRack installed imports nothing rather than erroring")
 
 -- ---------------------------------------------------------------------------
--- A swap deferred until combat ends is re-decided, not replayed (RULE-7)
--- ---------------------------------------------------------------------------
---
--- Exercised here for the reason every other write path in this file is: the deferral lives in
--- KitbagEvents' file-locals, behind an event handler, and events are the one thing Tests/ cannot
--- fire from pure Lua. The decision itself (Rules.Defer, Rules.Next) is pure and covered in
--- rules_test; what had no coverage at all is the WIRING — and the wiring is where the bug was.
---
--- The bug: `pending` held the step decided when combat started, and PLAYER_REGEN_ENABLED performed
--- it. So you enter combat in bear form with a Bear rule pending, drop form mid-fight, and the set
--- goes on at the end of the fight for a condition that expired a minute ago. Nothing else in the
--- engine works that way — every other path re-decides from the live world.
-
-local Events = G.Kitbag.Events
-local eventFrame = G.KitbagEventFrame
-H.ok(eventFrame ~= nil and eventFrame.OnEvent ~= nil,
-    "the engine's event frame is reachable, so its wiring can be driven outside the client")
-
-G.Kitbag.db = DB.Load({})
-DB.Set(G.Kitbag.db, "autoSwap", true)
-DB.Set(G.Kitbag.db, "deferInCombat", true)
-G.Kitbag.char = DB.Character(G.Kitbag.db, "Pobble - Whitemane")
-G.Kitbag.char.sets = { Bear = { slots = { [1] = "111:0:0:0:0:0:0" } } }
-G.Kitbag.char.rules = { { set = "Bear", when = { form = 1 } } }
-
--- What the engine ASKED for, rather than what the driver managed: the driver is asynchronous and
--- this test is about the decision reaching it at all.
-local equipped, applied = {}, {}
-local realEquip, realApply = Sets.Equip, Sets.Apply
-Sets.Equip = function(name, _, onDone)
-    equipped[#equipped + 1] = name
-    if onDone then onDone(true) end
-    return true
-end
-Sets.Apply = function(_, label) applied[#applied + 1] = label return true end
-
-local form, combat = 1, false
-G.GetShapeshiftForm = function() return form end
-G.InCombatLockdown = function() return combat end
-
--- Combat starts with the rule matching. The swap is owed, and held.
-combat = true
-eventFrame:OnEvent("PLAYER_REGEN_DISABLED")
-H.eq(#equipped, 0, "a swap that matches during combat is not attempted while deferInCombat is on")
-H.eq(Events.Diagnostics().deferred, "Bear",
-    "…and the dump names the set it is waiting to put on, or a held swap looks like no swap at all")
-
--- The condition expires mid-fight. This is the whole item: the world the step was decided in is
--- gone by the time the fight ends.
-form = 0
-eventFrame:OnEvent("UPDATE_SHAPESHIFT_FORM")
-H.eq(Events.Diagnostics().deferred, nil,
-    "a swap stops being owed the moment its rule stops matching, even mid-fight — a dump naming a "
-    .. "set nobody is waiting for sends the next session looking for a swap that never comes")
-
-combat = false
-eventFrame:OnEvent("PLAYER_REGEN_ENABLED")
-H.eq(#equipped, 0,
-    "a deferred swap whose condition expired during the fight does NOT fire when combat ends")
-H.eq(Events.Diagnostics().deferred, nil, "…and nothing is left waiting behind it")
-
--- Combat that ends BECAUSE you died, which is how most fights end. This used to be a guard written
--- out at the handler; the re-decision above deleted it, so it is now apply() asking Rules.Defer like
--- any other event — and that is worth asserting rather than assuming, because the failure is the
--- exact attempt-and-fail RULE-6 exists to stop, arriving through the one door that skipped apply().
-form, combat = 1, true
-eventFrame:OnEvent("PLAYER_REGEN_DISABLED")
-H.eq(Events.Diagnostics().deferred, "Bear", "a swap is owed going into the fight")
-G.UnitIsDeadOrGhost = function() return true end
-combat = false
-eventFrame:OnEvent("PLAYER_REGEN_ENABLED")
-H.eq(#equipped, 0, "nothing is equipped at the moment you hit the floor")
-H.eq(Events.Diagnostics().heldWhileDead, "Bear",
-    "…and the dump says which set is waiting on the corpse run, not merely that nothing happened")
-G.UnitIsDeadOrGhost = nil
-
--- The other direction, so the assertion above cannot be satisfied by a build that simply threw
--- every deferred swap away.
-form, combat = 1, true
-eventFrame:OnEvent("PLAYER_REGEN_DISABLED")
-H.eq(Events.Diagnostics().deferred, "Bear", "a swap deferred with the rule still matching is held")
-combat = false
-eventFrame:OnEvent("PLAYER_REGEN_ENABLED")
-H.eq(table.concat(equipped, ", "), "Bear",
-    "…and IS put on when combat ends, because the condition that chose it still holds")
-
--- Revival, which VERIFY-18 calls the likeliest failure in the whole corpse-run feature. Holding is a
--- `return`; WAKING depends on PLAYER_ALIVE or PLAYER_UNGHOST arriving and being handled like any
--- other event. A mock cannot prove the client SENDS them — that is what the `watched-events` check
--- exists for — but it can prove that when one arrives, the swap the corpse run held is decided again
--- from the world the player came back to rather than being left on the floor with the corpse.
---
--- Last in this block on purpose: it leaves the engine believing a set is on, and the assertions above
--- are about a world where nothing is.
-G.Kitbag.char.sets.Cat = { slots = { [1] = "222:0:0:0:0:0:0" } }
-G.Kitbag.char.rules = { { set = "Cat", when = { form = 3 } } }
-equipped = {}
-
-form, combat = 3, false
-G.UnitIsDeadOrGhost = function() return true end
-eventFrame:OnEvent("UPDATE_SHAPESHIFT_FORM")
-H.eq(#equipped, 0, "a rule that matches while you are dead is held, not attempted")
-H.eq(Events.Diagnostics().heldWhileDead, "Cat", "…and the dump names what it is holding")
-
-G.UnitIsDeadOrGhost = nil
-eventFrame:OnEvent("PLAYER_ALIVE")
-H.eq(equipped[#equipped], "Cat", "PLAYER_ALIVE performs the swap the corpse run was holding")
-H.eq(Events.Diagnostics().heldWhileDead, nil,
-    "…and the dump stops naming a corpse run it is no longer on")
-
--- The other event of the pair, driven separately rather than assumed equivalent. They are two
--- registrations reaching one handler, and a build that woke on only one of them would look exactly
--- like the assertion above passing — PLAYER_UNGHOST is the end of a corpse RUN, PLAYER_ALIVE is a
--- resurrection or a release, and a player who runs back gets only the second.
-G.Kitbag.char.sets.Owl = { slots = { [1] = "333:0:0:0:0:0:0" } }
-G.Kitbag.char.rules = { { set = "Owl", when = { form = 4 } } }
-equipped = {}
-form = 4
-G.UnitIsDeadOrGhost = function() return true end
-eventFrame:OnEvent("UPDATE_SHAPESHIFT_FORM")
-H.eq(#equipped, 0, "dead again, and the next swap is held too")
-G.UnitIsDeadOrGhost = nil
-eventFrame:OnEvent("PLAYER_UNGHOST")
-H.eq(equipped[#equipped], "Owl", "PLAYER_UNGHOST wakes it as well, which is the end of a corpse run")
-
--- And that the engine ASKED for those two at all, which the block above deliberately does not prove:
--- it drives OnEvent by name, so it would pass just as happily against a build that never registered
--- them and therefore never hears them in the client. `/kit verify`'s `watched-events` check answers
--- this in the client; this answers the half that does not need one — that the pair is on the list the
--- engine hands to RegisterEvent. Removing either from WATCHED reds it, and nothing else in the suite
--- notices.
-Events.Enable()
-local watching = {}
-for _, e in ipairs(Events.Diagnostics().events) do watching[e.name] = e.registered end
-H.ok(watching.PLAYER_ALIVE, "the engine watches PLAYER_ALIVE, or a held swap is never woken")
-H.ok(watching.PLAYER_UNGHOST, "…and PLAYER_UNGHOST, which is the end of a corpse run")
-H.ok(watching.PLAYER_REGEN_ENABLED, "…and the end of combat, which is the other deferral")
-
--- Restore-previous is gone (the Admiral's call), and this is the end-to-end half of proving it: the
--- pure tests show Rules.Next never asks for a restore, and this shows the ENGINE never performs one.
---
--- It is asserted through `applied` — the calls to Sets.Apply, which is the path a restore took —
--- rather than through the absence of a flag. A build that still restored would put the outfit back
--- through that function, and counting it is the only assertion that fails when it does.
---
--- The rule below deliberately KEEPS its `restore = true`, standing in for data written by an older
--- build that the migration has not walked yet: stale data has to be inert here too, not only in DB.
-G.Kitbag.char.sets.Fish = { slots = { [1] = "888:0:0:0:0:0:0" } }
-G.Kitbag.char.rules = { { set = "Fish", when = { form = 5 }, restore = true } }
-equipped, applied = {}, {}
-
-form = 5
-eventFrame:OnEvent("UPDATE_SHAPESHIFT_FORM")
-H.eq(equipped[#equipped], "Fish", "a rule equips its set on the form change, stale flag and all")
-H.eq(G.Kitbag.char.restorePoint, nil, "…and the engine remembers nothing on the way in")
-
-form = 0
-eventFrame:OnEvent("UPDATE_SHAPESHIFT_FORM")
-H.eq(#applied, 0, "leaving the form puts nothing back — the set it applied simply stays on")
-H.eq(G.Kitbag.char.restorePoint, nil, "…and there is still no point stored to fire later")
-
--- ---------------------------------------------------------------------------
--- A rule that has fired once can fire again (BUG-14)
--- ---------------------------------------------------------------------------
---
--- Reported from the client as "mounting used to equip a set and now does not". Driven here rather
--- than left pure because the whole of the bug is the LIFETIME of an engine file-local: `active`
--- survives across events, and no single call to Rules.Next can be wrong on its own.
---
--- The cycle below is the report verbatim — mount, change gear by hand, dismount, mount again. Every
--- step of it passed before the fix except the last, which is the one the player performs.
-G.Kitbag.char.sets.Travel = { slots = { [1] = "999:0:0:0:0:0:0" } }
-G.Kitbag.char.rules = { { set = "Travel", when = { mounted = true } } }
-equipped = {}
-
-local mounted = false
-G.IsMounted = function() return mounted end
-
-mounted = true
-eventFrame:OnEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
-H.eq(table.concat(equipped, ", "), "Travel", "mounting equips the set the mount rule names")
-H.eq(Events.Diagnostics().active, "Travel",
-    "…and the engine claims it, which is what stops it re-equipping on every event that follows")
-
--- The gear changes underneath the claim. Nothing tells the engine, and nothing can: the player did
--- it by hand and the addon does not police what you are wearing.
-mounted = false
-eventFrame:OnEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
-H.eq(#equipped, 1, "dismounting puts nothing back — the set stays on, which is RULE-4's whole point")
-H.eq(Events.Diagnostics().active, nil,
-    "…but the engine lets GO of the claim, because the rule that made it has stopped matching")
-
-mounted = true
-eventFrame:OnEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
-H.eq(table.concat(equipped, ", "), "Travel, Travel",
-    "mounting a SECOND time equips the set again — before BUG-14 the claim outlived the rule and "
-    .. "that set was never put on again for the rest of the session")
-
-G.IsMounted = function() return false end
-
-
-Sets.Equip, Sets.Apply = realEquip, realApply
-G.GetShapeshiftForm = function() return 0 end
-G.InCombatLockdown = function() return false end
-
--- VERIFY-15's likeliest failure, which is the redraw and not the decision. `Core.CanSwap` is covered
--- pure and `Compat.IsBusy` delegating to it is asserted against this mock, so a control that stays
--- live while the player is dead is far more likely to be a window nobody TOLD about the death — and
--- that telling is three events registered inside a pcall, because an event a flavour does not have
--- is a hard error rather than a no. An absent one is therefore silent, and it is silent in the worst
--- direction: PLAYER_ALIVE/PLAYER_UNGHOST are what bring the window back by itself on release, so
--- losing them leaves the controls greyed with the player alive and nothing to press.
---
--- The frame is named for the reason KitbagEventFrame is: a watcher with no handle on it from outside
--- can only be checked by dying, and the client is the one place that cannot be automated.
-local deathWatcher = G.KitbagDeathWatcher
-H.ok(deathWatcher ~= nil, "the window's death watcher is reachable from outside the file")
-for _, event in ipairs({ "PLAYER_DEAD", "PLAYER_ALIVE", "PLAYER_UNGHOST" }) do
-    H.ok(deathWatcher and deathWatcher:IsEventRegistered(event),
-        "…and the client accepted " .. event)
-end
-
--- And the mock must be able to say NO, or the four assertions above are worth nothing: a generic
--- IsEventRegistered handing back a truthy widget would pass every one of them against a frame that
--- registered nothing at all. This is the discriminator for them, not a test of the client.
-H.ok(deathWatcher and not deathWatcher:IsEventRegistered("PLAYER_LEVEL_UP"),
-    "…and the mock answers NO for an event nobody asked for, which is what makes the four above mean anything")
-
--- ---------------------------------------------------------------------------
--- The rule list's row buttons, with the list SCROLLED (VERIFY-11)
--- ---------------------------------------------------------------------------
---
--- Eight rows serve any number of rules, so every row button has to address the RULE and not itself.
--- That arithmetic is sound by construction — each closure reads `self:GetParent().ruleIndex` — but
--- "by construction" is what the window's own refresh was said to be before it turned out to return
--- early while hidden, and VERIFY-11 has said for three sessions that none of this has ever been
--- exercised at an offset. The failure is not subtle and it is unrecoverable: X at the top of a
--- scrolled list deletes a rule the player cannot see, and it looks exactly right until they count.
---
--- Driven through the buttons rather than through table.remove for the new-set check's reason: calling
--- the store proves the store works and says nothing about the wiring between a click and an index,
--- which is the entire question here.
-local RulesUI = G.Kitbag.RulesUI
-
-G.Kitbag.char.rules = {}
-for i = 1, 12 do
-    G.Kitbag.char.rules[i] = { set = "Rule" .. i, when = { combat = true }, priority = i }
-end
-
-RulesUI.Toggle()
-H.ok(G.KitbagRulesFrame and G.KitbagRulesFrame:IsShown(),
-    "the rule editor opens, so its list is actually drawn")
-
--- Scrolled four rules down: row 1 is now rule 5. An offset of zero would pass every assertion below
--- against code that ignored the offset entirely, which is precisely the bug being hunted.
-FauxScrollFrame_SetOffset(G.KitbagRulesScrollFrame, 4)
-RulesUI.Refresh()
-
-local topRow = G.KitbagRuleRow1
-H.eq(topRow and topRow.ruleIndex, 5, "the top row addresses the fifth rule once the list is scrolled")
-
-G.KitbagRuleRow1Up:Click()
-H.eq(G.Kitbag.char.rules[4].set, "Rule5",
-    "^ on the top row moves the rule that row is showing, not the rule the row is numbered")
-H.eq(G.Kitbag.char.rules[5].set, "Rule4", "…and the one it swapped with came down to meet it")
-
-RulesUI.Refresh()
-G.KitbagRuleRow1Remove:Click()
-H.eq(#G.Kitbag.char.rules, 11, "X removes exactly one rule")
-
--- WHICH one is the whole question, and it has to be asked so that only the right answer passes. The
--- top row is showing Rule4 by now (the ^ above swapped it up into index 5), so Rule4 must be the one
--- that went and Rule1 — the rule a row-index-only reading would have taken — must still be there.
--- The first draft of this asserted `rules[5].set == "Rule6"`, which is true after deleting the WRONG
--- rule as well: proved by breaking the offset arithmetic on purpose and watching it stay green.
-local remaining = {}
-for _, rule in ipairs(G.Kitbag.char.rules) do remaining[rule.set] = true end
-H.ok(not remaining.Rule4, "…and it is the rule the row was SHOWING that went")
-H.ok(remaining.Rule1,
-    "…and not the one at the row's own position, which is the delete VERIFY-11 is afraid of")
-
--- The other half of VERIFY-11's offset question: what the rows SAY. Clicking a row opens that rule
--- in the editor and tags its line `[editing]`, and the tag is drawn from the same `i + offset` the
--- buttons act on — so a build that got the arithmetic wrong would edit one rule while tagging
--- another, which is worse than either fault alone: the player is looking at the tag, so they believe
--- the wrong line and save their change over a rule they never opened.
-FauxScrollFrame_SetOffset(G.KitbagRulesScrollFrame, 3)
-RulesUI.Refresh()
-
-local shownRule = G.Kitbag.char.rules[4].set
-G.KitbagRuleRow1:Click()
-RulesUI.Refresh()
-
-local rowText = G.KitbagRuleRow1.text:GetText()
-H.ok(rowText:find(shownRule, 1, true) ~= nil,
-    "a scrolled row names the rule it is showing, not the rule at its own position")
-H.ok(rowText:find("[editing]", 1, true) ~= nil,
-    "…and clicking it tags THAT line, so the tag and the editor cannot name two different rules")
-
-local otherText = G.KitbagRuleRow2.text:GetText()
-H.ok(otherText:find("[editing]", 1, true) == nil,
-    "…and no other line claims to be the one being edited")
-
--- ---------------------------------------------------------------------------
 -- Equip and Delete act on the SELECTED set, with the list scrolled (VERIFY-8)
 -- ---------------------------------------------------------------------------
 --
@@ -1474,9 +1170,6 @@ H.ok(rawget(panel.equip, "kitbagDimmed") == true,
 H.ok(panel.delete:IsEnabled(), "…while Delete stays live, because deleting a set moves no gear")
 H.ok(panel.copy:IsEnabled(), "…and Copy to…, which writes into another character's list")
 H.ok(panel.key:IsEnabled(), "…and the keybinding button")
-if not G.KitbagRulesFrame:IsShown() then RulesUI.Toggle() end
-H.ok(G.KitbagRulesFrame:IsShown(), "…and the rule editor still opens as a ghost")
-if G.KitbagRulesFrame:IsShown() then RulesUI.Toggle() end
 
 G.UnitIsDeadOrGhost = nil
 UI.Refresh()
@@ -1544,39 +1237,6 @@ after["Nothing"].func()
 H.eq(Kitbag.Sets.ParentOf("Child"), nil, "Nothing clears the parent")
 H.ok(cell1.icon:IsShown(),
     "…and the pieces that were arriving through it are KEPT, flattened into the set itself")
-
--- The green marker, at an offset (VERIFY-11). The backlog said this one needed a person, on the
--- grounds that the marker wants "a rule the current world actually chooses, which a mock cannot
--- honestly stand in for". That was wrong, and worth correcting where it will be read: the world the
--- marker is drawn from is `Events.Explain()` over `Events.State()`, and the mock decides what the
--- state IS — that is how the engine block above drives form changes. What a mock cannot supply is a
--- real client's answer to "what form am I in"; it can supply an answer, which is all the marker needs.
---
--- The marker matters because it is the window's version of `/kit why`: it says which of a dozen rules
--- is the one currently choosing your gear. On the wrong line it is worse than absent — it accuses a
--- rule that is doing nothing, and the player edits that one.
-G.Kitbag.char.rules = {}
-for i = 1, 12 do
-    G.Kitbag.char.rules[i] = { set = "Fish", when = { form = 20 + i }, priority = 1 }
-end
-G.GetShapeshiftForm = function() return 25 end   -- so rule 5, and only rule 5, matches
-
-if not G.KitbagRulesFrame:IsShown() then RulesUI.Toggle() end
-FauxScrollFrame_SetOffset(G.KitbagRulesScrollFrame, 4)
-RulesUI.Refresh()
-
-local MARKER = "|cff40ff40>|r"
-H.eq(G.KitbagRuleRow1.ruleIndex, 5, "with the list scrolled four down, the top row is the fifth rule")
-H.ok(G.KitbagRuleRow1.text:GetText():find(MARKER, 1, true) ~= nil,
-    "…and the marker is on that line, because rule 5 is the one the world is choosing")
-H.ok(G.KitbagRuleRow2.text:GetText():find(MARKER, 1, true) == nil,
-    "…and on no other line, or it accuses a rule that is doing nothing and the player edits that one")
-
-G.GetShapeshiftForm = function() return 0 end
-RulesUI.Refresh()
-H.ok(G.KitbagRuleRow1.text:GetText():find(MARKER, 1, true) == nil,
-    "with nothing matching, no line claims to be the rule in charge")
-
 -- `/kit session` — the acts EPIC-VERIFY is waiting on, printed where the person performing them is
 -- (VERIFY-1 through 18). The list is pure and covered in verify_test; what is asserted here is the
 -- DOOR, because a command nobody can type is a checklist nobody reads: the addon's help must offer
@@ -1601,30 +1261,6 @@ H.ok(table.concat(helped, "\n"):find("/kit session", 1, true) ~= nil,
 
 
 -- ---------------------------------------------------------------------------
--- A rule row's three controls are icons (UI-25)
--- ---------------------------------------------------------------------------
---
--- "^", "v" and "X" on 24-pixel buttons, and only one of the three is a symbol: `v` is the letter vee
--- standing in for an arrow it does not look like, which is why the pair reads as a typo until you
--- have clicked one. None of the three had a tooltip either, so the list offered no way at all to
--- learn that the order of the rows is what decides ties.
---
--- The behaviour underneath is unchanged and is asserted elsewhere in this file, at a scroll offset:
--- what these two assertions add is that the control can still be identified now that its label is
--- gone. An unnamed square is the failure an icon introduces, and it is the one that looks tidy.
-if not G.KitbagRulesFrame:IsShown() then RulesUI.Toggle() end
-for _, entry in ipairs({
-    { button = G.KitbagRuleRow1Up,     what = "Move up" },
-    { button = G.KitbagRuleRow1Down,   what = "Move down" },
-    { button = G.KitbagRuleRow1Remove, what = "Remove" },
-}) do
-    H.ok(rawget(entry.button, "kitbagIcon") ~= nil,
-        entry.what .. " is drawn rather than spelled, which is what a 24-pixel button has room for")
-    H.ok(entry.button:GetScript("OnEnter") ~= nil,
-        "…and it says what it does on hover, which none of the three ever did")
-end
-
--- ---------------------------------------------------------------------------
 -- The bottom row is icons (UI-24, UI-27)
 -- ---------------------------------------------------------------------------
 --
@@ -1638,8 +1274,6 @@ end
 -- four had no tooltip at all before, on the grounds that the label was the explanation; that trade
 -- only works while there is a label.
 for _, entry in ipairs({
-    { button = G.KitbagRulesButton,   what = "Rules",
-      why = "a door to another window, which is what an icon is unambiguously right for" },
     { button = G.KitbagOptionsButton, what = "Options",
       why = "a door to another window, which is what an icon is unambiguously right for" },
     { button = G.KitbagSaveButton,    what = "Save",
@@ -1747,7 +1381,7 @@ H.ok(rawget(sample, "kitbagGround") ~= nil, "�and a ground inside it")
 -- nobody can measure � and the whole failure this guards against is one of them being missed, which
 -- looks like nothing at all until the window is open beside another one.
 for _, name in ipairs({
-    "KitbagSetList", "KitbagPreviewFrame", "KitbagRulesList", "KitbagRuleEditor",
+    "KitbagSetList", "KitbagPreviewFrame",
     "KitbagIconGrid", "KitbagPickerGrid", "KitbagPickerFrame",
 }) do
     local region = G[name]

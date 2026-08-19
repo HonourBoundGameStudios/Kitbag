@@ -301,4 +301,43 @@ H.ok(changelogDate ~= nil and #changelogDate == 10, "…and that entry is dated"
 for _, entry in ipairs(INTERFACES) do
     H.eq(tocVersion(entry.toc), tocVersion("Kitbag.toc"), entry.toc .. " declares the same version")
 end
+
+-- ---------------------------------------------------------------------------
+-- The icebox
+-- ---------------------------------------------------------------------------
+--
+-- The rule engine is shelved, not deleted: `Icebox/` holds the code so it can come back with its
+-- history intact, and NOTHING loads it. Two failures this guards, both silent — a file that is still
+-- listed in a `.toc` is still shipped and still running, and a file that is deleted instead of
+-- shelved cannot come back at all.
+--
+-- `deploy.ps1` and `package.ps1` copy `*.lua` at the ROOT, so a shelved file being out of the root is
+-- what actually keeps it out of the game; the `.toc` check below is the part a human could get wrong.
+
+local ICED = { "KitbagRules.lua", "KitbagEvents.lua", "KitbagRulesUI.lua" }
+
+for _, name in ipairs(ICED) do
+    local shelved = io.open("Icebox/" .. name, "r")
+    H.ok(shelved ~= nil, name .. " is shelved in Icebox/")
+    if shelved then shelved:close() end
+
+    local atRoot = io.open(name, "r")
+    H.ok(atRoot == nil, name .. " is NOT at the project root, where deploy.ps1 would ship it")
+    if atRoot then atRoot:close() end
+
+    for _, entry in ipairs(INTERFACES) do
+        local files = readToc(entry.toc)
+        H.ok(files[name] ~= true, entry.toc .. " does not load " .. name)
+    end
+end
+
+-- The tests for shelved code are shelved with it. run-all.ps1 globs `Tests/*_test.lua`, so a test
+-- file left behind would go red against modules nothing loads any more — and deleting it instead
+-- would throw away the one description of what the engine did.
+H.ok(io.open("Tests/rules_test.lua", "r") == nil,
+    "Tests/rules_test.lua is not in the suite the gate runs")
+local shelvedTest = io.open("Icebox/Tests/rules_test.lua", "r")
+H.ok(shelvedTest ~= nil, "…it is shelved in Icebox/Tests/ instead of deleted")
+if shelvedTest then shelvedTest:close() end
+
 H.done()

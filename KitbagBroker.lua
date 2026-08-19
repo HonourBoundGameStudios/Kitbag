@@ -12,7 +12,6 @@
 Kitbag = Kitbag or {}
 
 local Sets = Kitbag.Sets
-local Events = Kitbag.Events
 
 local Broker = {}
 
@@ -33,13 +32,8 @@ local function onTooltipShow(tooltip)
     local worn = Kitbag.char and Kitbag.char.lastSet
     tooltip:AddLine(worn and ("Wearing: " .. worn) or "No set applied yet", 1, 1, 1)
 
-    -- The same answer /kit why gives. A broker tooltip is the one place someone will look when
-    -- their gear changed and they do not know which rule did it.
-    local report = Events.Explain()
-    if report.chosen and report.chosen ~= worn then
-        tooltip:AddLine("Rules would choose: " .. report.chosen, 1, 0.82, 0)
-    end
-
+    -- The line that named the rule the engine would pick went with the engine (Icebox/). Nothing
+    -- changes gear on its own now, so "wearing X" is the whole story this tooltip has to tell.
     tooltip:AddLine("Left-click to open, right-click for options.", 0.6, 0.6, 0.6)
 end
 

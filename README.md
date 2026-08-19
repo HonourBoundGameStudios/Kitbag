@@ -2,15 +2,17 @@
 
 **Gear sets that actually apply.** A gear-set manager for World of Warcraft Classic.
 
-Save what you're wearing as a named set. Put it back on in one click. Let rules put it back on for
-you when you shift into bear form, or enter combat, or start fishing.
+Save what you're wearing as a named set. Put it back on in one click.
+
+> **Auto-swap rules are shelved for now.** The rule engine, its editor and the event wiring live in
+> `Icebox/` and nothing loads them, so Kitbag currently changes gear only when you ask it to. Rules
+> you already saved are untouched in your SavedVariables and will be there if the engine comes back.
 
 ## Why another one
 
 ItemRack was the right idea, and for a long time the only one. What people report about it now is
 almost always the same shape of problem: **the set half-applied.** A ring went to the wrong finger.
-The shield stayed on under the two-hander. Two rules both matched and the one that won changed
-between sessions. The set looked applied and wasn't.
+The shield stayed on under the two-hander. The set looked applied and wasn't.
 
 Every one of those is a bug in *deciding what to move*, not in moving it. So in Kitbag the deciding
 is a pure function — no frames, no events, no client — and it is covered by a test suite that runs
@@ -26,9 +28,6 @@ That buys three concrete behaviours:
 - **Nothing is assumed to have worked.** Actions go one per frame, each one re-reads the slot it
   targeted, and a step that won't take is retried and then *reported* — never left silently
   half-done. If an item is in the bank, it says so, by slot name, before it starts.
-
-And when a rule fires, `/kit why` tells you which rule won, and which condition every other rule
-failed on.
 
 ## Install
 
@@ -50,9 +49,7 @@ Supports **Classic Era** and **Mists Classic** from the same folder.
 | `/kit equip <name>` | Wear a set |
 | `/kit delete <name>` | Remove a set |
 | `/kit list` | What's saved |
-| `/kit rules` | The auto-swap rule editor |
-| `/kit why` | Which rule is choosing your set, and why |
-| `/kit options` | Auto-swap, announcements, minimap, trinket bar |
+| `/kit options` | Announcements, minimap, trinket bar |
 | `/kit inherit <set> from <parent>` | Make a set a delta on another |
 | `/kit import` | Bring this character's ItemRack sets across |
 | `/kit minimap` | Toggle the minimap button |
@@ -60,14 +57,13 @@ Supports **Classic Era** and **Mists Classic** from the same folder.
 
 ## Status
 
-**0.1.0 — early, but feature-complete against the first backlog.** The planner, the rule engine and
-its editor, sets and set inheritance, the window with per-row readiness and move-by-move tooltips,
-paperdoll flyouts, set icons, the trinket bar, the options panel and the ItemRack importer all work.
+**0.1.0 — early.** The planner, sets and set inheritance, the window with per-row readiness and
+move-by-move tooltips, paperdoll flyouts, set icons, the trinket bar, the options panel and the
+ItemRack importer all work. Auto-swap rules are shelved in `Icebox/` — see the note at the top.
 
-**Verified in the client on Classic Era only.** The window, the rule editor, the options panel, the
-paperdoll flyouts, the slot picker, the set icon picker, the trinket bar and the confirmation popups
-have all been seen drawing in a running game, and rules have been observed firing and equipping a set
-end to end. Every panel the addon draws has now been observed on screen.
+**Verified in the client on Classic Era only.** The window, the options panel, the paperdoll
+flyouts, the slot picker, the set icon picker, the trinket bar and the confirmation popups have all
+been seen drawing in a running game. Every panel the addon draws has now been observed on screen.
 
 **The other flavours have `.toc` files and have never been launched.** Their `## Interface` numbers
 are read off the installed client's own `.build.info` rather than guessed — except Cataclysm's,

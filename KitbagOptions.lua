@@ -90,7 +90,7 @@ local function build()
     note:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 18, 16)
     note:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -18, 16)
     note:SetJustifyH("LEFT")
-    note:SetText("These apply to the whole account. Sets and rules belong to each character.")
+    note:SetText("These apply to the whole account. Sets belong to each character.")
 
     return frame
 end

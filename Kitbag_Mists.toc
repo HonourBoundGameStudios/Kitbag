@@ -1,6 +1,6 @@
 ## Interface: 50504
 ## Title: |cff8fd3ffKitbag|r
-## Notes: Gear sets that actually apply. Save what you're wearing, swap it back in one click, and let rules do it for you.
+## Notes: Gear sets that actually apply. Save what you're wearing and swap it back in one click.
 ## Author: Honour Bound Game Studios Inc.
 ## Version: 0.1.0
 ## IconTexture: Interface\Icons\INV_Chest_Plate06
@@ -14,20 +14,17 @@
 # out of date and, on some flavours, refuses to load it at all.
 KitbagCompat.lua
 KitbagCore.lua
-KitbagRules.lua
 KitbagImport.lua
 KitbagDB.lua
 KitbagInventory.lua
 KitbagEquip.lua
 KitbagSets.lua
 KitbagDebug.lua
-KitbagEvents.lua
 KitbagSkin.lua
 KitbagIcons.lua
 KitbagPicker.lua
 KitbagFlyout.lua
 KitbagUI.lua
-KitbagRulesUI.lua
 KitbagTrinkets.lua
 KitbagMinimap.lua
 KitbagOptions.lua

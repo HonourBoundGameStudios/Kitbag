@@ -1,8 +1,12 @@
 -- Kitbag — a gear-set manager for World of Warcraft Classic.
 --
 -- Bootstrap only: load order, SavedVariables handoff, and the slash commands. Everything that makes
--- a decision lives in a module beside this one, and the ones that decide anything interesting
--- (KitbagCore, KitbagRules) are pure and tested under plain Lua — see Tests/.
+-- a decision lives in a module beside this one, and the one that decides anything interesting
+-- (KitbagCore) is pure and tested under plain Lua — see Tests/.
+--
+-- Auto-swap rules are SHELVED, not deleted: KitbagRules, KitbagEvents and KitbagRulesUI sit in
+-- `Icebox/`, no .toc lists them, and nothing here reaches for them. Saved rules stay in the
+-- SavedVariables untouched so bringing the engine back does not cost anyone their rules.
 
 local ADDON = ...
 
@@ -10,17 +14,14 @@ Kitbag = Kitbag or {}
 
 local Sets = Kitbag.Sets
 local UI = Kitbag.UI
-local RulesUI = Kitbag.RulesUI
-local Events = Kitbag.Events
 local Minimap_ = Kitbag.Minimap
 local DB = Kitbag.DB
 local Compat = Kitbag.Compat
 
---- Anything that changes stored state calls this. One redraw entry point means a new surface (the
---- rule editor, a broker plugin) gets kept in step by existing code rather than by remembering to.
+--- Anything that changes stored state calls this. One redraw entry point means a new surface (a
+--- broker plugin, the next panel) gets kept in step by existing code rather than by remembering to.
 function Kitbag.Refresh()
     UI.Refresh()
-    RulesUI.Refresh()
     Kitbag.Options.Refresh()
     Kitbag.Broker.Refresh()
 end
@@ -38,33 +39,15 @@ local function help()
     say("  |cffffd100/kit inherit <set> none|r — stop inheriting, keeping the pieces")
     say("  |cffffd100/kit copy <set> to <character>|r — give an alt a copy of a set")
     say("  |cffffd100/kit copy|r — which characters you can copy to")
-    say("  |cffffd100/kit rules|r — the auto-swap rule editor")
-    say("  |cffffd100/kit options|r — auto-swap, announcements, minimap, trinket bar")
-    say("  |cffffd100/kit why|r — which rule is choosing your set, and why")
+    say("  |cffffd100/kit options|r — announcements, minimap, trinket bar")
     say("  |cffffd100/kit import|r — bring this character's ItemRack sets across")
     say("  |cffffd100/kit minimap|r — toggle the minimap button")
     say("  |cffffd100/kit trinkets|r — toggle the trinket quick-use bar")
-    say("  |cffffd100/kit debug|r — dump gear, bags, sets, rules and plans for a bug report")
+    say("  |cffffd100/kit debug|r — dump gear, bags, sets and plans for a bug report")
     say("  |cffffd100/kit verify|r — check the addon's own frames and report what could not be checked")
     -- Named next to /kit verify because they are two halves of one question: that one reports what
     -- the addon could check, this one what only a person can.
     say("  |cffffd100/kit session|r — what still needs a person, and why each act is wanted")
-end
-
-local function why()
-    local report = Events.Explain()
-    Sets.Say("auto-swap would choose: %s",
-        report.chosen and ("|cffffd100" .. report.chosen .. "|r") or "|cff808080nothing|r")
-    for _, entry in ipairs(report.considered) do
-        if entry.matched then
-            Sets.Say("  |cff40ff40match|r  %s (priority %d)", entry.set, entry.priority)
-        else
-            Sets.Say("  |cff808080no|r     %s — %s", entry.set, entry.reason)
-        end
-    end
-    if #report.considered == 0 then
-        Sets.Say("  no rules yet — |cffffd100/kit rules|r to write one.")
-    end
 end
 
 local function command(input)
@@ -129,9 +112,7 @@ local function command(input)
                 Sets.Say("|cffffd100/kit copy <set> to <character>|r — %s", table.concat(targets, ", "))
             end
         end
-    elseif cmd == "rules" then RulesUI.Toggle()
     elseif cmd == "options" or cmd == "config" then Kitbag.Options.Toggle()
-    elseif cmd == "why" then why()
     elseif cmd == "import" then Sets.ImportItemRack()
     elseif cmd == "minimap" then Minimap_.SetHidden(not Kitbag.db.options.minimap.hide)
     elseif cmd == "trinkets" then Kitbag.Trinkets.SetHidden(not Kitbag.db.options.trinkets.hide)
@@ -171,12 +152,11 @@ loader:SetScript("OnEvent", function(_, event, name)
         KitbagDB = DB.Load(KitbagDB)
         Kitbag.db = KitbagDB
     elseif event == "PLAYER_LOGIN" then
-        -- Sets and rules are this character's; options are the account's. The name and realm are
-        -- only guaranteed to be readable from PLAYER_LOGIN on, so the bucket is bound here rather
-        -- than at ADDON_LOADED — nothing can ask for a set before then.
+        -- Sets are this character's; options are the account's. The name and realm are only
+        -- guaranteed to be readable from PLAYER_LOGIN on, so the bucket is bound here rather than
+        -- at ADDON_LOADED — nothing can ask for a set before then.
         Kitbag.char = DB.Character(KitbagDB, Compat.CharacterKey())
         Minimap_.Create()
-        Events.Enable()
         Kitbag.Flyout.Enable()
         Kitbag.Trinkets.Create()
         Kitbag.Bindings.Apply()

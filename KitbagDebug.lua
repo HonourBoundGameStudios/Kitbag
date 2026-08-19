@@ -16,7 +16,6 @@
 Kitbag = Kitbag or {}
 
 local Core = Kitbag.Core
-local Rules = Kitbag.Rules
 
 local Debug = {}
 
@@ -125,8 +124,11 @@ function Debug.Report(world)
         end
     end
 
-    -- The snapshot the rule engine matched against, which is the other half of "why am I wearing
-    -- this". Absent and false are kept apart here for the same reason they are in a set's slots.
+    -- What the client says about the player at the moment of the dump — dead, casting, mounted, in
+    -- combat. It used to be the rule engine's match snapshot; with the engine shelved (Icebox/) it
+    -- is read straight off Compat, because the conditions a swap can fail under are the same ones
+    -- whether or not anything is choosing sets automatically. Absent and false are kept apart here
+    -- for the same reason they are in a set's slots.
     add("")
     add("STATE")
     if not world.state then
@@ -137,89 +139,11 @@ function Debug.Report(world)
         end
     end
 
-    -- Every rule and why it did or didn't fire — `/kit why`, written to disk. The question a rule
-    -- bug asks is never "what are my rules" but "why did THAT one win", so the verdict sits on each
-    -- row rather than being left for the reader to derive from priorities.
-    local explain = world.explain or {}
-    local rules = world.rules or {}
-    add("")
-    add("RULES — chosen: %s", tostring(explain.chosen or "(none)"))
-    if #rules == 0 then
-        -- Stated, because "no rules" is the likeliest explanation for "it never swapped" and a
-        -- missing section cannot be told apart from a dump taken before the rules were read.
-        add("  (no rules)")
-    else
-        -- Numbered by list position: that order is the documented tiebreak between equal priorities,
-        -- so a reader comparing this to the rule list needs the same numbers on both.
-        for i, rule in ipairs(rules) do
-            local entry = explain.considered and explain.considered[i]
-            local verdict
-            if not entry then
-                verdict = "(not explained)"
-            elseif not entry.matched then
-                verdict = "no: " .. tostring(entry.reason)
-            elseif explain.chosen == rule.set then
-                verdict = "MATCHED (winner)"
-            else
-                verdict = "MATCHED"
-            end
-            -- Described with the client's own form labels, so a rule the player wrote as "Cat Form"
-            -- reading back as "in form 3" is itself the bug report.
-            local describe = Rules and Rules.Describe
-            local words = describe and describe(rule, { form = world.forms }) or "(cannot describe)"
-            add('  %d. "%s" priority %s — %s — %s',
-                i, tostring(rule.set), tostring(rule.priority or 0), words, verdict)
-        end
-    end
-
-    -- What the ENGINE remembers, which is a different question from what the world holds and the
-    -- only one that can explain a swap that never happened at all. Two states in here are invisible
-    -- everywhere else: a set the engine believes it already put on (no rule re-fires while it is
-    -- held) and a step parked until combat ends. Both look exactly like "the rule didn't match",
-    -- and the RULES section above will cheerfully say MATCHED while nothing moves.
-    local engine = world.engine
-    add("")
-    add("ENGINE")
-    if not engine then
-        add("  (not read)")
-    elseif engine.failed then
-        -- Reported, not swallowed: a debug tool that hides its own failure hides the bug behind it.
-        add("  (could not be read: %s)", tostring(engine.failed))
-    else
-        -- First, because it is the one switch that turns every rule off at once.
-        add("  auto-swap: %s", tostring(engine.autoSwap))
-        add("  holding: %s", engine.active and tostring(engine.active) or "(nothing)")
-        add("  deferred: %s", engine.deferred and tostring(engine.deferred) or "(nothing)")
-        -- Only when it applies. A "(nothing)" line on every dump ever taken is noise, and this
-        -- state is readable exactly as long as the corpse run lasts (RULE-6).
-        if engine.heldWhileDead then
-            add("  held (dead): %s — waiting for PLAYER_ALIVE/PLAYER_UNGHOST",
-                tostring(engine.heldWhileDead))
-        end
-    end
-
-    -- Whether each event actually registered. Events.Enable() registers inside pcall because no
-    -- flavour has every event, and the cost of that is silence: an event this flavour does not have
-    -- is indistinguishable from a rule that never matched. Stating it is the whole point — the
-    -- absent one is shouted rather than merely listed, because a reader scanning fifteen "ok" lines
-    -- for one missing word will not find it.
-    add("")
-    add("EVENTS")
-    local events = engine and engine.events
-    if not events then
-        add("  (not read)")
-    elseif #events == 0 then
-        add("  (no events registered)")
-    else
-        for _, e in ipairs(events) do
-            add("  %-32s %s", tostring(e.name), e.registered and "registered" or "NOT REGISTERED")
-        end
-    end
-
-    -- What the driver actually DID, which no other section can say. The engine's memory above
-    -- explains a swap that never started; this explains one that started and did not finish — and
-    -- the two send a reader to opposite files. The reason is the client's own wording, captured by
-    -- Equip and otherwise printed once to a chat frame nobody was watching (BUG-9).
+    -- What the driver actually DID, which no other section can say: a swap that started and did not
+    -- finish. The reason is the client's own wording, captured by Equip and otherwise printed once to
+    -- a chat frame nobody was watching (BUG-9). With the rule engine shelved (Icebox/) every entry
+    -- here was asked for by a person, so "why did this run at all" is no longer a question the dump
+    -- has to answer — only "why did it not finish".
     add("")
     add("RECENT SWAPS")
     local swaps = world.swaps or {}
@@ -307,23 +231,15 @@ local function attempt(fn, ...)
     return { failed = tostring(value) }
 end
 
-local function failed(value)
-    return type(value) == "table" and value.failed ~= nil
-end
-
 --- Read the world and hand it to Report. Everything the planner sees, from ONE reading, so the dump
 --- cannot show a set planned against bags that had already changed by the time the next set was read.
 function Debug.Capture()
     local Sets, Inventory, Compat = Kitbag.Sets, Kitbag.Inventory, Kitbag.Compat
-    -- Looked up at call time, not held as a load-time local: KitbagEvents loads AFTER this file, so
-    -- a local captured at load would be nil forever (the lesson UI-17 paid for with the minimap).
-    local Events = Kitbag.Events
 
-    -- One reading, shared by the snapshot and the explanation below it. Asking Events.Explain() for
-    -- the second would re-read the world, and a dump whose "why" disagrees with its own STATE is a
-    -- false lead of exactly the kind this file exists to prevent.
-    local state = Events and attempt(Events.State)
-    local rules = Kitbag.char and Kitbag.char.rules
+    -- The four conditions a swap can be refused under, read the same way KitbagSets reads them when
+    -- one fails. Through `attempt` because ActionState asks the client four questions and a dump is
+    -- taken when something is already wrong — a diagnostic that throws hides the bug behind its own.
+    local state = Compat and attempt(Compat.ActionState)
 
     local world = {
         when = date("%Y-%m-%d %H:%M:%S"),
@@ -340,27 +256,9 @@ function Debug.Capture()
         bags = Inventory and Inventory.Bags(),
         forms = Compat and attempt(Compat.FormLabels),
         state = state,
-        rules = rules,
-        -- Explained only against a state that was actually read. Handing the error table to Explain
-        -- would produce a full RULES section in which every rule missed on some condition — a
-        -- confident, detailed and entirely fictional answer to "why did nothing fire".
-        explain = (Rules and rules and state and not failed(state))
-            and attempt(Rules.Explain, rules, state) or nil,
         sets = {},
     }
 
-    -- The engine's own memory, and whether its events exist at all. Read here rather than inside
-    -- Events so the one fact only the DB knows — the master switch — arrives in the same table as
-    -- the ones only Events knows, and the section cannot half-answer.
-    local engine = Events and attempt(Events.Diagnostics)
-    if engine and not failed(engine) then
-        engine.autoSwap = Kitbag.db and Kitbag.db.options and Kitbag.db.options.autoSwap
-    end
-    world.engine = engine
-
-    -- Read straight off the character bucket rather than through Events.Diagnostics: the dump is
-    -- asked for when something is already wrong, and an engine read that throws must not take the
-    -- record of the last failed swap down with it.
     world.swaps = Kitbag.char and Kitbag.char.swaps
 
     for _, name in ipairs(Sets and Sets.Names() or {}) do

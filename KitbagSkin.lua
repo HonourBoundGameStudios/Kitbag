@@ -1,7 +1,7 @@
 -- KitbagSkin — one recessed panel, drawn the same way in every window.
 --
--- Kitbag draws six regions that hold a list or a grid: the set list, the character preview, the rule
--- list, the rule editor, and the two pickers' grids. Each of them used to sit directly on whatever
+-- Kitbag draws four regions that hold a list or a grid: the set list, the character preview, and
+-- the two pickers' grids. Each of them used to sit directly on whatever
 -- `BasicFrameTemplateWithInset` had painted behind it, so a window read as a heading, some controls,
 -- and content floating on an empty plate with no edge to say where the content began.
 --
