@@ -663,6 +663,15 @@ function Core.Plan(equipped, set, where, meta)
     local cur = {}
     for slotId, key in pairs(equipped) do cur[slotId] = key end
 
+    -- Working copy of WHERE things are, mutated alongside `cur`. Equipping from a bag is a SWAP:
+    -- the worn item lands in the bag slot the new one came from — the very fact `needsBagSlots`
+    -- leans on to charge nothing for it — so after that move the bag slot holds the OLD item and no
+    -- longer the new one. Planning the later slots against the caller's untouched map instead makes
+    -- a displaced item read as "not found anywhere" while it is sitting in the player's bag: the
+    -- second half of the trinket shuffle, and BUG-15.
+    local avail = {}
+    for key, at in pairs(where) do avail[key] = at end
+
     local actions, missing = {}, {}
     local atBank = 0
 
@@ -699,7 +708,7 @@ function Core.Plan(equipped, set, where, meta)
             -- out to be in the bank strips the shield and puts nothing in its place, leaving the
             -- player worse off than if they had never clicked.
             local src = wornIn(want, slotId)
-            local seen = not src and where[want] or nil
+            local seen = not src and avail[want] or nil
             local at = reachable(seen)
 
             if not src and not at then
@@ -727,6 +736,14 @@ function Core.Plan(equipped, set, where, meta)
                     -- one turns up anyway the failure report is the only place it can be seen.
                     actions[#actions + 1] = { kind = "equip", to = slotId, key = want,
                         from = { bag = at.bag, slot = at.slot, bank = at.bank } }
+                    -- The swap runs both ways, so the map has to follow both. An unequip is NOT
+                    -- tracked this way: it goes to whichever free slot the client is given at the
+                    -- time, which no plan can name in advance.
+                    local displaced = cur[slotId]
+                    avail[want] = nil
+                    if displaced then
+                        avail[displaced] = { bag = at.bag, slot = at.slot, bank = at.bank }
+                    end
                     cur[slotId] = want
                 end
             end

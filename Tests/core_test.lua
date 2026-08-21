@@ -83,6 +83,9 @@ local SWORD = "18348:0:0:0:0:0:0"
 local TWOHAND = "17182:0:0:0:0:0:0"
 local SHIELD = "17066:0:0:0:0:0:0"
 local HELM = "16963:0:0:0:0:0:0"
+local TRINKET_A = "11815:0:0:0:0:0:0"
+local TRINKET_B = "11122:0:0:0:0:0:0"
+local TRINKET_C = "10418:0:0:0:0:0:0"
 
 local function bagged(key, bag, slot) return { [key] = { bag = bag, slot = slot } } end
 
@@ -138,6 +141,21 @@ H.eq(#plan.missing, 0, "a ring worn in the other ring slot is not 'missing'")
 H.eq(#plan.actions, 1, "swapping two worn rings is ONE move, because the move swaps them both")
 H.eq(plan.actions[1].from.equipped, 12, "the source is the slot the wanted ring is worn in")
 H.eq(plan.actions[1].to, 11, "the destination is the slot that wanted it")
+
+-- 5b. The other half of the same shuffle, and the one that was WRONG (BUG-15). The wanted item is
+--     worn in a slot the plan has ALREADY filled from a bag. Equipping from a bag is a swap — the
+--     worn item lands in the bag slot the new one came from, which is why `needsBagSlots` charges
+--     nothing for it — so the displaced trinket is still perfectly reachable and must not be
+--     reported "not found anywhere" while it sits in the player's bag.
+--     Pobble's `Tanky-Heal-PVP`: Hand of Justice worn in trinket 1, wanted in trinket 2.
+plan = C.Plan({ [13] = TRINKET_A, [14] = TRINKET_B },
+    { slots = { [13] = TRINKET_C, [14] = TRINKET_A } }, bagged(TRINKET_C, 4, 3))
+H.eq(#plan.missing, 0, "an item displaced INTO a bag by an earlier action is not 'missing'")
+H.eq(#plan.actions, 2, "…it is fetched back, so the shuffle is two moves")
+H.eq(plan.actions[2].to, 14, "the second move fills the slot that wanted the displaced item")
+H.eq(plan.actions[2].key, TRINKET_A, "…with the displaced item")
+H.eq(plan.actions[2].from.bag, 4, "…sourced from the bag slot the first move put it in")
+H.eq(plan.actions[2].from.slot, 3, "…naming that exact slot, which is the one the client uses")
 
 -- 6. An item that is neither worn nor in a bag is reported, and does not fabricate an action.
 plan = C.Plan({}, { slots = { [16] = SWORD } }, {})
