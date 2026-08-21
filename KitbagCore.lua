@@ -982,6 +982,82 @@ function Core.DeleteImpact(sets, name)
     return out
 end
 
+--- What renaming a set would cost:
+--- `{ ok =, why =, name =, children = { <name>, … }, rules = { <index>, … }, key = }`.
+--
+-- A set's name is its identity everywhere else in the addon, so a rename is never a rename of one
+-- string. A child holds its parent BY NAME, a stored rule names its set BY NAME, and a keybinding
+-- belongs to the set it is keyed under. Change the name in the list alone and each of those becomes
+-- a pointer to a set that does not exist — and not one of them says so: `Resolve` treats a missing
+-- parent as contributing nothing, so an orphaned child quietly shrinks to its own slots and is
+-- discovered by equipping it and getting half an outfit. That is the report this addon exists to
+-- prevent, arriving by a different door.
+--
+-- `DeleteImpact`'s shape, and for `DeleteImpact`'s reason: the window has to know the consequence
+-- BEFORE it draws the control, so the confirmation and the act cannot form two opinions of what is
+-- about to happen. A question, never the change — the window asks this on every keystroke in the
+-- edit box, so an implementation that renamed as it answered would rename on a mouse-over.
+--
+-- The refusals are distinguished rather than folded into one `false`, for `CopySet`'s reason: "that
+-- name is taken" and "that is not a name" ask different things of the player. `same` is checked
+-- BEFORE `exists`, or renaming a set to the name it already has reports a clash with itself.
+--
+-- Trimming happens here, through `CleanName`, and `name` carries the trimmed form the caller must
+-- actually store: a name cleaned at one door and not at another is how a list ends up holding "Tank"
+-- and "Tank " looking identical, with no way to tell which one anything points at.
+--
+-- NOT reported, because it cannot be known from here: an action-bar macro the player placed by hand
+-- names the set in its body (`Core.MacroBody`), and that macro lives in the client's own data rather
+-- than in `sets`. A rename breaks it silently. The window is the place to say so, once.
+function Core.RenameImpact(sets, rules, old, new)
+    local out = { ok = false, children = {}, rules = {} }
+    if type(sets) ~= "table" or type(old) ~= "string" or type(sets[old]) ~= "table" then
+        out.why = "no-set"
+        return out
+    end
+
+    local clean = Core.CleanName(new)
+    if not clean then
+        out.why = "bad-name"
+        return out
+    end
+    if clean == old then
+        out.why = "same"
+        return out
+    end
+    if sets[clean] ~= nil then
+        out.why = "exists"
+        return out
+    end
+
+    out.ok, out.name = true, clean
+    -- Carried so the caller can re-apply it: the key travels with the set's own table, but the
+    -- binding is built from the set NAME (`Bindings.Apply` rebuilds from scratch through
+    -- `Core.MacroBody`), so a rename that does not re-apply leaves the key pointing at the old name.
+    out.key = sets[old].key
+
+    -- Only downwards, exactly as DeleteImpact goes: renaming a child changes nothing for its parent,
+    -- and the direction reversed would warn about the parent on every rename of a child.
+    for other, set in pairs(sets) do
+        if type(set) == "table" and set.parent == old then
+            out.children[#out.children + 1] = other
+        end
+    end
+    table.sort(out.children)
+
+    -- By index, because a rule has no other identity — and in list order, which `ipairs` gives and
+    -- `pairs` would not, so one press reports the same thing twice running. The rule engine is on
+    -- ice (see Icebox/README.md) but its DATA is not: a rename that skipped stored rules would leave
+    -- them pointing at nothing for whenever the engine comes back.
+    for i, rule in ipairs(type(rules) == "table" and rules or {}) do
+        if type(rule) == "table" and rule.set == old then
+            out.rules[#out.rules + 1] = i
+        end
+    end
+
+    return out
+end
+
 --- A set as another character would have to store it: flat, parentless, and nobody else's table
 --- (CORE-7). Returns `nil, why` — "no-set", "exists" or "same" — rather than copying.
 --

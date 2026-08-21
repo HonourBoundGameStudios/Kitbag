@@ -1361,4 +1361,76 @@ H.eq(both.takenFrom[1], "Alpha", "…in a stable order")
 H.eq(both.takenFrom[2], "Beta", "…so the same press reports the same thing twice running")
 H.eq(both.taken, "Alpha", "`taken` is the one to name in a message: the first of them")
 
+
+-- ---------------------------------------------------------------------------
+-- RenameImpact (UI-29)
+-- ---------------------------------------------------------------------------
+--
+-- A rename is not a rename of one string. A set's name is its identity everywhere else in the addon:
+-- a child holds its parent BY NAME, a rule names its set BY NAME, and a keybinding is keyed by the
+-- set it belongs to. Change the name in the list alone and every one of those becomes a pointer to a
+-- set that does not exist — and none of them says so. `Resolve` treats a missing parent as
+-- contributing nothing, so an orphaned child equips half an outfit and looks fine in the list.
+--
+-- DeleteImpact's shape, and for DeleteImpact's reason: the window has to know the consequence BEFORE
+-- it is drawn, so the confirmation and the act cannot form two opinions of what is about to happen.
+-- A question, never the change.
+
+local kin = {
+    Base  = { name = "Base", slots = {}, key = "SHIFT-E" },
+    Child = { name = "Child", parent = "Base", slots = {} },
+    Other = { name = "Other", parent = "Base", slots = {} },
+    Alone = { name = "Alone", slots = {} },
+}
+local kinRules = {
+    { set = "Base",  priority = 50 },
+    { set = "Alone", priority = 10 },
+    { set = "Base",  priority = 20 },
+}
+
+local ren = C.RenameImpact(kin, kinRules, "Base", "Tank")
+H.eq(ren.ok, true, "renaming a set that exists to an unused name is allowed")
+H.eq(ren.why, nil, "…with no refusal to explain")
+H.eq(ren.name, "Tank", "the impact carries the name that will actually be stored")
+H.eq(#ren.children, 2, "every set inheriting from the old name is reported")
+H.eq(ren.children[1], "Child", "…in a stable order, so one press reports the same twice running")
+H.eq(ren.children[2], "Other", "…and the second of them")
+H.eq(#ren.rules, 2, "every rule naming the old set is reported")
+H.eq(ren.rules[1], 1, "…by index, because a rule has no other identity")
+H.eq(ren.rules[2], 3, "…in list order, not pairs() order")
+H.eq(ren.key, "SHIFT-E", "the keybinding travelling with the set is named, so it can be re-applied")
+
+-- Only downwards, exactly as DeleteImpact goes: renaming a CHILD changes nothing for its parent, and
+-- getting the direction backwards would warn about the parent on every rename of a child.
+local child = C.RenameImpact(kin, kinRules, "Child", "Sprog")
+H.eq(#child.children, 0, "renaming a child reports no children of its own")
+H.eq(#child.rules, 0, "…and no rules, because none names it")
+H.eq(child.key, nil, "…and no key, because it carries none")
+
+-- The refusals. Distinguished rather than folded into one false, for CopySet's reason: "that name is
+-- taken" and "that is not a name" want different responses from the player.
+H.eq(C.RenameImpact(kin, kinRules, "Nobody", "Tank").why, "no-set",
+    "renaming a set that does not exist is refused, and says which half is wrong")
+H.eq(C.RenameImpact(kin, kinRules, "Base", "Alone").why, "exists",
+    "renaming onto a name already in use is refused BEFORE the press, not after")
+H.eq(C.RenameImpact(kin, kinRules, "Base", "   ").why, "bad-name",
+    "a name that is only whitespace is not a name")
+H.eq(C.RenameImpact(kin, kinRules, "Base", nil).why, "bad-name", "…and neither is nothing at all")
+H.eq(C.RenameImpact(nil, kinRules, "Base", "Tank").why, "no-set", "a missing set list is refused")
+
+-- Trimming happens HERE, or it happens in one door and not another and the list ends up holding
+-- "Tank" and "Tank " looking identical (CleanName's whole reason for existing).
+local padded = C.RenameImpact(kin, kinRules, "Base", "  Tank  ")
+H.eq(padded.ok, true, "a padded name is trimmed rather than refused")
+H.eq(padded.name, "Tank", "…and the impact names the trimmed form, which is what will be stored")
+H.eq(C.RenameImpact(kin, kinRules, "Base", " Base ").why, "same",
+    "renaming a set to the name it already has is a no-op, not a clash with itself")
+
+-- Rules are ICED but their data is not (see Icebox/README.md), and a rename that skipped them would
+-- leave a stored rule pointing at nothing for whenever the engine comes back. Absent rules are an
+-- empty answer rather than an error, because that is what every caller passes today.
+local noRules = C.RenameImpact(kin, nil, "Base", "Tank")
+H.eq(noRules.ok, true, "a caller with no rules at all still gets an answer")
+H.eq(#noRules.rules, 0, "…and it is an empty list rather than a nil to guard against")
+
 H.done()
