@@ -7,8 +7,8 @@
 -- a /reload.
 --
 -- Two gotchas are checked at the same time, both of which fail silently and only at runtime:
---   * both .toc files must list the same files, or one flavour breaks and only at runtime;
---   * a new module must be *in* the .toc, or it silently never loads.
+--   * a new module must be *in* the .toc, or it silently never loads;
+--   * there must be exactly ONE .toc — see the flavour section below for why that is now the check.
 --
 -- Usage: lua Tests/toc_test.lua   (run from the project root)
 
@@ -34,8 +34,21 @@ local function readToc(path)
     return files, order
 end
 
--- Kitbag.toc is the reference; every other flavour must match it exactly.
-local OTHER_FLAVOURS = { "Kitbag_Mists.toc", "Kitbag_Mainline.toc", "Kitbag_Cata.toc" }
+-- Classic Era is the only flavour as of 2026-09-03. The other three .toc files are DELETED rather
+-- than held back, at the Admiral's word: two had never had a frame drawn on them, the third has no
+-- client left to draw on, and a `.toc` in the repo is a promise that a parity check then has to keep
+-- forever against a flavour nobody runs. What replaces that parity check is a stronger claim — that
+-- there is exactly one `.toc` — because a flavour cannot fall out of step with Era if it does not
+-- exist. The list below is what must STAY gone; it is the guard against a support claim drifting
+-- back in one file at a time.
+local DROPPED = {
+    { toc = "Kitbag_Mists.toc",    label = "Mists Classic",
+      why = "deployed to its AddOns folder for three weeks and never once launched" },
+    { toc = "Kitbag_Mainline.toc", label = "Retail",
+      why = "never launched — the C_Item/C_Spell shims were reasoned, never observed" },
+    { toc = "Kitbag_Cata.toc",     label = "Cataclysm",
+      why = "no client exists to run it on; its interface number was argued, not read" },
+}
 
 local ERA, eraOrder = readToc("Kitbag.toc")
 
@@ -44,11 +57,12 @@ local ERA, eraOrder = readToc("Kitbag.toc")
 -- ---------------------------------------------------------------------------
 --
 -- A stale interface number marks the addon out of date and, on some clients, stops it loading at
--- all — and it goes stale every patch without anything in the repo changing. Three of these four
--- were originally GUESSED, which is the failure this section exists to make impossible: a guess and
--- a reading look identical in a .toc file.
+-- all — and it goes stale every patch without anything in the repo changing. This one was originally
+-- GUESSED, which is the failure this section exists to make impossible: a guess and a reading look
+-- identical in a .toc file. The three flavours whose numbers could never be read off a running
+-- client are gone (see DROPPED above) — one fewer place for a guess to hide.
 --
--- The numbers below were read off `<install>/.build.info` — the manifest Blizzard's own launcher
+-- The number below was read off `<install>/.build.info` — the manifest Blizzard's own launcher
 -- maintains, which names the exact version of every installed product. That file is on disk, so
 -- this needs no client launched and no human. RE-READ IT each patch rather than editing the number
 -- to whatever makes the test pass.
@@ -71,19 +85,7 @@ local function encode(major, minor, patch)
 end
 
 local INTERFACES = {
-    { toc = "Kitbag.toc",          product = "wow_classic_era", version = { 1, 15, 9 } },
-    { toc = "Kitbag_Mists.toc",    product = "wow_classic",     version = { 5, 5, 4 } },
-    { toc = "Kitbag_Mainline.toc", product = "wow",             version = { 12, 1, 0 } },
-    -- Cataclysm Classic is not installed here and CANNOT be: the `wow_classic` product has moved on
-    -- to Mists (5.5.4 in `.build.info`), so that flavour no longer exists as a live client to read.
-    -- The number is therefore argued rather than read — 4.4.2 was Cataclysm Classic's final build
-    -- before the Mists upgrade, corroborated 2026-08-18 against the public addon record rather than
-    -- against a client — and it stays LABELLED, because promoting an argument to a reading is how a
-    -- guess stops looking like one. If Blizzard ever runs Cata Classic again, read it off .build.info
-    -- and move it up to `product`.
-    { toc = "Kitbag_Cata.toc",     product = nil,               version = { 4, 4, 2 },
-      sourced = "public record: 4.4.2 was Cataclysm Classic's last build before Mists Classic "
-          .. "replaced it; no Cata client exists to read" },
+    { toc = "Kitbag.toc", product = "wow_classic_era", version = { 1, 15, 9 } },
 }
 
 for _, entry in ipairs(INTERFACES) do
@@ -109,20 +111,41 @@ for _, entry in ipairs(INTERFACES) do
         entry.toc .. " states where its interface number came from")
 end
 -- ---------------------------------------------------------------------------
--- Parity between the flavours
+-- One flavour, and only one
 -- ---------------------------------------------------------------------------
 --
--- Adding a module and forgetting one of the other .toc files breaks that flavour only, and only at
--- runtime, for someone who is not you. Load ORDER is checked too, not just membership: every module
--- reads its dependencies out of the Kitbag namespace at load time, so a reordered .toc is a
--- nil-index error on the flavour nobody launched.
+-- What stood here was a parity check: four .toc files compared line by line, membership and ORDER,
+-- because adding a module and forgetting one of the others broke that flavour only, at runtime, for
+-- someone who is not you. Nothing is left to fall out of step. The check that replaces it is the one
+-- that keeps it that way — a second .toc reappearing is exactly how the old failure would come back,
+-- and it would come back with no parity check watching it.
 
-for _, flavour in ipairs(OTHER_FLAVOURS) do
-    local _, order = readToc(flavour)
-    H.eq(#order, #eraOrder, flavour .. " lists the same number of files as Kitbag.toc")
-    for i, name in ipairs(eraOrder) do
-        H.eq(order[i], name, flavour .. " loads " .. name .. " in the same position")
+local function tocsAtRoot()
+    local list = io.popen(WINDOWS and "dir /b *.toc" or "ls *.toc")
+    if not list then return nil end
+    local found = {}
+    for name in list:lines() do
+        name = name:gsub("\r$", ""):match("^%s*(.-)%s*$")
+        if name ~= "" then found[#found + 1] = name end
     end
+    list:close()
+    return found
+end
+
+local atRoot = tocsAtRoot()
+if atRoot then
+    H.eq(#atRoot, 1, "the project root holds exactly one .toc")
+    H.eq(atRoot[1], "Kitbag.toc", "…and it is Kitbag.toc — Classic Era")
+else
+    print("  # skipped: no io.popen, cannot list the project root")
+end
+
+-- Named individually as well, so a failure says WHICH flavour came back rather than only that the
+-- count is wrong — and so this still holds in a sandbox without io.popen.
+for _, entry in ipairs(DROPPED) do
+    local f = io.open(entry.toc, "r")
+    H.ok(f == nil, entry.toc .. " is gone — " .. entry.why)
+    if f then f:close() end
 end
 
 -- ---------------------------------------------------------------------------
@@ -158,41 +181,27 @@ end
 
 
 -- ---------------------------------------------------------------------------
--- Which flavours the release zip actually ships (SHIP-4)
+-- What the release zip actually ships (SHIP-4)
 -- ---------------------------------------------------------------------------
 --
 -- A `.toc` in the repo is a file. A `.toc` in the zip is a promise: the client picks its flavour off
--- the suffix, so shipping `Kitbag_Mainline.toc` tells every Retail player this addon runs there. Two
--- of the four flavours have never had a single frame drawn on them — Retail was never launched, and
--- Cataclysm Classic no longer EXISTS as a client to launch — so the zip and the repo are deliberately
--- not the same set, and this is the check that keeps that deliberate rather than forgotten.
---
--- A flavour joins SHIPPED when there is evidence the addon has RUN on it, not when the file exists.
--- The held flavours stay in the repo and stay under every parity check above, so they cannot rot
--- while they wait.
+-- the suffix, so shipping `Kitbag_Mainline.toc` told every Retail player this addon runs there. It
+-- had never drawn a frame on that client. The zip and the repo used to be deliberately different
+-- sets for that reason; as of 2026-09-03 they are the same set of ONE, which is the simplest form
+-- the promise can take — what is in the repo is what ships, and what ships has been run.
 
 local SHIPPED = {
-    { toc = "Kitbag.toc",       label = "Classic Era",
+    { toc = "Kitbag.toc", label = "Classic Era",
       why = "loaded, drawn and equipping in a live 1.15.9 client, repeatedly" },
-    { toc = "Kitbag_Mists.toc", label = "Mists Classic",
-      why = "deployed to its AddOns folder, interface read off .build.info, identical file list" },
 }
 
-local HELD = {
-    { toc = "Kitbag_Mainline.toc", label = "Retail",
-      why = "never launched — the interface number is read, but the C_Item/C_Spell shims are "
-          .. "reasoned rather than observed" },
-    { toc = "Kitbag_Cata.toc",     label = "Cataclysm",
-      why = "no client exists to run it on; the interface number is argued, not read" },
-}
-
--- Nothing may be silently neither. A fifth flavour arriving with a plausible .toc must be sorted
--- into one list or the other, with a reason, before the gate goes green again.
+-- Every .toc the interface section knows about must be one that ships. The old version of this
+-- sorted each flavour into shipped-or-held-back so that none could be silently neither; with one
+-- flavour left, the equivalent guard is that the two lists cannot disagree about what exists.
 for _, entry in ipairs(INTERFACES) do
     local sorted
-    for _, s in ipairs(SHIPPED) do if s.toc == entry.toc then sorted = "shipped" end end
-    for _, h in ipairs(HELD) do if h.toc == entry.toc then sorted = "held back" end end
-    H.ok(sorted ~= nil, entry.toc .. " is either shipped or held back, deliberately")
+    for _, ship in ipairs(SHIPPED) do if ship.toc == entry.toc then sorted = true end end
+    H.ok(sorted == true, entry.toc .. " is a flavour the zip ships")
 end
 
 for _, entry in ipairs(SHIPPED) do
@@ -221,15 +230,16 @@ for _, entry in ipairs(SHIPPED) do
     for _, name in ipairs(packaged) do if name == entry.toc then inZip = true end end
     H.ok(inZip, "package.ps1 puts " .. entry.toc .. " in the zip")
 end
-for _, entry in ipairs(HELD) do
+for _, entry in ipairs(DROPPED) do
     local inZip = false
     for _, name in ipairs(packaged) do if name == entry.toc then inZip = true end end
-    H.ok(not inZip, "package.ps1 keeps " .. entry.toc .. " OUT of the zip — " .. entry.why)
+    H.ok(not inZip, "package.ps1 does not mention " .. entry.toc .. " — " .. entry.why)
 end
 
--- And the README must claim the same set. This is the drift that was actually found: the README said
--- two flavours while the zip carried four, and the reader who believes the README is the one who is
--- right. A support claim nobody can check is how an addon acquires a flavour it never tested.
+-- And the README must claim the same set. This is the drift that was actually found once already:
+-- the README said two flavours while the zip carried four, and the reader who believes the README is
+-- the one who is right. A support claim nobody can check is how an addon acquires a flavour it never
+-- tested — which is precisely how three of them got here.
 local function supportLine()
     local f = assert(io.open("README.md", "r"), "cannot open README.md")
     local line
@@ -246,7 +256,7 @@ for _, entry in ipairs(SHIPPED) do
     H.ok(supports and supports:find(entry.label, 1, true) ~= nil,
         "README claims support for " .. entry.label)
 end
-for _, entry in ipairs(HELD) do
+for _, entry in ipairs(DROPPED) do
     H.ok(supports and supports:find(entry.label, 1, true) == nil,
         "README does not claim support for " .. entry.label .. " — " .. entry.why)
 end

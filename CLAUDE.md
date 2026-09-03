@@ -16,8 +16,9 @@ every call site that came out with them.
 
 - **Stack:** Lua 5.1 (the WoW runtime), Blizzard FrameXML. No XML files, no libraries, no build step
   — the client compiles the Lua at load and you iterate with `/reload`.
-- **Flavours:** Classic Era (`Kitbag.toc`) and Mists Classic (`Kitbag_Mists.toc`) from one file
-  list. Retail is a backlog item, not a second repo.
+- **Flavour:** Classic Era, and only Classic Era (`Kitbag.toc`). Mists, Cataclysm and Retail were
+  dropped on 2026-09-03 — none had ever drawn a frame, and a `.toc` is a support claim. A second
+  `.toc` reappearing turns the gate red; see `Tests/toc_test.lua`.
 - **SavedVariables:** `KitbagDB`, schema-versioned — see `KitbagDB.lua`.
 
 **The design premise, and the reason this rewrite exists:** the parts that decide anything are
@@ -94,8 +95,9 @@ Enable Lua errors while developing: `/console scriptErrors 1` (or run BugSack).
 
 - **Load order is load-bearing.** Every module reads its dependencies out of `Kitbag` at load time,
   so a module must appear in the `.toc` *after* everything it uses. `Kitbag.lua` is last.
-- **Both `.toc` files must list the same files.** Adding a module and forgetting `Kitbag_Mists.toc`
-  breaks that flavour only, and only at runtime.
+- **There is exactly one `.toc`, and the gate enforces it.** The parity trap this replaced was real
+  — adding a module and forgetting a second `.toc` broke that flavour only, at runtime, for someone
+  else — so do not reintroduce a flavour without reintroducing a parity check with it.
 - **`## Interface` numbers go stale every patch** and a stale one can refuse to load. Verify against
   the live client.
 - **`GetItemInfo` returns nil for an uncached item.** Never treat nil as "not a two-hander" — that is

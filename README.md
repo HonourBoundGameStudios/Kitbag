@@ -38,7 +38,7 @@ Copy the `Kitbag` folder into `World of Warcraft\_classic_era_\Interface\AddOns\
 .\deploy.ps1 -WowPath "D:\World of Warcraft\_classic_era_"
 ```
 
-Supports **Classic Era** and **Mists Classic** from the same folder.
+Supports **Classic Era**. That is the only flavour Kitbag ships for.
 
 ## Use
 
@@ -65,10 +65,9 @@ ItemRack importer all work. Auto-swap rules are shelved in `Icebox/` — see the
 flyouts, the slot picker, the set icon picker, the trinket bar and the confirmation popups have all
 been seen drawing in a running game. Every panel the addon draws has now been observed on screen.
 
-**The other flavours have `.toc` files and have never been launched.** Their `## Interface` numbers
-are read off the installed client's own `.build.info` rather than guessed — except Cataclysm's,
-which has no local install to read and is still an educated guess. Treat this as a preview and
-report what breaks.
+**Classic Era is the only flavour.** Mists Classic, Cataclysm and Retail `.toc` files were dropped
+on 2026-09-03: none of the three had ever had a frame drawn on it, and a `.toc` file is a promise
+that the addon runs there. Treat this as a preview and report what breaks.
 
 ## Licence
 

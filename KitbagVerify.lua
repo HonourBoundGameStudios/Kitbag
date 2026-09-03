@@ -1544,7 +1544,7 @@ end
 -- ---------------------------------------------------------------------------
 --
 -- The checks above are everything the addon can ask ITSELF. This is the other list: the acts in the
--- WORLD that no frame can perform — die, open a bank, launch the other flavour.
+-- WORLD that no frame can perform — die, open a bank, log in as the alt.
 --
 -- They live here rather than in a working document for one reason. The document is on the machine
 -- that writes the code and the acts are performed on the machine that runs the game, and that gap
@@ -1605,11 +1605,6 @@ Verify.ACTS = {
         item = "VERIFY-17", act = "Copy a set to an alt, then log in as that alt.",
         why = "The menu and the row are measured by checks; that the set is really THERE on the "
             .. "other character is not.",
-    },
-    {
-        item = "VERIFY-6", act = "Launch Mists Classic once and type /kit.",
-        why = "The addon has been deployed there since 2026-08-14 and that client has never run it. "
-            .. "Nothing about this flavour is observed — only reasoned.",
     },
 }
 
