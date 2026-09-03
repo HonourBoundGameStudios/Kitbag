@@ -1098,8 +1098,13 @@ G.GetBindingAction = function(binding)
 end
 key:GetScript("OnKeyDown")(key, "W")
 H.eq(G.Kitbag.char.sets.Set07.key, nil, "a player-bound key never changes the selected set")
-H.eq(key:GetText(), "W is bound to Move Forward — hold a modifier",
-    "the capture button names the player action it refuses to take")
+-- BUG-16. The refusal is said in two places, and which half goes where is the whole fix: the
+-- button is 82px and does not clip, so the sentence went to the 316px line under the list — where
+-- UI-29 already puts the rename refusal — and the button keeps a caption that fits it.
+H.eq(key:GetText(), "Try again…",
+    "a refused press leaves the button saying the mode, not a sentence wider than the button")
+H.eq(G.KitbagStatusLine:GetText(), "W is bound to Move Forward — hold a modifier",
+    "…and the line under the list names the player action Kitbag refused to take")
 key:GetScript("OnKeyDown")(key, "ENTER")
 H.eq(G.Kitbag.char.sets.Set07.key, nil, "Enter cannot commit an earlier proposal after a refusal")
 G.GetBindingAction = normalBindingAction
@@ -1108,6 +1113,8 @@ G.GetBindingAction = normalBindingAction
 -- costs nothing until Enter says this is the one to keep.
 G.Kitbag.char.sets.Set06.key = "F8"
 key:GetScript("OnKeyDown")(key, "F8")
+H.ok(G.KitbagStatusLine:GetText() ~= "W is bound to Move Forward — hold a modifier",
+    "a refusal that has been answered stops being displayed under a key the player has moved on from")
 H.eq(G.Kitbag.char.sets.Set07.key, nil, "capturing a key does not replace the committed binding")
 H.eq(G.Kitbag.char.sets.Set06.key, "F8", "…or take the proposed key from another set")
 H.eq(key:GetText(), "F8 — Enter to keep, Escape to cancel (takes it from Set06)",

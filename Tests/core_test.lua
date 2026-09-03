@@ -1320,6 +1320,17 @@ H.eq(C.BindingRefusalLabel("LSHIFT", { ok = false, why = "modifier" }),
 H.eq(C.BindingRefusalLabel("SPACE", { ok = false, why = "reserved" }),
     "SPACE cannot be used as a binding", "reserved client controls explain their refusal")
 
+-- BUG-16. A refusal is prose and belongs on the status line, not on an 82px button: written to the
+-- button it spilled both ways across the inspector and landed on top of Inherit. So Core answers
+-- both halves — the caption the control wears while a refusal stands, and the sentence the line
+-- carries — and neither frame can drift from the refusal it describes.
+local caption = C.BindingRefusalCaption()
+H.eq(caption, "Try again…",
+    "a refused press leaves the button saying the mode, not the reason")
+H.ok(#caption <= 12, "…in a caption that fits KEY_WIDTH, which no reason ever could")
+H.ok(#caption < #C.BindingRefusalLabel("W", occupied),
+    "…and is far shorter than the sentence the status line takes off its hands")
+
 -- ---------------------------------------------------------------------------
 -- BindingImpact — what giving a set a key would cost (UI-12)
 -- ---------------------------------------------------------------------------

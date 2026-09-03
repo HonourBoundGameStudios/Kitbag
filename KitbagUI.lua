@@ -590,7 +590,7 @@ local pendingRefusal = nil
 
 local function keyLabel()
     if pendingRefusal then
-        return Core.BindingRefusalLabel(pendingRefusal.key, pendingRefusal)
+        return Core.BindingRefusalCaption()
     end
     local current = selected and Sets.KeyOf(selected) or nil
     local impact
@@ -598,6 +598,31 @@ local function keyLabel()
         impact = Core.BindingImpact(Kitbag.char.sets, selected, pendingBinding)
     end
     return Core.BindingLabel(current, pendingBinding, impact)
+end
+
+--- Repaint the button and, when a refusal stands, the line that carries its reason (BUG-16).
+--
+-- Always both, and always through here. A refusal is prose and belongs on the 316px status line,
+-- not on an 82px button whose FontString is centred and unclipped — written there the sentence
+-- spilled out both sides of the control and landed on top of Inherit and the doll cells either
+-- side. Painting the pair in one place is also what stops the two from disagreeing.
+--- True while `status` is showing a capture refusal rather than describing the list, so the line
+--- can be handed back exactly once instead of on every keystroke of a capture that never refused.
+local refusalOnLine = false
+
+local function paintKey(button)
+    button:SetText(keyLabel())
+    if not status then return end
+    if pendingRefusal then
+        status:SetText(Core.BindingRefusalLabel(pendingRefusal.key, pendingRefusal))
+        refusalOnLine = true
+    elseif refusalOnLine then
+        -- The refusal has been answered, so the line goes back to describing the list. A full
+        -- redraw rather than a second copy of the wording: `UI.Refresh` already owns what this
+        -- line says, and duplicating it here is how the two would come to disagree.
+        refusalOnLine = false
+        UI.Refresh()
+    end
 end
 
 local function stopCapture(button)
@@ -635,7 +660,7 @@ local function onKeyCaptured(button, key)
     if not binding then
         pendingBinding = nil
         pendingRefusal = { why = why, key = key }
-        button:SetText(keyLabel())
+        paintKey(button)
         return
     end
 
@@ -643,14 +668,14 @@ local function onKeyCaptured(button, key)
     if not candidate.ok then
         pendingBinding = nil
         pendingRefusal = candidate
-        button:SetText(keyLabel())
+        paintKey(button)
         return
     end
 
     -- The press is only a proposal. Replacing it costs nothing; only Enter reaches Bindings.Set.
     pendingBinding = binding
     pendingRefusal = nil
-    button:SetText(keyLabel())
+    paintKey(button)
 end
 
 local function onKeyEnter(self)
@@ -1596,6 +1621,15 @@ function UI.Refresh()
     -- Last, so the line describes the box rather than being overwritten by the count behind it. A
     -- redraw can arrive mid-rename from anywhere — the death watcher is enough on its own.
     if renaming then renameProposal() end
+
+    -- Same reason, for the other thing that borrows this line: a refusal outlives the keystroke
+    -- that caused it, so a redraw arriving while it stands must not quietly drop it (BUG-16).
+    if pendingRefusal then
+        status:SetText(Core.BindingRefusalLabel(pendingRefusal.key, pendingRefusal))
+        refusalOnLine = true
+    else
+        refusalOnLine = false
+    end
 
     -- Re-asked on every redraw rather than once at build: the import itself ends in a refresh, so
     -- this is what makes the button take itself away the moment its job is done.
