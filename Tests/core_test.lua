@@ -1560,6 +1560,24 @@ H.ok(C.ABOUT.description:find("set", 1, true) ~= nil,
 H.ok(C.ABOUT.steam:find("^https://") ~= nil, "the Steam link is a real https URL, not a search term")
 H.ok(C.ABOUT.repo:find("^https://github%.com/") ~= nil, "…and the repository link is the GitHub one")
 
+-- The three places this addon points at, in the order the page offers them. A list rather than three
+-- fields because the page renders one button per entry: a fourth link should be an entry here, not
+-- an edit in the frame that draws them.
+H.eq(#C.ABOUT.links, 3, "three links, one button each")
+H.eq(C.ABOUT.links[1].label, "Website", "the studio's own site comes first — it is the front door")
+H.eq(C.ABOUT.links[1].url, "https://honourbound.games", "…and it is honourbound.games")
+H.eq(C.ABOUT.links[2].label, "Steam", "then where the studio's games are")
+H.eq(C.ABOUT.links[3].label, "GitHub", "then where this addon is")
+for i, link in ipairs(C.ABOUT.links) do
+    H.ok(link.url:find("^https://") ~= nil, "link " .. i .. " is an https URL a browser can take")
+    -- The superseded domain is the failure this guards. honourboundgamestudios.com is still the
+    -- studio's EMAIL, its GitHub org and its social handles — so it cannot simply be banned — but as
+    -- the WEBSITE it was replaced on 2026-09-03, and a dead front door on an About page is the one
+    -- link nobody discovers is dead, because nobody clicks their own.
+    H.ok(link.url:find("//honourboundgamestudios%.com") == nil,
+        "…and it is not the superseded honourboundgamestudios.com website")
+end
+
 -- The two lines that are assembled rather than written down, which is exactly where a wrong one
 -- would be a confident sentence about the wrong thing: both carry the version, and the version is
 -- nil for the first seconds after a login.

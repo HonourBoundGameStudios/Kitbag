@@ -1346,48 +1346,82 @@ local function buildAbout(panel)
 
     local rule2 = aboutRule(panel, description, 12)
 
-    -- Where the rest of what the studio makes is. A URL in a FontString is a URL nobody can take
-    -- with them — the client has no clipboard of its own and no browser to hand it to — so it goes
-    -- in an edit box that can be selected and copied, and the box refuses every edit so it can never
-    -- hand over a URL somebody has half-typed over.
-    local linkLabel = aboutText(panel, rule2, 10, "GameFontNormal",
-        "|cffffd100Find our games on Steam|r")
+    -- Where to find the studio and this addon. A URL in a FontString is a URL nobody can take with
+    -- them — the client has no clipboard of its own and no browser to hand one to — so the page
+    -- offers one selectable box and a button per link that fills it.
+    --
+    -- One box rather than three: three boxes with three select buttons is six controls for one act,
+    -- and the act is "put a link where Ctrl-C can reach it". The buttons also do the selecting, so
+    -- there is no separate Select-all step to explain — pick a link, press Ctrl-C.
+    local linkLabel = aboutText(panel, rule2, 10, "GameFontNormal", "|cffffd100Find us online|r")
 
     local link = CreateFrame("EditBox", "KitbagAboutLink", panel, "InputBoxTemplate")
     link:SetSize(440, 22)
-    link:SetPoint("TOP", linkLabel, "BOTTOM", 0, -6)
     link:SetAutoFocus(false)
-    link:SetText(about.steam)
     link:SetCursorPosition(0)
     link:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     link:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
     link:SetScript("OnEditFocusGained", function(self) self:HighlightText() end)
+
+    -- Which link the box is currently showing. Held so an edit can be put back: the box exists to
+    -- hand over a URL, and one somebody has typed half over is worse than no URL at all — it is a
+    -- link that looks right and goes nowhere.
+    local showing = about.links[1].url
+    local function show(url)
+        showing = url
+        link:SetText(url)
+        link:SetCursorPosition(0)
+    end
     link:SetScript("OnTextChanged", function(self, user)
         if user then
-            self:SetText(about.steam)
+            self:SetText(showing)
             self:HighlightText()
         end
     end)
+    show(showing)
 
-    -- Ctrl-C is the only way out of the client, and selecting 68 characters of URL by dragging is
-    -- the step people give up on. The button does the selecting; the label says what is left to do,
-    -- because a button called "Copy" that cannot copy is a broken promise.
-    local copy = CreateFrame("Button", "KitbagAboutCopyButton", panel, "UIPanelButtonTemplate")
-    copy:SetSize(200, 22)
-    copy:SetPoint("TOP", link, "BOTTOM", 0, -8)
-    copy:SetText("Select all (then Ctrl-C)")
-    copy:SetScript("OnClick", function()
-        link:SetFocus()
-        link:HighlightText()
-    end)
+    -- The buttons, in a row centred over the box. Sized off their own count so a fourth link widens
+    -- the row rather than falling off the end of one built for three — the same reason the action
+    -- row under the set list derives its width (UI-28).
+    local BUTTON_W, BUTTON_GAP = 110, 6
+    local links = about.links
+    local row = CreateFrame("Frame", "KitbagAboutLinkRow", panel)
+    row:SetSize(#links * BUTTON_W + (#links - 1) * BUTTON_GAP, 22)
+    row:SetPoint("TOP", linkLabel, "BOTTOM", 0, -6)
 
-    -- The addon's own home, said once. It is in the .toc and in the README and was nowhere a player
-    -- could see it.
-    local repo = aboutText(panel, copy, 10, "GameFontDisableSmall", "|cff808080" .. about.repo .. "|r")
+    for i, entry in ipairs(links) do
+        local button = CreateFrame("Button", "KitbagAboutLink" .. entry.label, row,
+            "UIPanelButtonTemplate")
+        button:SetSize(BUTTON_W, 22)
+        if i == 1 then
+            button:SetPoint("LEFT", row, "LEFT", 0, 0)
+        else
+            button:SetPoint("LEFT", row, "LEFT", (i - 1) * (BUTTON_W + BUTTON_GAP), 0)
+        end
+        button:SetText(entry.label)
+        button:SetScript("OnClick", function()
+            show(entry.url)
+            link:SetFocus()
+            link:HighlightText()
+        end)
+        button:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_TOP")
+            GameTooltip:AddLine(entry.url, 1, 0.82, 0)
+            GameTooltip:AddLine("Puts this in the box below, selected. Ctrl-C copies it.",
+                0.9, 0.9, 0.9, true)
+            GameTooltip:Show()
+        end)
+        button:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    end
+
+    link:SetPoint("TOP", row, "BOTTOM", 0, -6)
+
+    local hint = aboutText(panel, link, 6, "GameFontDisableSmall",
+        "Pick a link, then press |cffffd100Ctrl-C|r to copy it.")
 
     -- The other door nothing in the window mentioned. `/kit help` has listed every command since the
     -- first commit, and a player who never types a slash command has no way to learn that.
-    aboutText(panel, repo, 6, "GameFontDisableSmall",
+    aboutText(panel, hint, 6, "GameFontDisableSmall",
         "Type |cffffd100/kit help|r in chat for every command, or |cffffd100/kit verify|r to have " ..
         "Kitbag check itself.", ABOUT_WIDTH)
 

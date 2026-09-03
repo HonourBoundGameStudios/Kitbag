@@ -1394,9 +1394,25 @@ Core.ABOUT = {
         "what is in it slot by slot, and the piece that decides a swap is a pure function with a " ..
         "test suite behind it — because a set that half-applies is a planning bug, not a bad day.",
 
+    -- The studio's front door, and it is honourbound.games — NOT honourboundgamestudios.com, which
+    -- was superseded as the website on 2026-09-03. That old domain is still the studio's email, its
+    -- GitHub org and its social handles, so it is not a string to hunt down everywhere; it is wrong
+    -- in exactly this one role. A dead front door on an About page is also the link that stays dead
+    -- longest, because nobody clicks their own.
+    website = "https://honourbound.games",
     steam = "https://store.steampowered.com/curator/44062210-Honour-Bound-Game-Studios/",
     repo = "https://github.com/HonourBoundGameStudios/Kitbag",
     copyright = "© Honour Bound Game Studios",
+}
+
+-- The links the About page offers, in the order it offers them: the studio, then where its games
+-- are, then where this addon is. A LIST rather than the three fields above read one at a time,
+-- because the page draws one button per entry — a fourth link should be an entry here rather than an
+-- edit in the frame that draws them, which is the same argument DB.OPTIONS and Core.TABS make.
+Core.ABOUT.links = {
+    { label = "Website", url = Core.ABOUT.website },
+    { label = "Steam",   url = Core.ABOUT.steam },
+    { label = "GitHub",  url = Core.ABOUT.repo },
 }
 
 -- The separator between the halves of a one-line fact. A middle dot with two spaces either side,

@@ -1060,17 +1060,28 @@ H.eq(G.KitbagAboutVersion:GetText(), "Version 0.1.0  ·  Classic Era",
 H.eq(G.KitbagAboutFooter:GetText(), "Kitbag v0.1.0  ·  © Honour Bound Game Studios",
     "…and the footer says whose it is")
 
--- The link is an edit box so it can be selected and copied — the client has no clipboard of its own
--- — and it must refuse edits, or it can hand over a URL somebody typed over half of.
-H.eq(G.KitbagAboutLink:GetText(), G.Kitbag.Core.ABOUT.steam, "the Steam link is on the page, selectable")
+-- The links. The box is an edit box so it can be selected and copied — the client has no clipboard
+-- of its own — and the three buttons are what fill it, which is the wiring no pure test can reach.
+local links = G.Kitbag.Core.ABOUT.links
+H.eq(G.KitbagAboutLink:GetText(), links[1].url,
+    "the page opens on the studio's own website, which is the front door")
+H.eq(links[1].url, "https://honourbound.games", "…and that is honourbound.games")
+
+G.KitbagAboutLinkSteam:Click()
+H.eq(G.KitbagAboutLink:GetText(), links[2].url, "the Steam button puts the Steam URL in the box")
+G.KitbagAboutLinkGitHub:Click()
+H.eq(G.KitbagAboutLink:GetText(), links[3].url, "…and GitHub the repository's")
+G.KitbagAboutLinkWebsite:Click()
+H.eq(G.KitbagAboutLink:GetText(), links[1].url, "…and Website goes back to the studio's site")
+
+-- The box must refuse edits, or it hands over a URL somebody typed half over — a link that looks
+-- right and goes nowhere, which is worse than no link at all. It puts back whatever button was last
+-- pressed, not a constant, or the refusal would drag the box back to the website every time.
+G.KitbagAboutLinkSteam:Click()
 G.KitbagAboutLink:SetText("nonsense")
 G.KitbagAboutLink:GetScript("OnTextChanged")(G.KitbagAboutLink, true)
-H.eq(G.KitbagAboutLink:GetText(), G.Kitbag.Core.ABOUT.steam,
-    "…and typing into it puts the URL straight back, so it cannot be edited into a wrong one")
-
-G.KitbagAboutCopyButton:Click()
-H.ok(G.KitbagAboutCopyButton:GetScript("OnClick") ~= nil,
-    "the select-all button is wired, which is the only route out of the client to a clipboard")
+H.eq(G.KitbagAboutLink:GetText(), links[2].url,
+    "typing into the box puts back the link that was chosen, not the one it opened on")
 
 -- Settings is a page now, not a second window, and the door every other surface uses has to land on
 -- it. This is the assertion that would have caught the whole of UI-32 going in as a tab strip with
