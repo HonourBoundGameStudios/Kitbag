@@ -41,6 +41,12 @@ only be tested by wearing the bug.
 
 **RED → GREEN → REVIEW (repeat until clean) → COMMIT → propose next → repeat.** One item, one commit.
 
+> **⭐ "propose next" applies at the end of EVERY completed goal or task** — not only backlog
+> items worked RED→GREEN. A fix, a spike, a tidy-up, a one-off chore: if anything is open when it
+> finishes, propose the next item and wait. The proposal is part of the deliverable, not a courtesy —
+> finishing without one leaves the Admiral to go find the thread again. If nothing is open, say so
+> plainly — that is a real answer. *(Fleetcast 2026-09-03 — Admiral's order, originated on Sigil.)*
+
 1. **RED** — write the failing test *first*, and confirm it fails.
    - Pure logic (planner, rules, parsing, migrations) → a `Tests/*_test.lua` case. **This is the
      default, and the seam is worth extracting for.**
