@@ -144,6 +144,17 @@ H.ok(byId["selection"] ~= nil,
 H.eq(byId["selection"] and byId["selection"].item, "VERIFY-8",
     "…and it names the item it answers")
 
+-- UI-29's half of the same question. The rename box is anchored to whichever ROW is showing the set
+-- it will rename, and it is the only widget in the addon whose position is computed rather than
+-- declared — everything else is a static SetPoint that either drew or did not. A box that opens over
+-- the wrong row renames the wrong set with the player watching it happen, which is VERIFY-8's fear
+-- with a keyboard attached. It is also the first EditBox the list has ever held, so whether it draws
+-- over the row rather than under it has never been observed.
+H.ok(byId["rename-box"] ~= nil,
+    "a check proves the rename box opens over the row showing the set it will rename")
+H.eq(byId["rename-box"] and byId["rename-box"].item, "VERIFY-8",
+    "…and it names the item it answers")
+
 -- VERIFY-10's picker questions are geometry, and geometry is the one thing on that list a person is
 -- WORST at: "does the scroll bar clear the last column" is a three-pixel question answered by eye
 -- with "looks fine". Worse, BAR_STRIP is our guess at how far outside its scroll frame Blizzard

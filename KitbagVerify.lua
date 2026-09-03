@@ -432,6 +432,86 @@ Verify.CHECKS = {
         end,
     },
     {
+        id = "rename-box", item = "VERIFY-8", label = "Rename box opens over the right row",
+        -- UI-29's half of the selection question. The rename box is the only widget in the addon
+        -- whose position is COMPUTED rather than declared — every other frame is a static SetPoint
+        -- that either drew or did not, while this one is anchored at press time to whichever of the
+        -- twelve rows happens to be showing the set. A box over the wrong row renames the wrong set
+        -- with the player watching, which is VERIFY-8's fear with a keyboard attached.
+        --
+        -- It is also the list's first EditBox, so "does it draw OVER the row rather than under it"
+        -- has never been observed. That half is geometry and is reported rather than judged: the
+        -- numbers go in the detail so a person reading the run can see the box sitting inside the
+        -- row, and a wrong answer shows up as an overlap nobody has to have predicted.
+        run = function()
+            local UI, Sets = Kitbag.UI, Kitbag.Sets
+            if not UI or not Sets then return nil, "KitbagUI is not loaded" end
+            if not Kitbag.char then return nil, "no character bucket yet — not logged in" end
+
+            local button, box = _G.KitbagRenameButton, _G.KitbagRenameBox
+            if not button or not box then
+                return nil, "the window has not been built — open /kit once, then run this"
+            end
+
+            local names = Sets.Names() or {}
+            if #names == 0 then return nil, "no sets to rename — save one, then run this" end
+
+            -- Same reason the selection check does it: UI.Refresh returns immediately with the
+            -- window hidden, so a box opened over a list nothing redrew would report on rows that
+            -- are not showing what they say they are.
+            local window = _G.KitbagFrame
+            local wasShown = window and window:IsShown()
+            if window and not wasShown then
+                window:Show()
+                UI.Refresh()
+            end
+
+            button:Click()
+            local target = UI.Selected()
+            local shown, text = box:IsShown(), box:GetText()
+
+            -- Which row is drawing that set, found the way the player finds it: by reading the rows.
+            local rowName, geometry
+            for i = 1, 12 do
+                local row = _G["KitbagSetRow" .. i]
+                if row and row:IsShown() and row.setName == target then
+                    rowName = row:GetName()
+                    local rowTop, rowBottom = row:GetTop(), row:GetBottom()
+                    local boxTop, boxBottom = box:GetTop(), box:GetBottom()
+                    if rowTop and rowBottom and boxTop and boxBottom then
+                        geometry = string.format("%s spans %.0f..%.0f, box %.0f..%.0f",
+                            rowName, rowBottom, rowTop, boxBottom, boxTop)
+                    end
+                end
+            end
+
+            -- Escape rather than a second Click, because Escape is the exit a player uses and the
+            -- one that must never commit. A check that tidies up through a path nobody takes leaves
+            -- the path everybody takes unmeasured.
+            local escape = box:GetScript("OnEscapePressed")
+            if escape then escape(box) end
+            if window and not wasShown then window:Hide() end
+
+            if not shown then
+                return false, string.format("pressing Rename with %s selected opened nothing",
+                    tostring(target))
+            end
+            if text ~= target then
+                return false, string.format("the box opened on %q while %q is selected — it would "
+                    .. "rename the set NOT on screen", tostring(text), tostring(target))
+            end
+            if not rowName then
+                return false, string.format("no visible row is showing %s, so the box is anchored "
+                    .. "to a row drawing another set", tostring(target))
+            end
+            if box:IsShown() then
+                return false, "Escape did not close the box, which is the one way out of the mode"
+            end
+            return true, string.format("opened on %s over %s%s", target, rowName,
+                geometry and ("; " .. geometry) or "")
+        end,
+    },
+    {
         id = "picker", item = "VERIFY-2", label = "Slot picker opens",
         run = function()
             local Picker, Sets = Kitbag.Picker, Kitbag.Sets
@@ -1491,8 +1571,8 @@ Verify.ACTS = {
     },
     {
         item = "VERIFY-19", act = "Open /kit and look for MAGENTA squares.",
-        why = "The visual pass (UI-21..27) left NO text buttons in the addon: ten icon buttons "
-            .. "over nine texture paths, and not one of them "
+        why = "The visual pass (UI-21..27) left NO text buttons in the addon: eleven icon buttons "
+            .. "over ten texture paths — the newest is Rename (UI-29) — and not one of them "
             .. "has ever been drawn. A wrong path in this client does not draw nothing, it renders "
             .. "missing-texture magenta — so this is a negative observation anyone can make in two "
             .. "seconds, rather than an opinion about how it looks. While there: the paperdoll's "
