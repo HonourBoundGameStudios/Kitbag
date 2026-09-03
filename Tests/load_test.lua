@@ -602,6 +602,60 @@ H.eq(G.Kitbag.char.sets.Base.slots[1], "111:0:0:0:0:0:0",
 -- menu's "only when it would change something" guard correct rather than merely tidy.
 H.eq(Sets.Inherit("Child", nil), false, "a set that inherits from nothing cannot stop inheriting")
 
+-- ---------------------------------------------------------------------------
+-- Sets.Rename — the move, and everything that has to travel with it (UI-29)
+-- ---------------------------------------------------------------------------
+--
+-- Exercised here for the reason Sets.Inherit is: this writes the character bucket and then reaches
+-- the client through Bindings.Apply, so the mock is the only place outside the game it can run at
+-- all. `Core.RenameImpact` already decides — what is untested without this is whether the four
+-- things the impact NAMES are actually carried, and every one of them fails silently:
+-- a forgotten binding leaves a key bound to a set that no longer exists, a forgotten child resolves
+-- against a missing parent and quietly becomes half a set, a forgotten rule points at nothing, and a
+-- forgotten `lastSet` loses the window's selection.
+G.Kitbag.char = {
+    sets = {
+        Base  = { name = "Base", slots = { [1] = "111:0:0:0:0:0:0" }, key = "CTRL-9" },
+        Child = { name = "Child", slots = { [16] = "333:0:0:0:0:0:0" }, parent = "Base" },
+        Other = { name = "Other", slots = {} },
+    },
+    rules = { { set = "Base" }, { set = "Other" }, { set = "Base" } },
+    lastSet = "Base",
+}
+
+local renameKeys = {}
+local beforeRename = G.SetBindingClick
+G.SetBindingClick = function(key, ...)
+    renameKeys[#renameKeys + 1] = key
+    return beforeRename(key, ...)
+end
+
+H.eq(Sets.Rename("Base", "  Tank  "), true, "renaming a set succeeds, trimming the name given")
+G.SetBindingClick = beforeRename
+
+local sets = G.Kitbag.char.sets
+H.eq(sets.Base, nil, "…the old name is gone rather than left as a duplicate")
+H.ok(sets.Tank ~= nil, "…and the set is under the new one")
+H.eq(sets.Tank.name, "Tank", "…with its own `name` field rewritten, not left naming the old key")
+H.eq(sets.Tank.slots[1], "111:0:0:0:0:0:0", "…carrying its gear")
+H.eq(sets.Tank.key, "CTRL-9", "…and its keybinding")
+H.eq(sets.Child.parent, "Tank", "the child now inherits from the new name, not from nothing")
+H.eq(G.Kitbag.char.rules[1].set, "Tank", "a stored rule naming the set is re-pointed")
+H.eq(G.Kitbag.char.rules[3].set, "Tank", "…every one of them")
+H.eq(G.Kitbag.char.rules[2].set, "Other", "…and a rule naming another set is left alone")
+H.eq(G.Kitbag.char.lastSet, "Tank", "the window's last selection follows the set it selected")
+H.eq(table.concat(renameKeys, ", "), "CTRL-9",
+    "…and the key is re-bound, so it equips the set under its new name rather than a vanished one")
+
+-- The refusals. Read through the same pure answer the window greys the button with, so a rename the
+-- UI would have blocked cannot succeed by another door.
+H.eq(Sets.Rename("Nobody", "Tank"), false, "a set that does not exist cannot be renamed")
+H.eq(Sets.Rename("Tank", "Other"), false, "…and neither can one be renamed onto a name in use")
+H.ok(sets.Other ~= nil and next(sets.Other.slots) == nil, "…leaving the set it would have replaced")
+H.eq(Sets.Rename("Tank", "   "), false, "a name that is only whitespace is refused")
+H.eq(Sets.Rename("Tank", "Tank"), false, "…and renaming a set to the name it already has is a no-op")
+H.ok(sets.Tank ~= nil, "…with the set still there after every refusal")
+
 -- The `/kit save` → refuse → `/kit resave` sequence (VERIFY-12). Worth stating plainly, because the
 -- backlog item assumed otherwise: the SLASH path never raises the confirmation popup. Only the
 -- window does. `/kit save` over a set that names gear you are not wearing REFUSES and says what it

@@ -287,6 +287,69 @@ function Sets.Delete(name)
     return true
 end
 
+--- Rename a set, taking everything that points at it along (UI-29).
+--
+-- The set is a VALUE in `sets` keyed by its name, so a rename is a move rather than an edit — and
+-- four separate things name the set from outside its own table. Every one of them fails silently if
+-- it is left behind, which is why the decision is `Core.RenameImpact` rather than four checks here:
+-- a binding rebuilt from a name nothing holds is a key that stops working, a child pointing at a
+-- vanished parent quietly resolves to half a set, a stored rule naming nothing never fires again,
+-- and `lastSet` loses the window's selection.
+--
+-- Refused through the same pure answer the window greys its button with, so the edit box and the
+-- press cannot disagree about what is allowed. The refusals are distinguished because they ask
+-- different things: "that name is taken" wants another name, "that is not a name" wants any name.
+function Sets.Rename(old, new)
+    local rules = char().rules
+    local impact = Core.RenameImpact(char().sets, rules, old, new)
+    if not impact.ok then
+        if impact.why == "exists" then
+            say("|cffff8080a set called|r |cffffd100%s|r |cffff8080already exists.|r " ..
+                "|cff808080Pick another name — Kitbag will not overwrite it.|r",
+                Core.CleanName(new))
+        elseif impact.why == "bad-name" then
+            -- No command is named, deliberately: there is no `/kit rename`, and the window is the
+            -- only door in. A message citing a command that does not exist is worse than none.
+            say("give the set a name.")
+        elseif impact.why == "same" then
+            say("|cffffd100%s|r is already called that.", old)
+        else
+            say("no set called |cffffd100%s|r.", tostring(old))
+        end
+        return false
+    end
+
+    local sets = char().sets
+    local set = sets[old]
+    sets[old] = nil
+    -- The stored `name` is what previews, tooltips and the macro body read; leaving it naming the
+    -- old key would make the set answer to two names, one of which no longer opens it.
+    set.name = impact.name
+    sets[impact.name] = set
+
+    for _, child in ipairs(impact.children) do sets[child].parent = impact.name end
+    -- By index, because a rule has no other identity. The engine is on ice (Icebox/README.md); its
+    -- stored data is not, and a rule left pointing at nothing would come back broken.
+    for _, index in ipairs(impact.rules) do rules[index].set = impact.name end
+    if char().lastSet == old then char().lastSet = impact.name end
+
+    say("renamed |cffffd100%s|r to |cffffd100%s|r.", old, impact.name)
+
+    -- Rebuilt rather than moved: `Bindings.Apply` builds every binding from the set NAME through
+    -- `Core.MacroBody`, so the key would go on equipping a set that no longer exists. Only when the
+    -- set had one — Apply is cheap but it also reports binding clashes, and a rename is no place to
+    -- start listing them.
+    if impact.key and Kitbag.Bindings then Kitbag.Bindings.Apply() end
+
+    -- The one thing nothing here can carry: a macro the player placed on an action bar by hand
+    -- names the set in its body, and that lives in the client's own data rather than in `sets`.
+    say("|cff808080If you put %s on an action bar by hand, that macro still says |r|cffffd100%s|r" ..
+        "|cff808080 — drag it again from the window.|r", old, old)
+
+    Kitbag.Refresh()
+    return true
+end
+
 --- Names, sorted, so the UI and /kit list agree and neither reshuffles between openings.
 function Sets.Names()
     local names = {}
