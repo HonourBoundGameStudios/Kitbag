@@ -77,11 +77,30 @@ foreach ($doc in @("README.md", "CHANGELOG.md", "LICENSE")) {
 if (Test-Path $zip) { Remove-Item $zip -Force }
 Compress-Archive -Path $staging -DestinationPath $zip -CompressionLevel Optimal
 
+# The body of the GitHub release, sliced out of CHANGELOG.md rather than kept as a second copy of it.
+# The copy that used to live here was hand-made, and by release time it advertised a feature that had
+# been shelved — the same drift the gate now catches inside the changelog itself. Deriving it means
+# there is nothing left to keep in sync: the notes ARE the changelog entry for the version being
+# packaged, and if that entry is wrong the gate says so before this script ever runs.
+$notes = Join-Path $out "release-notes-$version.md"
+$section, $inSection = @(), $false
+foreach ($line in Get-Content (Join-Path $root "CHANGELOG.md")) {
+    if ($line -match '^##\s*\[') {
+        # Escaped: a version is dotted, and an unescaped '.' would match any character.
+        $inSection = $line -match ("^##\s*\[" + [regex]::Escape($version) + "\]")
+        if (-not $inSection -and $section.Count -gt 0) { break }
+    }
+    if ($inSection) { $section += $line }
+}
+if ($section.Count -eq 0) { Write-Error "CHANGELOG.md has no '## [$version]' entry to release from." }
+Set-Content -Path $notes -Value $section -Encoding utf8NoBOM
+
 $files = (Get-ChildItem $staging -File).Count
 $size = [math]::Round((Get-Item $zip).Length / 1KB, 1)
 Write-Host ""
 Write-Host "Packaged Kitbag $version — $files file(s), $size KB" -ForegroundColor Green
 Write-Host "  $zip" -ForegroundColor Cyan
+Write-Host "  $notes" -ForegroundColor Cyan
 Write-Host "Flavours in this zip:" -ForegroundColor Cyan
 foreach ($toc in Get-ChildItem $staging -Filter "Kitbag*.toc" | Sort-Object Name) {
     $interface = (Select-String -Path $toc.FullName -Pattern '^##\s*Interface:\s*(.+)$').Matches[0].Groups[1].Value.Trim()
