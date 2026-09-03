@@ -1546,25 +1546,33 @@ H.eq(C.TabIndex("rules"), nil, "a tab that no longer exists resolves to nothing,
 H.eq(C.TabIndex(9), nil, "and neither does an index past the end")
 H.eq(C.TabIndex(nil), nil, "nothing in, nothing out")
 
--- What the About tab says. Pure because every one of these values can be missing — GetAddOnMetadata
--- answers nil for an addon the client has not indexed, exactly as GetItemInfo does for an uncached
--- item — and the failure that matters is not a blank panel, it is a confident line about the wrong
--- thing. An unknown value keeps its ROW and says so.
-local about = C.AboutFacts({
-    version = "0.1.0", author = "Honour Bound Game Studios Inc.",
-    interface = 11509, website = "https://example.invalid/Kitbag", sets = 4,
-})
-H.eq(#about, 5, "five facts, one per row")
-H.eq(about[1].label, "Version", "version first, since it is the one anybody is asked for")
-H.eq(about[1].value, "0.1.0", "…read from the .toc rather than typed here")
-H.eq(about[3].value, "11509", "the interface number is shown as text, not as a float")
-H.eq(about[4].value, "4 on this character", "the set count says whose sets it is counting")
+-- The About tab is the studio's page as much as the addon's, and it is GearJourney's — the same
+-- shape, in the same order, so two addons from the same studio do not introduce it two different
+-- ways. Core owns the copy for the reason it owns every other sentence in this addon: a string in a
+-- frame script is a string nothing can check, and this page is nothing BUT strings.
+H.eq(C.ABOUT.studio, "Honour Bound Game Studios", "the page is the studio's before it is the addon's")
+H.ok(C.ABOUT.tagline ~= nil and #C.ABOUT.tagline > 0, "…with the studio's tagline under the name")
+H.ok(C.ABOUT.blurb:find("Honour Bound Game Studios", 1, true) ~= nil,
+    "…and a blurb that names the studio rather than starting mid-sentence")
+H.eq(C.ABOUT.addon, "Kitbag", "the addon's own name is on the page, spelled the way the .toc spells it")
+H.ok(C.ABOUT.description:find("set", 1, true) ~= nil,
+    "…and the description says what this addon is for, which is sets")
+H.ok(C.ABOUT.steam:find("^https://") ~= nil, "the Steam link is a real https URL, not a search term")
+H.ok(C.ABOUT.repo:find("^https://github%.com/") ~= nil, "…and the repository link is the GitHub one")
 
-local blank = C.AboutFacts(nil)
-H.eq(#blank, 5, "a world that answered nothing still fills every row")
-H.eq(blank[1].value, "unknown", "…and an absent value says unknown rather than leaving a gap")
-H.eq(blank[4].value, "none on this character yet",
-    "a character with no sets reads as a state rather than as a zero")
-H.eq(C.AboutFacts({ sets = 1 })[4].value, "1 on this character", "one set is not 1 sets")
+-- The two lines that are assembled rather than written down, which is exactly where a wrong one
+-- would be a confident sentence about the wrong thing: both carry the version, and the version is
+-- nil for the first seconds after a login.
+H.eq(C.AboutVersionLine("0.1.0", "Classic Era"), "Version 0.1.0  ·  Classic Era",
+    "the version line names the version and the flavour it is for")
+H.eq(C.AboutVersionLine(nil, "Classic Era"), "Version unknown  ·  Classic Era",
+    "a version the client cannot answer for reads as unknown rather than as a blank")
+H.eq(C.AboutVersionLine("0.1.0", nil), "Version 0.1.0",
+    "…and with no flavour to name there is no dangling separator")
+
+H.eq(C.AboutFooter("0.1.0"), "Kitbag v0.1.0  ·  © Honour Bound Game Studios",
+    "the footer is the addon, its version and whose it is")
+H.eq(C.AboutFooter(nil), "Kitbag  ·  © Honour Bound Game Studios",
+    "…and it drops the version rather than printing 'vunknown', because the line above already said so")
 
 H.done()

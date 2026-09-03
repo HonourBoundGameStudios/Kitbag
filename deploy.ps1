@@ -58,6 +58,12 @@ Get-ChildItem $dest -Filter *.toc -ErrorAction SilentlyContinue | Remove-Item -F
 Copy-Item (Join-Path $root "*.lua") $dest
 Copy-Item (Join-Path $root "*.toc") $dest
 
+# Media/ is the first thing Kitbag ships that is not code, and the two globs above would have left it
+# behind in silence: a texture path the client cannot resolve draws missing-texture magenta on the
+# About page rather than failing at load. Recursed and forced so the folder is refreshed in place.
+$media = Join-Path $root "Media"
+if (Test-Path $media) { Copy-Item $media $dest -Recurse -Force }
+
 $count = (Get-ChildItem $dest -File).Count
 Write-Host "Deployed $count file(s) to $dest" -ForegroundColor Green
 Write-Host "In-game: /reload  then  /kit" -ForegroundColor Cyan

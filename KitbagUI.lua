@@ -1266,92 +1266,151 @@ end
 -- About (UI-32)
 -- ---------------------------------------------------------------------------
 
--- What the client knows about this addon, as the plain table Core.AboutFacts takes.
---
--- Every one of these can answer nil. GetAddOnMetadata does so for an addon the client has not
--- finished indexing, which is the same first-seconds-after-a-login window GetItemInfo is empty in.
--- That is why the wording lives in Core and this only fetches: a missing value has to turn into the
--- word "unknown" in one place rather than in five.
-local function aboutWorld()
-    local meta = GetAddOnMetadata or (C_AddOns and C_AddOns.GetAddOnMetadata)
-    local function field(key)
-        if not meta then return nil end
-        local ok, value = pcall(meta, "Kitbag", key)
-        return ok and value or nil
-    end
+-- Where the studio logo lives inside the deployed addon folder. A texture path is resolved by the
+-- client at draw time against Interface\AddOns\<folder>, so this string is also a claim about what
+-- deploy.ps1 and package.ps1 put there — and Tests/toc_test.lua holds all three together, because a
+-- media file that does not ship does not draw nothing: it draws missing-texture magenta.
+local LOGO = "Interface\\AddOns\\Kitbag\\Media\\HBGS-Logo"
 
-    return {
-        version = field("Version"),
-        author = field("Author"),
-        website = field("X-Website"),
-        -- The CLIENT's interface number rather than the .toc's. They differ exactly when the .toc
-        -- has gone stale, which is the one reason anybody would ever look this up.
-        interface = GetBuildInfo and select(4, GetBuildInfo()) or nil,
-        sets = #Sets.Names(),
-    }
+-- 600 inside a 660 window: wide enough that the studio blurb and the addon's description each come
+-- out as two or three lines rather than five, which is what decides whether this page fits at all.
+local ABOUT_WIDTH = 600
+
+-- The addon's version, or nil. GetAddOnMetadata answers nil for an addon the client has not finished
+-- indexing — the same first-seconds-after-a-login window GetItemInfo is empty in — which is why the
+-- two lines that carry it are assembled in Core rather than here.
+local function addonVersion()
+    local meta = GetAddOnMetadata or (C_AddOns and C_AddOns.GetAddOnMetadata)
+    if not meta then return nil end
+    local ok, value = pcall(meta, "Kitbag", "Version")
+    return ok and value or nil
+end
+
+--- A hairline rule, in the palette every other edge in the addon uses.
+---
+--- Skin's own colour rather than a grey of its own: a divider is an edge, and an edge that does not
+--- match the six recessed regions around it reads as something failing to draw rather than as a
+--- deliberate line.
+local function aboutRule(panel, anchor, gap)
+    local rule = panel:CreateTexture(nil, "ARTWORK")
+    rule:SetSize(ABOUT_WIDTH, 1)
+    rule:SetPoint("TOP", anchor, "BOTTOM", 0, -gap)
+    -- WHITE8X8 tinted, not SetColorTexture: same reasoning as KitbagSkin's two textures, which is
+    -- that the modern API is not on every flavour's widget and a nil method takes the page down.
+    rule:SetTexture("Interface\\Buttons\\WHITE8X8")
+    rule:SetVertexColor(Skin.EDGE[1], Skin.EDGE[2], Skin.EDGE[3], 0.85)
+    return rule
+end
+
+local function aboutText(panel, anchor, gap, font, text, width)
+    local line = panel:CreateFontString(nil, "OVERLAY", font)
+    line:SetPoint("TOP", anchor, "BOTTOM", 0, -gap)
+    if width then
+        line:SetWidth(width)
+        line:SetJustifyH("CENTER")
+    end
+    line:SetText(text)
+    return line
 end
 
 local function buildAbout(panel)
-    local title = panel:CreateFontString("KitbagAboutTitle", "OVERLAY", "GameFontNormalLarge")
-    title:SetPoint("TOP", panel, "TOP", 0, -44)
-    title:SetText("|cff8fd3ffKitbag|r")
+    local about = Core.ABOUT
 
-    local blurb = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    blurb:SetPoint("TOP", title, "BOTTOM", 0, -10)
-    blurb:SetWidth(520)
-    blurb:SetJustifyH("CENTER")
-    blurb:SetText("Gear sets that actually apply. Save what you are wearing and swap it back in " ..
-        "one click.")
+    -- The studio's half of the page, top to bottom: logo, studio, tagline, blurb. Centred on the
+    -- PANEL rather than on the block above it so nothing can drift sideways as the words change.
+    local logo = panel:CreateTexture(nil, "ARTWORK")
+    logo:SetSize(72, 72)
+    logo:SetPoint("TOP", panel, "TOP", 0, -34)
+    logo:SetTexture(LOGO)
 
-    -- One row per fact, built from the pure list rather than typed out here, so the panel cannot
-    -- grow a row the wording does not know about — or keep one it has stopped filling in.
-    panel.facts = {}
-    local previous = nil
-    for i, fact in ipairs(Core.AboutFacts()) do
-        local label = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        if previous then
-            label:SetPoint("TOPRIGHT", previous, "BOTTOMRIGHT", 0, -7)
-        else
-            -- Hung off the middle of the window rather than off either edge: the two columns are a
-            -- block, and a block that is centred stays centred whatever the longest value turns out
-            -- to be.
-            label:SetPoint("TOPRIGHT", blurb, "BOTTOM", -14, -34)
+    local studio = aboutText(panel, logo, 6, "GameFontNormalLarge", about.studio)
+    studio:SetTextColor(1, 0.82, 0)
+
+    local tagline = aboutText(panel, studio, 3, "GameFontNormal", "|cffbfbfbf" .. about.tagline .. "|r")
+    local blurb = aboutText(panel, tagline, 8, "GameFontHighlightSmall", about.blurb, ABOUT_WIDTH)
+
+    -- The addon's half, set off by a rule. Its own name again, because this page is reached from
+    -- inside the addon AND from a screenshot of it, and the second reader has no window title.
+    local rule = aboutRule(panel, blurb, 12)
+
+    local name = aboutText(panel, rule, 10, "GameFontNormalLarge", about.addon)
+    name:SetTextColor(1, 0.82, 0)
+
+    -- Named, and repainted on every redraw: this is the one line on the page whose content the
+    -- client has to answer for, and it is nil for the first seconds after a login (VERIFY-8).
+    panel.version = panel:CreateFontString("KitbagAboutVersion", "OVERLAY", "GameFontHighlightSmall")
+    panel.version:SetPoint("TOP", name, "BOTTOM", 0, -3)
+
+    local description = aboutText(panel, panel.version, 8, "GameFontHighlightSmall",
+        about.description, ABOUT_WIDTH)
+
+    local rule2 = aboutRule(panel, description, 12)
+
+    -- Where the rest of what the studio makes is. A URL in a FontString is a URL nobody can take
+    -- with them — the client has no clipboard of its own and no browser to hand it to — so it goes
+    -- in an edit box that can be selected and copied, and the box refuses every edit so it can never
+    -- hand over a URL somebody has half-typed over.
+    local linkLabel = aboutText(panel, rule2, 10, "GameFontNormal",
+        "|cffffd100Find our games on Steam|r")
+
+    local link = CreateFrame("EditBox", "KitbagAboutLink", panel, "InputBoxTemplate")
+    link:SetSize(440, 22)
+    link:SetPoint("TOP", linkLabel, "BOTTOM", 0, -6)
+    link:SetAutoFocus(false)
+    link:SetText(about.steam)
+    link:SetCursorPosition(0)
+    link:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    link:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+    link:SetScript("OnEditFocusGained", function(self) self:HighlightText() end)
+    link:SetScript("OnTextChanged", function(self, user)
+        if user then
+            self:SetText(about.steam)
+            self:HighlightText()
         end
-        label:SetWidth(120)
-        label:SetJustifyH("RIGHT")
-        label:SetText(fact.label)
+    end)
 
-        local value = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        value:SetPoint("LEFT", label, "RIGHT", 12, 0)
-        value:SetWidth(300)
-        value:SetJustifyH("LEFT")
+    -- Ctrl-C is the only way out of the client, and selecting 68 characters of URL by dragging is
+    -- the step people give up on. The button does the selecting; the label says what is left to do,
+    -- because a button called "Copy" that cannot copy is a broken promise.
+    local copy = CreateFrame("Button", "KitbagAboutCopyButton", panel, "UIPanelButtonTemplate")
+    copy:SetSize(200, 22)
+    copy:SetPoint("TOP", link, "BOTTOM", 0, -8)
+    copy:SetText("Select all (then Ctrl-C)")
+    copy:SetScript("OnClick", function()
+        link:SetFocus()
+        link:HighlightText()
+    end)
 
-        panel.facts[i] = value
-        previous = label
-    end
+    -- The addon's own home, said once. It is in the .toc and in the README and was nowhere a player
+    -- could see it.
+    local repo = aboutText(panel, copy, 10, "GameFontDisableSmall", "|cff808080" .. about.repo .. "|r")
 
-    -- The one thing this panel is for beyond the numbers: where the rest of the addon is. `/kit
-    -- help` has listed every command since the first commit and nothing in the window ever said so.
-    local help = panel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    help:SetPoint("BOTTOM", panel, "BOTTOM", 0, 18)
-    help:SetWidth(560)
-    help:SetJustifyH("CENTER")
-    help:SetText("Type |cffffd100/kit help|r in chat for every command, or |cffffd100/kit verify|r " ..
-        "to have Kitbag check itself.")
+    -- The other door nothing in the window mentioned. `/kit help` has listed every command since the
+    -- first commit, and a player who never types a slash command has no way to learn that.
+    aboutText(panel, repo, 6, "GameFontDisableSmall",
+        "Type |cffffd100/kit help|r in chat for every command, or |cffffd100/kit verify|r to have " ..
+        "Kitbag check itself.", ABOUT_WIDTH)
+
+    -- Pinned to the bottom rather than to the chain above it, so the page has a footer wherever the
+    -- blocks in the middle end up.
+    panel.footer = panel:CreateFontString("KitbagAboutFooter", "OVERLAY", "GameFontDisableSmall")
+    panel.footer:SetPoint("BOTTOM", panel, "BOTTOM", 0, 10)
 
     return panel
 end
 
---- Fill the About rows in.
+--- Repaint the two lines that carry the version.
 ---
---- On every redraw rather than once at build, and it has to be: the set count is one of the facts,
---- and the version is nil for the first seconds after a login.
+--- On every redraw rather than once at build, and it has to be: the version is nil for the first
+--- seconds after a login, which is exactly when somebody opening this page would read it.
 local function refreshAbout(panel)
-    if not panel or not panel.facts then return end
-    local facts = Core.AboutFacts(aboutWorld())
-    for i, value in ipairs(panel.facts) do
-        value:SetText(facts[i] and facts[i].value or "")
-    end
+    if not panel or not panel.version then return end
+    local version = addonVersion()
+    -- Era and only Era (see the .toc). Asked of Compat rather than typed, so the day a second
+    -- flavour comes back this line is not the one that quietly still says Classic Era.
+    panel.version:SetText(Core.AboutVersionLine(version,
+        Compat.IS_MAINLINE and "Retail" or "Classic Era"))
+    panel.footer:SetText(Core.AboutFooter(version))
 end
 
 -- ---------------------------------------------------------------------------

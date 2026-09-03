@@ -68,6 +68,12 @@ foreach ($toc in $SHIPPED_TOCS) {
     if (-not (Test-Path $path)) { Write-Error "$toc is shipped but does not exist." }
     Copy-Item $path $staging
 }
+# Media/ — the studio logo the About page draws (UI-32). The *.lua glob above is what keeps Icebox/
+# out of the zip, and it is what would have kept this out of it too; a texture the zip does not carry
+# renders magenta in the client and nothing before that point says so.
+$media = Join-Path $root "Media"
+if (Test-Path $media) { Copy-Item $media $staging -Recurse -Force }
+
 foreach ($doc in @("README.md", "CHANGELOG.md", "LICENSE")) {
     $path = Join-Path $root $doc
     if (Test-Path $path) { Copy-Item $path $staging }

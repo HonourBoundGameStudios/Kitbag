@@ -1371,35 +1371,67 @@ function Core.TabIndex(which)
     return nil
 end
 
---- The About tab's facts, as ordered { label, value } rows.
+--- The About page's copy, in one place.
 ---
---- Pure because every one of these values can be absent — `GetAddOnMetadata` answers nil for an
---- addon the client has not finished indexing, the same way `GetItemInfo` does for an uncached item.
---- The failure that matters is not an empty panel: it is a row that quietly disappears, so a player
---- reading a support answer off this screen reports four facts where there should be five and nobody
---- can tell which one is missing. An unknown value keeps its row and says it is unknown.
-function Core.AboutFacts(info)
-    info = info or {}
+--- The page is GearJourney's, deliberately: the studio's own page, then the addon's, then where to
+--- find the rest of what the studio makes. Two addons from the same studio should not introduce it
+--- two different ways, and the fleet already had a shape for this — so this is the same blocks in
+--- the same order, with Kitbag's words in them.
+---
+--- Here rather than in the frame that draws it, for the reason every other sentence in this addon
+--- is here: a string written inside a frame script is a string nothing outside the game can read,
+--- and this page is nothing BUT strings.
+Core.ABOUT = {
+    studio = "Honour Bound Game Studios",
+    tagline = "Games and tools, made with honour.",
+    blurb = "Honour Bound Game Studios is an independent studio crafting games and player-first " ..
+        "tools. Kitbag is one of our community add-ons — built so that swapping gear is one click " ..
+        "and one outcome, instead of a set that half-applied.",
 
-    local function known(value)
-        value = value ~= nil and tostring(value) or ""
-        if value == "" then return "unknown" end
-        return value
+    addon = "Kitbag",
+    description = "Save what you are wearing as a named set and put it back on in one click. " ..
+        "Every row tells you whether the set can actually be worn right now, the paperdoll shows " ..
+        "what is in it slot by slot, and the piece that decides a swap is a pure function with a " ..
+        "test suite behind it — because a set that half-applies is a planning bug, not a bad day.",
+
+    steam = "https://store.steampowered.com/curator/44062210-Honour-Bound-Game-Studios/",
+    repo = "https://github.com/HonourBoundGameStudios/Kitbag",
+    copyright = "© Honour Bound Game Studios",
+}
+
+-- The separator between the halves of a one-line fact. A middle dot with two spaces either side,
+-- which is what GearJourney's About page uses and what the eye reads as "and also" rather than as
+-- punctuation inside a sentence.
+local ABOUT_DOT = "  ·  "
+
+--- "Version 0.1.0  ·  Classic Era" — the addon's own line, under its name.
+---
+--- Assembled rather than written down because the version comes from the client, and the client
+--- answers nil for an addon it has not finished indexing. That is the same first-seconds-after-login
+--- window GetItemInfo is empty in, and a blank where a version should be reads as a broken addon.
+function Core.AboutVersionLine(version, flavour)
+    version = (version ~= nil and tostring(version) ~= "") and tostring(version) or "unknown"
+
+    local line = "Version " .. version
+    -- No flavour, no separator. A trailing "  ·  " is how a line that is merely incomplete comes out
+    -- looking broken instead.
+    if flavour ~= nil and tostring(flavour) ~= "" then
+        line = line .. ABOUT_DOT .. tostring(flavour)
     end
+    return line
+end
 
-    -- The count is a state, not a statistic: zero is "you have not made one yet", which is the only
-    -- reading of it that tells a new player what to do next.
-    local count = tonumber(info.sets) or 0
-    local sets = count > 0 and string.format("%d on this character", count)
-        or "none on this character yet"
-
-    return {
-        { label = "Version",   value = known(info.version) },
-        { label = "Author",    value = known(info.author) },
-        { label = "Interface", value = known(info.interface) },
-        { label = "Sets",      value = sets },
-        { label = "Website",   value = known(info.website) },
-    }
+--- "Kitbag v0.1.0  ·  © Honour Bound Game Studios" — the line pinned to the bottom of the page.
+---
+--- The version is DROPPED when it is not known rather than replaced with a word. The line above
+--- already says "Version unknown", and saying it twice — once as "vunknown" — turns one honest gap
+--- into something that reads like a bug in the addon's own name.
+function Core.AboutFooter(version)
+    local name = Core.ABOUT.addon
+    if version ~= nil and tostring(version) ~= "" then
+        name = name .. " v" .. tostring(version)
+    end
+    return name .. ABOUT_DOT .. Core.ABOUT.copyright
 end
 
 Kitbag.Core = Core

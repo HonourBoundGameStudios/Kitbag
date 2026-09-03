@@ -62,7 +62,8 @@ move-by-move tooltips, paperdoll flyouts, set icons, the trinket bar, the settin
 importer all work. Auto-swap rules are shelved in `Icebox/` — see the note at the top.
 
 The window has **three tabs** along the bottom: **Main** (the set list and the paperdoll),
-**Settings** (what used to be a second window) and **About**.
+**Settings** (what used to be a second window) and **About** — the studio page, the addon's version,
+and a selectable link to Honour Bound Game Studios on Steam, laid out the same way GearJourney's is.
 
 **Verified in the client on Classic Era only.** The window, the options panel, the paperdoll
 flyouts, the slot picker, the set icon picker, the trinket bar and the confirmation popups have all

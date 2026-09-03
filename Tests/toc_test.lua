@@ -381,4 +381,49 @@ local shelvedTest = io.open("Icebox/Tests/rules_test.lua", "r")
 H.ok(shelvedTest ~= nil, "…it is shelved in Icebox/Tests/ instead of deleted")
 if shelvedTest then shelvedTest:close() end
 
+-- ---------------------------------------------------------------------------
+-- Media (UI-32)
+-- ---------------------------------------------------------------------------
+--
+-- The About page draws the studio logo, and a texture path is a claim about what is in the deployed
+-- folder rather than a reference the loader can check. Three things have to agree — the path in
+-- KitbagUI, the file on disk, and the two scripts that copy the addon — and NONE of them fails
+-- loudly on its own: a missing texture renders missing-texture magenta in the client, which nobody
+-- sees until they open the page, and the suite would stay green the whole time.
+--
+-- This is also the first thing Kitbag ships that is not a .lua or a .toc, which is exactly why both
+-- scripts had to grow a line. `deploy.ps1` and `package.ps1` copy `*.lua` at the root — that glob is
+-- what keeps Icebox/ out of the game and it is what would have left Media/ out of it too.
+
+local LOGO_FILE = "Media/HBGS-Logo.tga"
+
+local logo = io.open(LOGO_FILE, "r")
+H.ok(logo ~= nil, LOGO_FILE .. " exists, which is the file the About page names")
+if logo then logo:close() end
+
+local function fileBody(path)
+    local f = assert(io.open(path, "r"), "cannot open " .. path)
+    local body = f:read("*a")
+    f:close()
+    return body
+end
+
+-- The path as the CLIENT will resolve it. Taken out of the source rather than restated — a test that
+-- writes the path down a second time passes when the two copies agree with each other and disagree
+-- with the folder — and then EVALUATED, because the source text is not the string. A Windows path
+-- written with single backslashes compiles happily in Lua 5.1 and silently loses every one of them:
+-- that is exactly the mistake this check was written against, and comparing source text to source
+-- text did not catch it.
+local uiBody = fileBody("KitbagUI.lua")
+local logoLiteral = uiBody:match('local LOGO = (".-")')
+H.ok(logoLiteral ~= nil, "KitbagUI names the logo in one place, as a constant")
+local logoPath = logoLiteral and assert(loadstring("return " .. logoLiteral))()
+H.eq(logoPath, "Interface\\AddOns\\Kitbag\\Media\\HBGS-Logo",
+    "…and it resolves to the deployed folder's path, without the extension the client appends")
+
+for _, script in ipairs({ "deploy.ps1", "package.ps1" }) do
+    H.ok(fileBody(script):find("Media", 1, true) ~= nil,
+        script .. " copies Media/ — the glob it had would have shipped everything BUT the logo")
+end
+
 H.done()

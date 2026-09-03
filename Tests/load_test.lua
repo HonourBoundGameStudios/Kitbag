@@ -1052,9 +1052,25 @@ H.eq(UI.ActiveTab(), "about", "clicking the third tab shows the third page")
 H.ok(G.KitbagAboutPanel:IsShown(), "…the page it names")
 H.ok(not G.KitbagMainPanel:IsShown(), "…and Main goes away rather than being drawn under it")
 
--- The one thing About says that changes: the set count. Twenty were stored above.
-H.eq(G.Kitbag.Core.AboutFacts({ sets = 20 })[4].value, "20 on this character",
-    "the About page counts this character's sets")
+-- The About page is the studio's page (it is GearJourney's, block for block), and the two lines on
+-- it that the CLIENT has to answer for are the ones worth driving from here: both carry the version,
+-- and the mock answers "0.1.0" for it the way a client does once it has indexed the addon.
+H.eq(G.KitbagAboutVersion:GetText(), "Version 0.1.0  ·  Classic Era",
+    "the About page names the version and the flavour, read from the client rather than typed")
+H.eq(G.KitbagAboutFooter:GetText(), "Kitbag v0.1.0  ·  © Honour Bound Game Studios",
+    "…and the footer says whose it is")
+
+-- The link is an edit box so it can be selected and copied — the client has no clipboard of its own
+-- — and it must refuse edits, or it can hand over a URL somebody typed over half of.
+H.eq(G.KitbagAboutLink:GetText(), G.Kitbag.Core.ABOUT.steam, "the Steam link is on the page, selectable")
+G.KitbagAboutLink:SetText("nonsense")
+G.KitbagAboutLink:GetScript("OnTextChanged")(G.KitbagAboutLink, true)
+H.eq(G.KitbagAboutLink:GetText(), G.Kitbag.Core.ABOUT.steam,
+    "…and typing into it puts the URL straight back, so it cannot be edited into a wrong one")
+
+G.KitbagAboutCopyButton:Click()
+H.ok(G.KitbagAboutCopyButton:GetScript("OnClick") ~= nil,
+    "the select-all button is wired, which is the only route out of the client to a clipboard")
 
 -- Settings is a page now, not a second window, and the door every other surface uses has to land on
 -- it. This is the assertion that would have caught the whole of UI-32 going in as a tab strip with
