@@ -1288,8 +1288,37 @@ end
 -- out of the window they bound it from.
 H.eq(C.BindingKey("ESCAPE"), nil, "ESCAPE is never a binding, whatever asks")
 H.eq(C.BindingKey("ESCAPE", true, true, true), nil, "…modifiers do not make it one")
+for _, key in ipairs({ "ENTER", "SPACE", "TAB" }) do
+    H.eq(C.BindingKey(key), nil, key .. " is a client control, never a set binding")
+end
 H.eq(C.BindingKey(nil), nil, "no key at all is nil rather than an error")
 H.eq(C.BindingKey(""), nil, "an empty key is nil — the client sends one for some devices")
+
+-- A capture cannot safely take a key the player has already assigned. The client supplies that
+-- fact, but the decision stays pure: no client call is allowed to leak into the planner's module.
+-- `known = false` is refused too. A missing API must not turn a character's movement key into a
+-- gear swap merely because Kitbag could not inspect it.
+local openKey = C.BindingCandidate("SHIFT-E", { known = true })
+H.eq(openKey.ok, true, "a key with no player action remains available")
+
+local occupied = C.BindingCandidate("W", {
+    known = true, action = "MOVEFORWARD", label = "Move Forward",
+})
+H.eq(occupied.ok, false, "a player-bound key is never available to a gear set")
+H.eq(occupied.why, "player-binding", "…and explains the refusal as a player binding")
+H.eq(C.BindingRefusalLabel("W", occupied), "W is bound to Move Forward — hold a modifier",
+    "the button names the action the player would otherwise lose")
+
+local unreadable = C.BindingCandidate("CTRL-E", { known = false })
+H.eq(unreadable.ok, false, "an uninspectable key is refused rather than guessed safe")
+H.eq(unreadable.why, "unreadable", "…with a distinct reason for the capture UI")
+H.eq(C.BindingRefusalLabel("CTRL-E", unreadable),
+    "Can't check CTRL-E — try another key", "the player is told why capture did not proceed")
+
+H.eq(C.BindingRefusalLabel("LSHIFT", { ok = false, why = "modifier" }),
+    "Press another key with the modifier", "a bare modifier says how to finish the chord")
+H.eq(C.BindingRefusalLabel("SPACE", { ok = false, why = "reserved" }),
+    "SPACE cannot be used as a binding", "reserved client controls explain their refusal")
 
 -- ---------------------------------------------------------------------------
 -- BindingImpact — what giving a set a key would cost (UI-12)

@@ -204,6 +204,32 @@ function Compat.MacroIcons()
     return macroIcons
 end
 
+--- The player's action currently attached to a binding string (UI-31).
+--
+-- `SetBindingClick` changes the live binding table but Kitbag never saves it. That means one of
+-- Kitbag's own temporary clicks can be returned here while the player is moving a set's key from
+-- one set to another; it is not a player action to protect, so it is deliberately treated as open.
+-- Every other action is protected. `known = false` is distinct from an empty action: if a client
+-- ever lacks GetBindingAction, the caller must refuse rather than guess a key is harmless.
+function Compat.BindingAction(key)
+    local getter = _G.GetBindingAction
+    if not getter or type(key) ~= "string" or key == "" then
+        return { known = false }
+    end
+
+    local action = getter(key)
+    if type(action) ~= "string" or action == "" then return { known = true } end
+    if action:match("^CLICK KitbagBindingButton%d+(:.*)?$") then
+        return { known = true }
+    end
+
+    return {
+        known = true,
+        action = action,
+        label = _G["BINDING_NAME_" .. action] or action,
+    }
+end
+
 --- The key this character's sets are stored under: "Name - Realm".
 --
 -- The realm has to be in it. Two characters can share a name across realms on one account, and a

@@ -1160,6 +1160,12 @@ local BARE_MODIFIERS = {
     LSHIFT = true, RSHIFT = true, LCTRL = true, RCTRL = true, LALT = true, RALT = true,
 }
 
+-- These are client controls, not spare keys. Unlike a letter a player deliberately unbound, they
+-- have no safe reading in capture mode: Space, Tab and Enter all retain an immediate game/UI role.
+local RESERVED_BINDING_KEYS = {
+    ESCAPE = true, ENTER = true, SPACE = true, TAB = true,
+}
+
 --- A captured keystroke as a binding string — `Core.BindingKey("E", true)` is "SHIFT-E" — or nil if
 --- the keystroke cannot be one (UI-12).
 --
@@ -1174,14 +1180,64 @@ local BARE_MODIFIERS = {
 -- in the game; a build in which some other path could bind it is a build where the player cannot
 -- leave the window they bound it from.
 function Core.BindingKey(key, shift, ctrl, alt)
-    if type(key) ~= "string" or key == "" then return nil end
-    if key == "ESCAPE" or BARE_MODIFIERS[key] then return nil end
+    if type(key) ~= "string" or key == "" then return nil, "empty" end
+    if key == "ESCAPE" then return nil, "escape" end
+    if RESERVED_BINDING_KEYS[key] then return nil, "reserved" end
+    if BARE_MODIFIERS[key] then return nil, "modifier" end
 
     local prefix = ""
     if alt then prefix = prefix .. "ALT-" end
     if ctrl then prefix = prefix .. "CTRL-" end
     if shift then prefix = prefix .. "SHIFT-" end
     return prefix .. key
+end
+
+--- Decide whether a syntactically valid binding string is safe to claim.
+--
+-- The client owns the question "what does this key presently do?"; Core owns the policy that
+-- answer implies.  Keeping the latter here makes failure-to-refuse testable without a client and
+-- keeps a missing API conservative: an answer we cannot read cannot be safely taken.
+--
+-- `state` is Compat.BindingAction's plain table: { known = bool, action = <command>, label = <UI
+-- wording> }. A nil/false `action` means no player binding. Kitbag's currently active click is
+-- deliberately reported as no action by Compat — it is being reassigned, not taken from the player.
+function Core.BindingCandidate(key, state)
+    if type(key) ~= "string" or key == "" then
+        return { ok = false, why = "empty" }
+    end
+    if type(state) ~= "table" or state.known ~= true then
+        return { ok = false, why = "unreadable", key = key }
+    end
+    if type(state.action) == "string" and state.action ~= "" then
+        return {
+            ok = false,
+            why = "player-binding",
+            key = key,
+            action = state.action,
+            label = state.label or state.action,
+        }
+    end
+    return { ok = true, key = key }
+end
+
+--- Player-facing explanation for a refused capture (UI-31).
+--
+-- This is deliberately pure too. The visible sentence is an outcome of the policy above, not a
+-- second policy hidden in the frame script where it could drift from the refusal it describes.
+function Core.BindingRefusalLabel(key, refusal)
+    if type(refusal) ~= "table" then return "That key cannot be bound" end
+    if refusal.why == "modifier" then return "Press another key with the modifier" end
+    if refusal.why == "escape" then return "Escape cancels this binding" end
+    if refusal.why == "reserved" then
+        return string.format("%s cannot be used as a binding", key)
+    end
+    if refusal.why == "player-binding" then
+        return string.format("%s is bound to %s — hold a modifier", key, refusal.label)
+    end
+    if refusal.why == "unreadable" then
+        return string.format("Can't check %s — try another key", key)
+    end
+    return "That key cannot be bound"
 end
 
 --- What giving `name` the key `key` would cost: { ok = bool, why = , taken = <set name or nil> }.

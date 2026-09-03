@@ -351,6 +351,7 @@ G.SetBinding = function() return true end
 G.SetBindingClick = function() return true end
 G.SaveBindings = function() end
 G.GetBindingKey = function() return nil end
+G.GetBindingAction = function() return "" end
 G.CreateMacro = function() end
 G.GetMacroIndexByName = function() return 0 end
 G.EditMacro = function() end
@@ -1032,6 +1033,22 @@ key:Click("LeftButton")
 H.eq(key:GetText(), "Press…", "clicking the key button enters capture mode and says so on the button")
 H.eq(keyboard[#keyboard], true, "…the button takes the keyboard")
 H.eq(propagate[#propagate], false, "…and stops the keystroke reaching the game behind it")
+
+-- A player's current action wins over a new gear binding. The refusal must be visible and must
+-- discard any prior proposal, because Enter after an ignored press must not commit a key the button
+-- is no longer showing.
+G.BINDING_NAME_MOVEFORWARD = "Move Forward"
+local normalBindingAction = G.GetBindingAction
+G.GetBindingAction = function(binding)
+    return binding == "W" and "MOVEFORWARD" or ""
+end
+key:GetScript("OnKeyDown")(key, "W")
+H.eq(G.Kitbag.char.sets.Set07.key, nil, "a player-bound key never changes the selected set")
+H.eq(key:GetText(), "W is bound to Move Forward — hold a modifier",
+    "the capture button names the player action it refuses to take")
+key:GetScript("OnKeyDown")(key, "ENTER")
+H.eq(G.Kitbag.char.sets.Set07.key, nil, "Enter cannot commit an earlier proposal after a refusal")
+G.GetBindingAction = normalBindingAction
 
 -- The first chord is a proposal, not a destructive write. Re-pressing replaces it, so a mis-hit
 -- costs nothing until Enter says this is the one to keep.

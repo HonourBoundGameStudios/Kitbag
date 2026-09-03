@@ -19,6 +19,7 @@ Kitbag = Kitbag or {}
 local Sets = Kitbag.Sets
 local Equip = Kitbag.Equip
 local Core = Kitbag.Core
+local Compat = Kitbag.Compat
 local Skin = Kitbag.Skin
 
 local UI = {}
@@ -574,8 +575,12 @@ end
 --- refresh path can see it without reaching through a widget that may not exist yet.
 local capturing = false
 local pendingBinding = nil
+local pendingRefusal = nil
 
 local function keyLabel()
+    if pendingRefusal then
+        return Core.BindingRefusalLabel(pendingRefusal.key, pendingRefusal)
+    end
     local current = selected and Sets.KeyOf(selected) or nil
     local impact
     if pendingBinding and selected then
@@ -587,6 +592,7 @@ end
 local function stopCapture(button)
     capturing = false
     pendingBinding = nil
+    pendingRefusal = nil
     button:EnableKeyboard(false)
     -- Restored, not merely turned off. While capturing, this frame is the only thing in the game
     -- receiving keys — including the ones that open the menu and the ones that close this window —
@@ -611,15 +617,28 @@ local function onKeyCaptured(button, key)
         return
     end
 
-    -- A modifier on its own is the player half-way through a chord: stay in the mode and wait for
-    -- the key it is modifying. Core.BindingKey is what knows which those are.
-    local binding = Core.BindingKey(key, IsShiftKeyDown(), IsControlKeyDown(), IsAltKeyDown())
+    -- Core owns which raw keystrokes can form chords; Compat then asks the client whether the
+    -- completed chord already belongs to the player. A capture that cannot prove the key is free
+    -- must not take it — the button names the action rather than silently appearing to ignore it.
+    local binding, why = Core.BindingKey(key, IsShiftKeyDown(), IsControlKeyDown(), IsAltKeyDown())
     if not binding then
+        pendingBinding = nil
+        pendingRefusal = { why = why, key = key }
+        button:SetText(keyLabel())
+        return
+    end
+
+    local candidate = Core.BindingCandidate(binding, Compat.BindingAction(binding))
+    if not candidate.ok then
+        pendingBinding = nil
+        pendingRefusal = candidate
+        button:SetText(keyLabel())
         return
     end
 
     -- The press is only a proposal. Replacing it costs nothing; only Enter reaches Bindings.Set.
     pendingBinding = binding
+    pendingRefusal = nil
     button:SetText(keyLabel())
 end
 
@@ -629,7 +648,8 @@ local function onKeyEnter(self)
     if capturing then
         GameTooltip:AddLine(pendingBinding
             and "Press Enter to keep this key, or Escape to cancel."
-            or "Press the key you want. Escape cancels.", 1, 1, 1, true)
+            or (pendingRefusal and "Choose an unbound key. Escape cancels."
+                or "Press the key you want. Escape cancels."), 1, 1, 1, true)
     else
         GameTooltip:AddLine("Click, then press a key to bind this set. " ..
             "Right-click to clear it.", 1, 1, 1, true)
@@ -664,6 +684,8 @@ local function buildKeyButton(panel, gapWidth)
         end
 
         capturing = true
+        pendingBinding = nil
+        pendingRefusal = nil
         self:SetText("Press…")
         self:EnableKeyboard(true)
         -- Without this the keystroke reaches the game as well as this button, so binding "B" would
