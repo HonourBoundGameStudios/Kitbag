@@ -1523,4 +1523,48 @@ H.eq(C.RenameLabel("Base", C.RenameImpact(kin, kinRules, "Base", "  Tank  ")),
     "Press Enter to rename Base to Tank.",
     "the line promises the name that will actually be stored")
 
+-- ---------------------------------------------------------------------------
+-- The window's tabs (UI-32)
+-- ---------------------------------------------------------------------------
+
+-- The tab strip is data rather than three hand-placed buttons, for KitbagOptions' reason: a fourth
+-- tab should be an entry in a list, not a remembered edit in four places. Pure because the ORDER is
+-- a decision — Main is where the window opens and the two doors sit behind it — and because a tab
+-- resolved by name is what lets `/kit options` and the minimap open the window ON a tab without
+-- either of them knowing an index.
+H.eq(#C.TABS, 3, "there are three tabs")
+H.eq(C.TABS[1].id, "main", "the window opens on Main")
+H.eq(C.TABS[2].id, "settings", "settings second")
+H.eq(C.TABS[3].id, "about", "about last")
+H.eq(C.TABS[3].label, "About", "…and each carries the word that goes on the button")
+
+H.eq(C.TabIndex("settings"), 2, "a tab is addressable by name, so a caller never types an index")
+H.eq(C.TabIndex(3), 3, "an index that is already an index passes through")
+-- Both of these are how a bad tab arrives: a stale saved id, or an index off the end after a tab is
+-- removed. Neither may resolve to "some other tab" — the caller decides what to do with nothing.
+H.eq(C.TabIndex("rules"), nil, "a tab that no longer exists resolves to nothing, not to Main")
+H.eq(C.TabIndex(9), nil, "and neither does an index past the end")
+H.eq(C.TabIndex(nil), nil, "nothing in, nothing out")
+
+-- What the About tab says. Pure because every one of these values can be missing — GetAddOnMetadata
+-- answers nil for an addon the client has not indexed, exactly as GetItemInfo does for an uncached
+-- item — and the failure that matters is not a blank panel, it is a confident line about the wrong
+-- thing. An unknown value keeps its ROW and says so.
+local about = C.AboutFacts({
+    version = "0.1.0", author = "Honour Bound Game Studios Inc.",
+    interface = 11509, website = "https://example.invalid/Kitbag", sets = 4,
+})
+H.eq(#about, 5, "five facts, one per row")
+H.eq(about[1].label, "Version", "version first, since it is the one anybody is asked for")
+H.eq(about[1].value, "0.1.0", "…read from the .toc rather than typed here")
+H.eq(about[3].value, "11509", "the interface number is shown as text, not as a float")
+H.eq(about[4].value, "4 on this character", "the set count says whose sets it is counting")
+
+local blank = C.AboutFacts(nil)
+H.eq(#blank, 5, "a world that answered nothing still fills every row")
+H.eq(blank[1].value, "unknown", "…and an absent value says unknown rather than leaving a gap")
+H.eq(blank[4].value, "none on this character yet",
+    "a character with no sets reads as a state rather than as a zero")
+H.eq(C.AboutFacts({ sets = 1 })[4].value, "1 on this character", "one set is not 1 sets")
+
 H.done()

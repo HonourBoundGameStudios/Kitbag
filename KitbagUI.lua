@@ -63,9 +63,9 @@ local COPY_ICON = "Interface\\Icons\\INV_Misc_GroupLooking"
 local SAVE_ICON = "Interface\\Icons\\INV_Misc_Note_01"
 local NEW_ICON = "Interface\\Buttons\\UI-PlusButton-Up"
 
--- The door on the bottom row (UI-24): the engineering wrench for settings, which is the closest
--- thing this client has to a cog.
-local OPTIONS_ICON = "Interface\\Icons\\Trade_Engineering"
+-- Settings was a wrench on the bottom row that opened a second window (UI-24). It is a tab now
+-- (UI-32), so the icon is gone: a door drawn as a labelled tab needs no picture, and two doors
+-- onto one panel is worse than either of them alone.
 
 local CELL = 34            -- a doll cell, big enough to read an icon at a glance
 local CELL_GAP = 3
@@ -75,6 +75,12 @@ local PARENT_Y = -70       -- the inherit button, between the set's headline and
 local KEY_WIDTH = 82       -- the keybinding button, sharing that row rather than taking one of its own
 
 local frame, rows, status, scroll, doll, importButton, renameBox
+
+-- The tab strip and the three panels it switches between (UI-32). `activeTab` is an index rather
+-- than an id because an index is what Blizzard's tab helpers take, and Core.TabIndex is the only
+-- thing that produces one — so a stale id can never quietly become an index nobody meant.
+local panels
+local activeTab = 1
 local selected = nil       -- the set the inspector is showing
 
 -- The set the rename box was OPENED on, or nil. Held rather than re-read from `selected` when Enter
@@ -1257,6 +1263,174 @@ local function refreshDoll(name, plan, totals)
 end
 
 -- ---------------------------------------------------------------------------
+-- About (UI-32)
+-- ---------------------------------------------------------------------------
+
+-- What the client knows about this addon, as the plain table Core.AboutFacts takes.
+--
+-- Every one of these can answer nil. GetAddOnMetadata does so for an addon the client has not
+-- finished indexing, which is the same first-seconds-after-a-login window GetItemInfo is empty in.
+-- That is why the wording lives in Core and this only fetches: a missing value has to turn into the
+-- word "unknown" in one place rather than in five.
+local function aboutWorld()
+    local meta = GetAddOnMetadata or (C_AddOns and C_AddOns.GetAddOnMetadata)
+    local function field(key)
+        if not meta then return nil end
+        local ok, value = pcall(meta, "Kitbag", key)
+        return ok and value or nil
+    end
+
+    return {
+        version = field("Version"),
+        author = field("Author"),
+        website = field("X-Website"),
+        -- The CLIENT's interface number rather than the .toc's. They differ exactly when the .toc
+        -- has gone stale, which is the one reason anybody would ever look this up.
+        interface = GetBuildInfo and select(4, GetBuildInfo()) or nil,
+        sets = #Sets.Names(),
+    }
+end
+
+local function buildAbout(panel)
+    local title = panel:CreateFontString("KitbagAboutTitle", "OVERLAY", "GameFontNormalLarge")
+    title:SetPoint("TOP", panel, "TOP", 0, -44)
+    title:SetText("|cff8fd3ffKitbag|r")
+
+    local blurb = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    blurb:SetPoint("TOP", title, "BOTTOM", 0, -10)
+    blurb:SetWidth(520)
+    blurb:SetJustifyH("CENTER")
+    blurb:SetText("Gear sets that actually apply. Save what you are wearing and swap it back in " ..
+        "one click.")
+
+    -- One row per fact, built from the pure list rather than typed out here, so the panel cannot
+    -- grow a row the wording does not know about — or keep one it has stopped filling in.
+    panel.facts = {}
+    local previous = nil
+    for i, fact in ipairs(Core.AboutFacts()) do
+        local label = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        if previous then
+            label:SetPoint("TOPRIGHT", previous, "BOTTOMRIGHT", 0, -7)
+        else
+            -- Hung off the middle of the window rather than off either edge: the two columns are a
+            -- block, and a block that is centred stays centred whatever the longest value turns out
+            -- to be.
+            label:SetPoint("TOPRIGHT", blurb, "BOTTOM", -14, -34)
+        end
+        label:SetWidth(120)
+        label:SetJustifyH("RIGHT")
+        label:SetText(fact.label)
+
+        local value = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        value:SetPoint("LEFT", label, "RIGHT", 12, 0)
+        value:SetWidth(300)
+        value:SetJustifyH("LEFT")
+
+        panel.facts[i] = value
+        previous = label
+    end
+
+    -- The one thing this panel is for beyond the numbers: where the rest of the addon is. `/kit
+    -- help` has listed every command since the first commit and nothing in the window ever said so.
+    local help = panel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    help:SetPoint("BOTTOM", panel, "BOTTOM", 0, 18)
+    help:SetWidth(560)
+    help:SetJustifyH("CENTER")
+    help:SetText("Type |cffffd100/kit help|r in chat for every command, or |cffffd100/kit verify|r " ..
+        "to have Kitbag check itself.")
+
+    return panel
+end
+
+--- Fill the About rows in.
+---
+--- On every redraw rather than once at build, and it has to be: the set count is one of the facts,
+--- and the version is nil for the first seconds after a login.
+local function refreshAbout(panel)
+    if not panel or not panel.facts then return end
+    local facts = Core.AboutFacts(aboutWorld())
+    for i, value in ipairs(panel.facts) do
+        value:SetText(facts[i] and facts[i].value or "")
+    end
+end
+
+-- ---------------------------------------------------------------------------
+-- The tabs (UI-32)
+-- ---------------------------------------------------------------------------
+
+-- Bottom tabs, in Blizzard's own art, because that is what every window in this game with more than
+-- one page does — the character sheet, the spellbook, the friends list. A strip of tabs under a
+-- window is the one navigation idiom a WoW player never has to be taught, and both pages behind it
+-- were previously hard to reach: Settings was a SECOND window opened by a wrench whose picture had
+-- to be learned, and About did not exist anywhere.
+--
+-- The template is TRIED rather than assumed. CreateFrame errors on a template the client does not
+-- have — it does not hand back nil — and an error thrown here would take the whole window down at
+-- build time. Same shape as lightModel above: try the good one, fall back, never throw.
+local TAB_TEMPLATES = {
+    "CharacterFrameTabButtonTemplate",
+    "PanelTabButtonTemplate",
+    "UIPanelButtonTemplate",
+}
+
+local function createTab(parent, index, label)
+    -- `<frame name>Tab<n>`, which is not a style choice: PanelTemplates_SetNumTabs collects the
+    -- strip by looking exactly those globals up.
+    local name = "KitbagFrameTab" .. index
+
+    local button
+    for _, template in ipairs(TAB_TEMPLATES) do
+        local ok, made = pcall(CreateFrame, "Button", name, parent, template)
+        if ok and made then
+            button = made
+            break
+        end
+    end
+    -- Nothing matched. A plain button still switches the page, which is the half that matters.
+    button = button or CreateFrame("Button", name, parent)
+
+    button:SetID(index)
+    button:SetText(label)
+
+    -- Blizzard sizes a tab to its own text. Without the helper the label would be drawn on a tab of
+    -- whatever width the template happened to declare, so the fallback is a width that fits the
+    -- longest word here rather than a hope.
+    local sized = false
+    if PanelTemplates_TabResize then sized = pcall(PanelTemplates_TabResize, button, 0) end
+    if not sized then button:SetSize(96, 32) end
+
+    button:SetScript("OnClick", function(self)
+        -- The click a player already associates with changing page. Guarded rather than assumed:
+        -- SOUNDKIT is a table of constants that has been renamed once already.
+        if PlaySound and SOUNDKIT and SOUNDKIT.IG_CHARACTER_INFO_TAB then
+            pcall(PlaySound, SOUNDKIT.IG_CHARACTER_INFO_TAB)
+        end
+        UI.ShowTab(self:GetID())
+    end)
+
+    return button
+end
+
+local function buildTabs(parent)
+    local made = {}
+    for i, tab in ipairs(Core.TABS) do
+        local button = createTab(parent, i, tab.label)
+        if i == 1 then
+            -- Blizzard's own offsets for a bottom strip: the first tab tucked in from the frame's
+            -- left edge, and each one after it overlapping its neighbour by the width of the art's
+            -- own border so the seam between two tabs is a single line rather than two.
+            button:SetPoint("TOPLEFT", parent, "BOTTOMLEFT", 11, 2)
+        else
+            button:SetPoint("TOPLEFT", made[i - 1], "TOPRIGHT", -14, 0)
+        end
+        made[i] = button
+    end
+
+    if PanelTemplates_SetNumTabs then pcall(PanelTemplates_SetNumTabs, parent, #made) end
+    return made
+end
+
+-- ---------------------------------------------------------------------------
 -- The window
 -- ---------------------------------------------------------------------------
 
@@ -1301,10 +1475,24 @@ local function build()
     frame.title:SetPoint("TOP", frame, "TOP", 0, -5)
     frame.title:SetText("Kitbag")
 
+    -- One frame per tab, each covering the whole window, so changing page is showing one frame and
+    -- hiding two rather than remembering a list of twenty widgets to hide — which is the list that
+    -- ends up one short. Anchored to both corners rather than sized, so the panels cannot come apart
+    -- from the window if its size ever changes.
+    panels = {}
+    for _, tab in ipairs(Core.TABS) do
+        local panel = CreateFrame("Frame", "Kitbag" .. tab.label .. "Panel", frame)
+        panel:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+        panel:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
+        panel:Hide()
+        panels[tab.id] = panel
+    end
+    local main = panels.main
+
     -- Named and recessed like every other region in the addon (UI-22). The rows are children of it,
     -- so the ground draws behind them however their own selection and highlight textures are layered.
-    local list = Skin.Inset(CreateFrame("Frame", "KitbagSetList", frame))
-    list:SetPoint("TOPLEFT", frame, "TOPLEFT", 14, -34)
+    local list = Skin.Inset(CreateFrame("Frame", "KitbagSetList", main))
+    list:SetPoint("TOPLEFT", main, "TOPLEFT", 14, -34)
     -- Room on the right for the scroll bar. Overlapping it would eat the rightmost few pixels of
     -- every row, which reads as a dead strip rather than as a layout bug.
     list:SetSize(316, MAX_ROWS * ROW_HEIGHT)
@@ -1347,19 +1535,19 @@ local function build()
     -- FauxScrollFrame rather than a real scrolling child: the rows stay put and the *data* moves
     -- through them, so thirteen frames serve a hundred sets. It is also the one scrolling widget
     -- that has existed unchanged in every flavour Kitbag targets.
-    scroll = CreateFrame("ScrollFrame", "KitbagScrollFrame", frame, "FauxScrollFrameTemplate")
+    scroll = CreateFrame("ScrollFrame", "KitbagScrollFrame", main, "FauxScrollFrameTemplate")
     scroll:SetPoint("TOPLEFT", list, "TOPLEFT", 0, 0)
     scroll:SetPoint("BOTTOMRIGHT", list, "BOTTOMRIGHT", 0, 0)
     scroll:SetScript("OnVerticalScroll", function(self, offset)
         FauxScrollFrame_OnVerticalScroll(self, offset, ROW_HEIGHT, UI.Refresh)
     end)
 
-    doll = buildDoll(frame)
+    doll = buildDoll(main)
 
     -- Under the list, centred on it (UI-28). Built here rather than with the paperdoll because it is
     -- anchored to the LIST — the controls act on whichever set is selected there, and a row of them
     -- in the far corner of the next panel along said otherwise.
-    local actionRow = buildActionRow(frame, list, doll)
+    local actionRow = buildActionRow(main, list, doll)
 
     -- Named so `/kit verify` can measure that the import button clears this line rather than sitting
     -- on it (VERIFY-14). The button appears between the two and only on some characters, which is
@@ -1367,7 +1555,7 @@ local function build()
     --
     -- Below the action bar rather than directly below the list, because the bar is what has to touch
     -- the list: this line is prose about the column, and prose reads perfectly well as its footer.
-    status = frame:CreateFontString("KitbagStatusLine", "OVERLAY", "GameFontDisableSmall")
+    status = main:CreateFontString("KitbagStatusLine", "OVERLAY", "GameFontDisableSmall")
     -- Still anchored to the LIST, so it keeps the left edge it shares with the rows above it — a
     -- left-justified line hung off a centred row would follow the row's edge instead. The drop is
     -- measured off the bar rather than typed, so a taller bar pushes this down with it.
@@ -1379,28 +1567,11 @@ local function build()
     -- full at 660 wide and UIPanelButtonTemplate does not shrink a label that no longer fits — it
     -- lets it run out under the button's edge — so an overflow reads as an oddly-worded button rather
     -- than as a layout fault, and nobody files it.
-    -- Options is a door to another window rather than something this window does, which is the one
-    -- kind of control an icon is unambiguously right for — and it was spending 90 pixels of a row
-    -- VERIFY-10 exists because it was full (UI-24).
     --
-    -- It had no tooltip while it had a label. That was survivable then and is not now, so the hover
-    -- arrives with the picture; `/kit verify` asserts the pair rather than trusting it.
-    --
-    -- The Rules button stood to its right until the engine was shelved (see Icebox/). Options simply
-    -- inherits that corner rather than sitting where it did with a gap beside it: a control anchored
-    -- to a button that no longer exists is a layout that breaks silently, and a hole in the row reads
-    -- as something failing to draw.
-    local optionsButton = Skin.IconButton(frame, "KitbagOptionsButton", OPTIONS_ICON, 22)
-    optionsButton:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -14, 14)
-    optionsButton:SetScript("OnClick", function() Kitbag.Options.Toggle() end)
-    optionsButton:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_TOPRIGHT")
-        GameTooltip:AddLine("Options", 1, 0.82, 0)
-        GameTooltip:AddLine("The minimap button, the trinket bar and what Kitbag says in chat.",
-            0.9, 0.9, 0.9, true)
-        GameTooltip:Show()
-    end)
-    optionsButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    -- The wrench that stood in the right-hand corner is gone (UI-32). It was a door to a second
+    -- window and it is a tab now, which hands the corner back — but nothing is moved into it: the
+    -- two controls here belong beside the box they read, and spreading them to fill a row is how a
+    -- pair stops looking like a pair.
 
     -- It was cut to 150 to buy the Options button its room; UI-24 and UI-27 turned the row's buttons
     -- into icons and handed back nearly 300 pixels between them. An edit box scrolls, so a long name
@@ -1410,9 +1581,9 @@ local function build()
     -- 306 lines its right edge up with the list above it. It sits at 20 where the list sits at 14
     -- because InputBoxTemplate insets its own border by about five pixels a side, which is the same
     -- correction the import button applies with its -6.
-    local nameBox = CreateFrame("EditBox", "KitbagNameBox", frame, "InputBoxTemplate")
+    local nameBox = CreateFrame("EditBox", "KitbagNameBox", main, "InputBoxTemplate")
     nameBox:SetSize(306, 20)
-    nameBox:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 20, 15)
+    nameBox:SetPoint("BOTTOMLEFT", main, "BOTTOMLEFT", 20, 15)
     nameBox:SetAutoFocus(false)
 
     -- Both buttons take the name from the same box, so they read it the same way — through the same
@@ -1475,7 +1646,7 @@ local function build()
     -- read as "save the set I have selected" — a different act, and a destructive one, since it is
     -- the selected set that would be overwritten. The tooltip has to carry that, so it says what is
     -- captured, from where, and under what name, in that order.
-    local save = Skin.IconButton(frame, "KitbagSaveButton", SAVE_ICON, 22)
+    local save = Skin.IconButton(main, "KitbagSaveButton", SAVE_ICON, 22)
     save:SetPoint("LEFT", nameBox, "RIGHT", 10, 0)
     save:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_TOPRIGHT")
@@ -1506,7 +1677,7 @@ local function build()
 
     -- The other way in (UI-16). Saving what you are wearing cannot make a set out of gear that is
     -- still in the bank; an empty set plus the slot picker can.
-    local blank = Skin.IconButton(frame, "KitbagNewSetButton", NEW_ICON, 22)
+    local blank = Skin.IconButton(main, "KitbagNewSetButton", NEW_ICON, 22)
     blank:SetPoint("LEFT", save, "RIGHT", 6, 0)
     blank:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_TOPRIGHT")
@@ -1534,7 +1705,7 @@ local function build()
     -- ItemRack and disappears for good once the sets are across — this is a one-time migration, not
     -- a control anyone needs permanently. Same reasoning as the Inherits button (UI-11): a
     -- permanently dead control is a puzzle rather than an affordance.
-    importButton = CreateFrame("Button", "KitbagImportButton", frame, "UIPanelButtonTemplate")
+    importButton = CreateFrame("Button", "KitbagImportButton", main, "UIPanelButtonTemplate")
     -- Wide enough for a two-digit count: "Import 12 sets from ItemRack" is the longest this says,
     -- and nothing else shares the row, so the room is free.
     importButton:SetSize(220, 22)
@@ -1555,6 +1726,16 @@ local function build()
     end)
     importButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
     importButton:Hide()
+
+    -- The other two pages. Settings is BUILT by KitbagOptions rather than laid out here, because it
+    -- is generated from DB.OPTIONS and always was — UI-32 changed where it is drawn, not what draws
+    -- it. That file loads after this one, which is why the call is made at build time rather than a
+    -- local taken at load.
+    Kitbag.Options.Attach(panels.settings)
+    buildAbout(panels.about)
+
+    buildTabs(frame)
+    UI.ShowTab(activeTab)
 
     return frame
 end
@@ -1641,6 +1822,10 @@ function UI.Refresh()
     else
         importButton:Hide()
     end
+
+    -- Cheap, and it has to happen here: the set count is one of the About facts, so a set saved on
+    -- the Main tab must not leave the About tab counting the world as it was.
+    refreshAbout(panels and panels.about)
 end
 
 -- Dying and coming back changes whether Equip may be pressed, and nothing else in the addon redraws
@@ -1663,13 +1848,67 @@ for _, event in ipairs({ "PLAYER_DEAD", "PLAYER_ALIVE", "PLAYER_UNGHOST" }) do
 end
 deathWatcher:SetScript("OnEvent", function() UI.Refresh() end)
 
+--- Show one page. Returns the index shown, or nil if there is no such tab.
+---
+--- Re-applied on every open rather than only on a change, because hiding a window hides its children:
+--- the page that was up when the window closed has to be put back when it comes back.
+function UI.ShowTab(which)
+    if not frame then build() end
+
+    local index = Core.TabIndex(which)
+    -- Nothing rather than a fallback to Main, which is Core.TabIndex's own rule: a caller that asked
+    -- for a page that does not exist has a bug, and silently landing them somewhere else hides it.
+    if not index then return nil end
+
+    activeTab = index
+    for i, tab in ipairs(Core.TABS) do
+        local panel = panels[tab.id]
+        if panel then
+            if i == index then panel:Show() else panel:Hide() end
+        end
+    end
+
+    -- Blizzard's own selected/deselected art. Guarded because it is the only cosmetic half of the
+    -- strip: a client without the helper gets three tabs that all look unselected and all still work.
+    if PanelTemplates_SetTab then pcall(PanelTemplates_SetTab, frame, index) end
+
+    UI.Refresh()
+    Kitbag.Options.Refresh()
+    return index
+end
+
+--- Which page is up, by id.
+function UI.ActiveTab()
+    return Core.TABS[activeTab] and Core.TABS[activeTab].id
+end
+
+--- Open the window on a named page, or close it if that page is already the one showing.
+---
+--- The door every other surface uses. `/kit options`, the minimap's right-click and the broker's all
+--- asked for a second WINDOW before UI-32 and ask for a page now — by name, so not one of them has
+--- to know which number it is.
+function UI.ToggleTab(which)
+    if not frame then build() end
+
+    local index = Core.TabIndex(which) or 1
+    if frame:IsShown() and activeTab == index then
+        frame:Hide()
+        return
+    end
+
+    frame:Show()
+    UI.ShowTab(index)
+end
+
 function UI.Toggle()
     if not frame then build() end
     if frame:IsShown() then
         frame:Hide()
     else
         frame:Show()
-        UI.Refresh()
+        -- The page the window was left on, put back. UI.ShowTab refreshes, so this is also the
+        -- redraw the open needs.
+        UI.ShowTab(activeTab)
     end
 end
 

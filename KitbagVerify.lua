@@ -92,15 +92,26 @@ end
 
 -- Show a frame, read what the client made of it, and put it back the way it was. Restoring matters:
 -- a verification run that leaves six windows open on someone's screen will not be run twice.
+-- Shown is not the same question as visible, and since UI-32 the difference decides an answer: a
+-- page of the main window keeps its own shown flag when the window closes, so `IsShown` on it says
+-- "yes" over a window nobody can see — and this file's whole argument is that a check which cannot
+-- tell those apart manufactures confidence. IsVisible answers for the parent chain as well; it is
+-- feature-detected because the flag is all a widget without it can offer.
+local function onScreen(frame)
+    if not frame then return nil end
+    if frame.IsVisible then return frame:IsVisible() end
+    return frame:IsShown()
+end
+
 local function inspect(toggle, frameName)
     local frame = _G[frameName]
-    local wasShown = frame and frame:IsShown()
+    local wasShown = onScreen(frame)
 
     if not wasShown then toggle() end
     frame = _G[frameName]
     if not frame then return false, frameName .. " was never created" end
 
-    local shown = frame:IsShown()
+    local shown = onScreen(frame)
     local width, height = frame:GetWidth(), frame:GetHeight()
     local strata = frame:GetFrameStrata()
 
@@ -150,10 +161,65 @@ Verify.CHECKS = {
         end,
     },
     {
-        id = "options-window", item = "VERIFY-2", label = "Options panel draws",
+        id = "options-window", item = "VERIFY-2", label = "Settings page draws",
         run = function()
             if not Kitbag.Options then return nil, "KitbagOptions is not loaded" end
-            return inspect(Kitbag.Options.Toggle, "KitbagOptionsFrame")
+            if not Kitbag.UI then return nil, "KitbagUI is not loaded" end
+
+            -- Settings is a page of the main window since UI-32, so opening it moves that window
+            -- off whatever page it was on. Put it back: a verification run that leaves the addon
+            -- somewhere the player did not put it is a check with a side effect, and the next thing
+            -- they open would be the wrong page for a reason nothing on screen explains.
+            local was = Kitbag.UI.ActiveTab()
+            local ok, detail = inspect(Kitbag.Options.Toggle, "KitbagSettingsPanel")
+            if was then Kitbag.UI.ShowTab(was) end
+            return ok, detail
+        end,
+    },
+    {
+        id = "tabs", item = "VERIFY-8", label = "The tab strip switches pages",
+        -- Three buttons that all look alike and all claim to do something is the failure a tab strip
+        -- has: a tab whose page never gets shown is indistinguishable from one whose page is empty.
+        -- So this drives every tab through the click a player would make and asks the panels, not
+        -- the buttons.
+        run = function()
+            if not Kitbag.UI then return nil, "KitbagUI is not loaded" end
+            -- Nothing exists until the window has been built once, and that is a check that could
+            -- not run rather than a strip that is broken — the distinction this whole file is about.
+            if not _G.KitbagFrame then
+                return nil, "the window has not been built — open /kit once, then run this"
+            end
+
+            local was = Kitbag.UI.ActiveTab()
+
+            -- IsShown, deliberately, where the check above wants IsVisible: the question here is
+            -- which PAGE the strip put up, and it is a fair question whether or not the window
+            -- itself happens to be open while the run is going on.
+            local faults = {}
+            for i, tab in ipairs(Kitbag.Core.TABS) do
+                local button = _G["KitbagFrameTab" .. i]
+                local panel = _G["Kitbag" .. tab.label .. "Panel"]
+                if not button then
+                    faults[#faults + 1] = tab.label .. " has no tab button"
+                elseif not panel then
+                    faults[#faults + 1] = tab.label .. " has no panel"
+                else
+                    button:Click()
+                    if not panel:IsShown() then
+                        faults[#faults + 1] = tab.label .. "'s tab does not show its page"
+                    end
+                    for _, other in ipairs(Kitbag.Core.TABS) do
+                        local sibling = other.id ~= tab.id and _G["Kitbag" .. other.label .. "Panel"]
+                        if sibling and sibling:IsShown() then
+                            faults[#faults + 1] = other.label .. " is still drawn under " .. tab.label
+                        end
+                    end
+                end
+            end
+
+            if was then Kitbag.UI.ShowTab(was) end
+            if #faults > 0 then return false, table.concat(faults, "; ") end
+            return true, string.format("%d tabs, each showing its own page", #Kitbag.Core.TABS)
         end,
     },
     {
@@ -638,7 +704,6 @@ Verify.CHECKS = {
                 { name = "the name box", frame = _G.KitbagNameBox },
                 { name = "Save",         frame = _G.KitbagSaveButton,    icon = true },
                 { name = "New set",      frame = _G.KitbagNewSetButton,  icon = true },
-                { name = "Options",      frame = _G.KitbagOptionsButton, icon = true },
             }
             for _, piece in ipairs(row) do
                 if not piece.frame then
@@ -653,9 +718,10 @@ Verify.CHECKS = {
             -- 1. The row against itself. Every neighbour must clear the one before it; the pair that
             -- actually decides this is New set against Options, because that is the seam the second
             -- button was squeezed into.
-            -- Most of these gaps are anchor constants and can only change if someone re-anchors the
-            -- row; New set→Options is the real one, since those two are anchored from OPPOSITE edges
-            -- of the window and nothing but the window's width holds them apart.
+            -- These gaps are anchor constants and can only change if someone re-anchors the row.
+            -- The pair that used to decide it — New set against the Options wrench, anchored from
+            -- OPPOSITE edges with nothing but the window's width between them — went with the
+            -- wrench (UI-32), so what is left is the row against the window in step 2.
             for i = 2, #row do
                 local before, after = row[i - 1], row[i]
                 local gap = before.frame:GetRight() and after.frame:GetLeft()
@@ -676,7 +742,7 @@ Verify.CHECKS = {
             local inRight = row[#row].frame:GetRight() and frame:GetRight()
                 and (frame:GetRight() - row[#row].frame:GetRight())
             if inLeft and inLeft < 0 then faults[#faults + 1] = "the name box runs off the left edge" end
-            if inRight and inRight < 0 then faults[#faults + 1] = "Options runs off the right edge" end
+            if inRight and inRight < 0 then faults[#faults + 1] = "New set runs off the right edge" end
 
             -- 3. Each control readable in its own right. Two failures, and which one applies depends
             -- on whether the control has words on it.
@@ -1571,8 +1637,9 @@ Verify.ACTS = {
     },
     {
         item = "VERIFY-19", act = "Open /kit and look for MAGENTA squares.",
-        why = "The visual pass (UI-21..27) left NO text buttons in the addon: eleven icon buttons "
-            .. "over ten texture paths — the newest is Rename (UI-29) — and not one of them "
+        why = "The visual pass (UI-21..27) left NO text buttons in the addon: ten icon buttons "
+            .. "over nine texture paths — the newest is Rename (UI-29), and the Options wrench "
+            .. "went with UI-32 — and not one of them "
             .. "has ever been drawn. A wrong path in this client does not draw nothing, it renders "
             .. "missing-texture magenta — so this is a negative observation anyone can make in two "
             .. "seconds, rather than an opinion about how it looks. While there: the paperdoll's "

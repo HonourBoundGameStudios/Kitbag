@@ -49,7 +49,7 @@ Supports **Classic Era**. That is the only flavour Kitbag ships for.
 | `/kit equip <name>` | Wear a set |
 | `/kit delete <name>` | Remove a set |
 | `/kit list` | What's saved |
-| `/kit options` | Announcements, minimap, trinket bar |
+| `/kit options` | Open the window on its **Settings** tab |
 | `/kit inherit <set> from <parent>` | Make a set a delta on another |
 | `/kit import` | Bring this character's ItemRack sets across |
 | `/kit minimap` | Toggle the minimap button |
@@ -58,12 +58,19 @@ Supports **Classic Era**. That is the only flavour Kitbag ships for.
 ## Status
 
 **0.1.0 — early.** The planner, sets and set inheritance, the window with per-row readiness and
-move-by-move tooltips, paperdoll flyouts, set icons, the trinket bar, the options panel and the
-ItemRack importer all work. Auto-swap rules are shelved in `Icebox/` — see the note at the top.
+move-by-move tooltips, paperdoll flyouts, set icons, the trinket bar, the settings and the ItemRack
+importer all work. Auto-swap rules are shelved in `Icebox/` — see the note at the top.
+
+The window has **three tabs** along the bottom: **Main** (the set list and the paperdoll),
+**Settings** (what used to be a second window) and **About**.
 
 **Verified in the client on Classic Era only.** The window, the options panel, the paperdoll
 flyouts, the slot picker, the set icon picker, the trinket bar and the confirmation popups have all
-been seen drawing in a running game. Every panel the addon draws has now been observed on screen.
+been seen drawing in a running game.
+
+**The tab strip has NOT been seen in a running client yet.** It passes the suite and `/kit verify`
+has a check for it, but the three panels were rearranged after the last in-client pass, so the one
+thing no test can answer — whether it looks right — is still open.
 
 **Classic Era is the only flavour.** Mists Classic, Cataclysm and Retail `.toc` files were dropped
 on 2026-09-03: none of the three had ever had a frame drawn on it, and a `.toc` file is a promise

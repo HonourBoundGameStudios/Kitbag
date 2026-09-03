@@ -35,7 +35,7 @@ H.start("Kitbag load")
 local NUMBER_GETTERS = {
     GetWidth = true, GetHeight = true, GetScale = true, GetEffectiveScale = true,
     GetLeft = true, GetRight = true, GetTop = true, GetBottom = true,
-    GetNumPoints = true, GetStringWidth = true, GetTextWidth = true, GetID = true,
+    GetNumPoints = true, GetStringWidth = true, GetTextWidth = true,
     GetFrameLevel = true, GetAlpha = true, GetValue = true,
 }
 local STRING_GETTERS = { GetName = true, GetText = true, GetFrameStrata = true, GetObjectType = true }
@@ -169,6 +169,13 @@ SCRIPT_METHODS = {
     Disable = function(self) rawset(self, "_enabled", false) end,
     SetEnabled = function(self, on) rawset(self, "_enabled", on and true or false) end,
     IsEnabled = function(self) return rawget(self, "_enabled") ~= false end,
+    -- The id a widget was given, REMEMBERED rather than answered with a plausible number. It used
+    -- to sit among the number getters returning the same value for every frame, which is fine until
+    -- something is identified by it — and Blizzard's tab strips are: a tab handler reads
+    -- `self:GetID()` to know which page it is, so a mock that answers the same id for all three
+    -- would show the first page whichever tab was clicked and report that as working (UI-32).
+    SetID = function(self, id) rawset(self, "_id", id) end,
+    GetID = function(self) return rawget(self, "_id") or 0 end,
     SetShown = function(self, shown) rawset(self, "_shown", shown and true or false) end,
     IsShown = function(self) return rawget(self, "_shown") and true or false end,
     IsVisible = function(self) return rawget(self, "_shown") and true or false end,
@@ -1032,6 +1039,40 @@ G.Kitbag.char = { sets = sets, rules = {}, swaps = {} }
 UI.Toggle()
 H.ok(G.KitbagFrame and G.KitbagFrame:IsShown(), "the main window opens, so its list is drawn")
 
+-- The tabs (UI-32). Driven through Click rather than through UI.ShowTab, because the wiring between
+-- a tab and the page it shows is the part a pure test cannot reach: Core decides the ORDER and the
+-- window has to honour it, and a strip whose third button shows the second page is a bug that every
+-- pure test in the suite would pass.
+H.eq(UI.ActiveTab(), "main", "the window opens on Main, whatever page it was left on")
+H.ok(G.KitbagMainPanel:IsShown(), "…so the Main page is drawn")
+H.ok(not G.KitbagAboutPanel:IsShown(), "…and the other pages are not")
+
+G.KitbagFrameTab3:Click()
+H.eq(UI.ActiveTab(), "about", "clicking the third tab shows the third page")
+H.ok(G.KitbagAboutPanel:IsShown(), "…the page it names")
+H.ok(not G.KitbagMainPanel:IsShown(), "…and Main goes away rather than being drawn under it")
+
+-- The one thing About says that changes: the set count. Twenty were stored above.
+H.eq(G.Kitbag.Core.AboutFacts({ sets = 20 })[4].value, "20 on this character",
+    "the About page counts this character's sets")
+
+-- Settings is a page now, not a second window, and the door every other surface uses has to land on
+-- it. This is the assertion that would have caught the whole of UI-32 going in as a tab strip with
+-- nothing behind the second tab.
+G.Kitbag.Options.Toggle()
+H.eq(UI.ActiveTab(), "settings", "the Options door opens the window on the Settings page")
+H.ok(G.KitbagSettingsPanel:IsShown(), "…and that page is the one drawn")
+H.ok(G.KitbagSettingsTitle ~= nil, "…with the checkboxes KitbagOptions generates on it")
+
+-- Pressing the same door again closes the window rather than doing nothing, which is what every
+-- other Toggle in the addon does and what the minimap's right-click has always meant.
+G.Kitbag.Options.Toggle()
+H.ok(not G.KitbagFrame:IsShown(), "…and asking for the page that is already up closes the window")
+
+-- Back to Main for everything below, which is written against it.
+UI.Toggle()
+UI.ShowTab("main")
+
 FauxScrollFrame_SetOffset(G.KitbagScrollFrame, 4)
 UI.Refresh()
 
@@ -1454,18 +1495,16 @@ H.ok(table.concat(helped, "\n"):find("/kit session", 1, true) ~= nil,
 -- The bottom row is icons (UI-24, UI-27)
 -- ---------------------------------------------------------------------------
 --
--- Four controls, and they divide cleanly: Options and Rules are DOORS to other windows, Save and New
--- set are things this window DOES. A door is the control an icon is unambiguously right for. The
--- other two are the interesting half, because their labels were carrying real meaning — "Save what
--- I'm wearing" is a whole sentence, and it is the sentence that stops the button being read as "save
--- the set I have selected", which is a different and destructive thing.
+-- Two controls now: Save and New set, the things this window DOES. The doors that used to sit
+-- beside them are gone — Rules with the shelved engine, Options into the Settings tab (UI-32) — and
+-- what is left is the interesting half, because these two labels were carrying real meaning. "Save
+-- what I'm wearing" is a whole sentence, and it is the sentence that stops the button being read as
+-- "save the set I have selected", which is a different and destructive thing.
 --
--- So the tooltip is asserted here as the load-bearing part rather than as a formality. Two of these
--- four had no tooltip at all before, on the grounds that the label was the explanation; that trade
--- only works while there is a label.
+-- So the tooltip is asserted here as the load-bearing part rather than as a formality. Both of these
+-- had no tooltip at all before, on the grounds that the label was the explanation; that trade only
+-- works while there is a label.
 for _, entry in ipairs({
-    { button = G.KitbagOptionsButton, what = "Options",
-      why = "a door to another window, which is what an icon is unambiguously right for" },
     { button = G.KitbagSaveButton,    what = "Save",
       why = "the label was a sentence, and a sentence is exactly what a tooltip is for" },
     { button = G.KitbagNewSetButton,  what = "New set",

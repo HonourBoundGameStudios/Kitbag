@@ -1335,5 +1335,72 @@ function Core.BindingLabel(current, pending, impact)
     return current or "Key…"
 end
 
+-- ---------------------------------------------------------------------------
+-- The window's tabs (UI-32)
+-- ---------------------------------------------------------------------------
+
+--- The tab strip, in the order it is drawn.
+---
+--- Data rather than three hand-placed buttons, for the reason `DB.OPTIONS` is data: a fourth tab
+--- should be one entry added here, not an edit somebody has to remember to make in four places —
+--- the button, its anchor, the panel it shows and the panels it must hide.
+---
+--- Main is first because it is what the window is for; the other two are doors that used to be
+--- somewhere else entirely (Settings was a second window, About did not exist).
+Core.TABS = {
+    { id = "main",     label = "Main" },
+    { id = "settings", label = "Settings" },
+    { id = "about",    label = "About" },
+}
+
+--- Which tab `which` is, by id or by index. nil when there is no such tab.
+---
+--- Names are what callers outside the window use — `/kit options` and the minimap button ask for
+--- "settings" and must not have to know it is the second one, which is exactly the knowledge that
+--- goes stale when a tab is inserted before it.
+---
+--- An unknown tab is nothing rather than the first one. A caller that asked for a tab that no longer
+--- exists has a stale id, and quietly landing them on Main hides that: the caller decides.
+function Core.TabIndex(which)
+    if type(which) == "number" then
+        return (which >= 1 and which <= #Core.TABS and math.floor(which) == which) and which or nil
+    end
+    for i, tab in ipairs(Core.TABS) do
+        if tab.id == which then return i end
+    end
+    return nil
+end
+
+--- The About tab's facts, as ordered { label, value } rows.
+---
+--- Pure because every one of these values can be absent — `GetAddOnMetadata` answers nil for an
+--- addon the client has not finished indexing, the same way `GetItemInfo` does for an uncached item.
+--- The failure that matters is not an empty panel: it is a row that quietly disappears, so a player
+--- reading a support answer off this screen reports four facts where there should be five and nobody
+--- can tell which one is missing. An unknown value keeps its row and says it is unknown.
+function Core.AboutFacts(info)
+    info = info or {}
+
+    local function known(value)
+        value = value ~= nil and tostring(value) or ""
+        if value == "" then return "unknown" end
+        return value
+    end
+
+    -- The count is a state, not a statistic: zero is "you have not made one yet", which is the only
+    -- reading of it that tells a new player what to do next.
+    local count = tonumber(info.sets) or 0
+    local sets = count > 0 and string.format("%d on this character", count)
+        or "none on this character yet"
+
+    return {
+        { label = "Version",   value = known(info.version) },
+        { label = "Author",    value = known(info.author) },
+        { label = "Interface", value = known(info.interface) },
+        { label = "Sets",      value = sets },
+        { label = "Website",   value = known(info.website) },
+    }
+end
+
 Kitbag.Core = Core
 return Core
