@@ -294,6 +294,37 @@ H.eq(changelogVersion, tocVersion("Kitbag.toc"),
     "the newest CHANGELOG entry is the version Kitbag.toc ships")
 H.ok(changelogDate ~= nil and #changelogDate == 10, "…and that entry is dated")
 
+-- …and the entry is the WHOLE of what ships. The check above only looks at the newest *versioned*
+-- heading, so work parked under `## [Unreleased]` slips past it: the version number still matches,
+-- the notes are still dated, and the release goes out describing a subset of itself. That is not
+-- hypothetical — 0.1.0's notes were written on 2026-08-18 and twenty commits then landed on top of
+-- them under the same version number, including a change (the shelved rule engine) that made a
+-- feature the notes ADVERTISE untrue.
+--
+-- So: an `## [Unreleased]` heading may exist as a place to collect work, but it must be empty at the
+-- gate. Anything under it belongs in the version being shipped, or in a version number of its own.
+local function unreleasedContent()
+    local f = io.open("CHANGELOG.md", "r")
+    -- Returns an empty list rather than nil for a missing file: the assertion above already reports
+    -- that, and a nil here would crash the file instead of failing one line.
+    if not f then return {} end
+    local inSection, content = false, {}
+    for line in f:lines() do
+        if line:match("^##%s*%[[Uu]nreleased%]") then
+            inSection = true
+        elseif inSection and line:match("^##%s") then
+            inSection = false
+        elseif inSection and line:match("%S") then
+            content[#content + 1] = line
+        end
+    end
+    f:close()
+    return content
+end
+
+local parked = unreleasedContent()
+H.eq(#parked, 0, "nothing is parked under '## [Unreleased]' — the shipped version's notes are all of it")
+
 -- Every flavour agrees on the version too. package.ps1 refuses to build otherwise — CurseForge reads
 -- one .toc and would tell the players on the others they are running a version they are not — and
 -- this says the same thing at the gate rather than only at packaging time, since the gate is what
