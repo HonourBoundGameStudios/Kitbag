@@ -1338,6 +1338,22 @@ H.eq(C.BindingImpact(KEYED, "Nope", "SHIFT-E").why, "no-set",
     "…and says why, distinctly, because the window and the slash command answer it differently")
 H.eq(C.BindingImpact(nil, "Farm", "SHIFT-E").ok, false, "no set list at all is not a crash")
 
+-- ---------------------------------------------------------------------------
+-- BindingLabel — what the key button says before and after a proposal (UI-30)
+-- ---------------------------------------------------------------------------
+--
+-- A capture is no longer the change: it is a proposal the player must confirm with Enter. The
+-- label is pure so the consequence shown at the button cannot drift away from BindingImpact's
+-- answer between the capture and the commit.
+H.eq(C.BindingLabel(nil, nil), "Key…", "an unbound set invites a new key")
+H.eq(C.BindingLabel("CTRL-1", nil), "CTRL-1", "a bound set shows its committed key")
+H.eq(C.BindingLabel("CTRL-1", "SHIFT-E", { ok = true }),
+    "SHIFT-E — Enter to keep, Escape to cancel",
+    "a captured key is proposed, not committed")
+H.eq(C.BindingLabel("CTRL-1", "SHIFT-E", { ok = true, taken = "Farm" }),
+    "SHIFT-E — Enter to keep, Escape to cancel (takes it from Farm)",
+    "the proposal names the other set that would lose the key")
+
 -- The impact must not be the change. A question that mutates would make the confirmation and the
 -- act the same event, and the window asks this on every redraw to draw the button's label.
 C.BindingImpact(KEYED, "Raid", "SHIFT-E")

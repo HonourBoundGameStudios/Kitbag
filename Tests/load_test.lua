@@ -1010,7 +1010,7 @@ H.ok(G.Kitbag.char.sets.Set01 ~= nil,
     "…nor the set at the clicked row's own position, which is VERIFY-8's fear exactly")
 
 -- ---------------------------------------------------------------------------
--- Keybinding capture cannot outlive the window (VERIFY-16)
+-- Keybinding capture proposes before it changes, and cannot outlive the window (UI-30, VERIFY-16)
 -- ---------------------------------------------------------------------------
 --
 -- While capturing, the key button is the ONLY thing in the game receiving keystrokes: propagation is
@@ -1033,6 +1033,21 @@ H.eq(key:GetText(), "Press…", "clicking the key button enters capture mode and
 H.eq(keyboard[#keyboard], true, "…the button takes the keyboard")
 H.eq(propagate[#propagate], false, "…and stops the keystroke reaching the game behind it")
 
+-- The first chord is a proposal, not a destructive write. Re-pressing replaces it, so a mis-hit
+-- costs nothing until Enter says this is the one to keep.
+G.Kitbag.char.sets.Set06.key = "F8"
+key:GetScript("OnKeyDown")(key, "F8")
+H.eq(G.Kitbag.char.sets.Set07.key, nil, "capturing a key does not replace the committed binding")
+H.eq(G.Kitbag.char.sets.Set06.key, "F8", "…or take the proposed key from another set")
+H.eq(key:GetText(), "F8 — Enter to keep, Escape to cancel (takes it from Set06)",
+    "the proposal tells the player how to commit and what it would cost")
+key:GetScript("OnKeyDown")(key, "F9")
+H.eq(key:GetText(), "F9 — Enter to keep, Escape to cancel",
+    "a second key replaces the proposal rather than committing the first one")
+key:GetScript("OnKeyDown")(key, "ENTER")
+H.eq(G.Kitbag.char.sets.Set07.key, "F9", "Enter commits the currently proposed key")
+H.eq(keyboard[#keyboard], false, "committing gives the keyboard back")
+
 -- Closing the window mid-capture. Not by calling the handler directly: the whole question is whether
 -- hiding the WINDOW reaches a button several frames down, which is what OnHide is registered for.
 G.KitbagFrame:Hide()
@@ -1046,9 +1061,10 @@ G.KitbagFrame:Show()
 UI.Refresh()
 key:Click("LeftButton")
 H.eq(keyboard[#keyboard], true, "capture can be entered again after the window was closed on it")
+key:GetScript("OnKeyDown")(key, "F10")
 key:GetScript("OnKeyDown")(key, "ESCAPE")
 H.eq(keyboard[#keyboard], false, "Escape leaves capture mode")
-H.eq(G.Kitbag.char.sets.Set07.key, nil, "…without binding Escape to anything")
+H.eq(G.Kitbag.char.sets.Set07.key, "F9", "…without committing the proposed key")
 
 -- ---------------------------------------------------------------------------
 -- The Import button takes itself away on the same refresh (VERIFY-14)

@@ -573,9 +573,20 @@ end
 --- True while the button is swallowing keystrokes. File-local rather than on the frame so the
 --- refresh path can see it without reaching through a widget that may not exist yet.
 local capturing = false
+local pendingBinding = nil
+
+local function keyLabel()
+    local current = selected and Sets.KeyOf(selected) or nil
+    local impact
+    if pendingBinding and selected then
+        impact = Core.BindingImpact(Kitbag.char.sets, selected, pendingBinding)
+    end
+    return Core.BindingLabel(current, pendingBinding, impact)
+end
 
 local function stopCapture(button)
     capturing = false
+    pendingBinding = nil
     button:EnableKeyboard(false)
     -- Restored, not merely turned off. While capturing, this frame is the only thing in the game
     -- receiving keys — including the ones that open the menu and the ones that close this window —
@@ -585,29 +596,40 @@ local function stopCapture(button)
 end
 
 local function onKeyCaptured(button, key)
+    -- Escape always cancels, whether there is a proposal already or the player has only just
+    -- entered capture. It reaches here rather than closing the window because propagation is off.
+    if key == "ESCAPE" then
+        stopCapture(button)
+        return
+    end
+
+    -- Enter is deliberately handled before BindingKey: once a chord is proposed it is the second
+    -- act that changes stored state, rather than another chord that silently replaces the proposal.
+    if key == "ENTER" and pendingBinding then
+        if selected then Kitbag.Bindings.Set(selected, pendingBinding) end
+        stopCapture(button)
+        return
+    end
+
     -- A modifier on its own is the player half-way through a chord: stay in the mode and wait for
     -- the key it is modifying. Core.BindingKey is what knows which those are.
     local binding = Core.BindingKey(key, IsShiftKeyDown(), IsControlKeyDown(), IsAltKeyDown())
     if not binding then
-        -- Escape leaves the mode without changing anything. It reaches here rather than closing the
-        -- window because propagation is off, which is the one thing that makes this mode safe to be
-        -- in — and Core.BindingKey refuses to turn it into a binding whatever else is held down.
-        if key == "ESCAPE" then stopCapture(button) end
         return
     end
 
-    -- Stored before the mode ends, because ending it redraws — and a redraw that runs before the
-    -- store would put the OLD key back on the button the player is watching, for as long as it took
-    -- something else to refresh the window.
-    if selected then Kitbag.Bindings.Set(selected, binding) end
-    stopCapture(button)
+    -- The press is only a proposal. Replacing it costs nothing; only Enter reaches Bindings.Set.
+    pendingBinding = binding
+    button:SetText(keyLabel())
 end
 
 local function onKeyEnter(self)
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     GameTooltip:AddLine("Keybinding", 1, 0.82, 0)
     if capturing then
-        GameTooltip:AddLine("Press the key you want. Escape cancels.", 1, 1, 1, true)
+        GameTooltip:AddLine(pendingBinding
+            and "Press Enter to keep this key, or Escape to cancel."
+            or "Press the key you want. Escape cancels.", 1, 1, 1, true)
     else
         GameTooltip:AddLine("Click, then press a key to bind this set. " ..
             "Right-click to clear it.", 1, 1, 1, true)
@@ -976,7 +998,7 @@ local function refreshDoll(name, plan, totals)
     -- refresh landing mid-mode does not wipe the prompt off the button the player is looking at.
     if shown then doll.key:Show() else doll.key:Hide() end
     if shown and not capturing then
-        doll.key:SetText(Sets.KeyOf(name) or "Key…")
+        doll.key:SetText(Core.BindingLabel(Sets.KeyOf(name)))
     end
 
     -- The inherit button appears only when it can do something: with one set saved there is nothing

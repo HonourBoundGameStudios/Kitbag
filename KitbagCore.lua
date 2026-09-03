@@ -1221,5 +1221,21 @@ function Core.BindingImpact(sets, name, key)
     return { ok = true, taken = taken[1], takenFrom = taken }
 end
 
+--- The keybinding button's label for a committed key or an uncommitted proposal (UI-30).
+--
+-- A proposal needs to say two things before it can safely replace a binding: Enter is the act that
+-- keeps it, and another set may lose the key. Keeping that wording beside BindingImpact means the
+-- button does not invent a second, subtly different account of what the commit will do.
+function Core.BindingLabel(current, pending, impact)
+    if type(pending) == "string" and pending ~= "" then
+        local label = pending .. " — Enter to keep, Escape to cancel"
+        if type(impact) == "table" and impact.taken then
+            label = label .. " (takes it from " .. impact.taken .. ")"
+        end
+        return label
+    end
+    return current or "Key…"
+end
+
 Kitbag.Core = Core
 return Core
