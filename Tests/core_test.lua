@@ -1458,6 +1458,8 @@ H.eq(C.RenameImpact(kin, kinRules, "Nobody", "Tank").why, "no-set",
     "renaming a set that does not exist is refused, and says which half is wrong")
 H.eq(C.RenameImpact(kin, kinRules, "Base", "Alone").why, "exists",
     "renaming onto a name already in use is refused BEFORE the press, not after")
+H.eq(C.RenameImpact(kin, kinRules, "Base", "Alone").name, "Alone",
+    "…and a refused impact still names the candidate, so the message can name what it collided with")
 H.eq(C.RenameImpact(kin, kinRules, "Base", "   ").why, "bad-name",
     "a name that is only whitespace is not a name")
 H.eq(C.RenameImpact(kin, kinRules, "Base", nil).why, "bad-name", "…and neither is nothing at all")
@@ -1477,5 +1479,37 @@ H.eq(C.RenameImpact(kin, kinRules, "Base", " Base ").why, "same",
 local noRules = C.RenameImpact(kin, nil, "Base", "Tank")
 H.eq(noRules.ok, true, "a caller with no rules at all still gets an answer")
 H.eq(#noRules.rules, 0, "…and it is an empty list rather than a nil to guard against")
+
+
+-- The live line under a rename in progress (UI-29).
+--
+-- Pure for `BindingRefusalLabel`'s reason: the sentence is an outcome of the policy above, not a
+-- second policy hidden in a frame script where it could drift from the refusal it describes. The
+-- edit box asks this on every keystroke, so it must answer for a name that is not finished being
+-- typed as readily as for a finished one — "that name is taken" has to arrive BEFORE the press.
+H.eq(C.RenameLabel("Base", C.RenameImpact(kin, kinRules, "Base", "Tank")),
+    "Press Enter to rename Base to Tank.",
+    "a name that would work says so, and names both ends of the change")
+H.eq(C.RenameLabel("Base", C.RenameImpact(kin, kinRules, "Base", "Alone")),
+    "Another set is already called Alone.",
+    "a taken name is refused in the line rather than by a chat message after the press")
+H.eq(C.RenameLabel("Base", C.RenameImpact(kin, kinRules, "Base", "   ")),
+    "Type a name for this set.",
+    "an empty box asks for a name rather than reporting a failure nobody caused yet")
+H.eq(C.RenameLabel("Base", C.RenameImpact(kin, kinRules, "Base", "Base")),
+    "Base is already its name.",
+    "…and a name that has not changed is not an error either")
+H.eq(C.RenameLabel("Gone", C.RenameImpact(kin, kinRules, "Gone", "Tank")),
+    "There is no set called Gone.",
+    "a set that vanished under the box is named rather than left as a dead edit")
+H.eq(C.RenameLabel("Base", nil), "There is no set called Base.",
+    "nothing at all is the same answer as no set, rather than an error inside the line")
+
+-- The trimmed name, not the typed one. A player who typed trailing spaces is about to get a set
+-- without them, and a confirmation that echoes the typing rather than the outcome is the reason
+-- lists end up holding "Tank" and "Tank " looking identical.
+H.eq(C.RenameLabel("Base", C.RenameImpact(kin, kinRules, "Base", "  Tank  ")),
+    "Press Enter to rename Base to Tank.",
+    "the line promises the name that will actually be stored")
 
 H.done()

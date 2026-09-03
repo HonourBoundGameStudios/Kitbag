@@ -1004,7 +1004,9 @@ end
 --
 -- Trimming happens here, through `CleanName`, and `name` carries the trimmed form the caller must
 -- actually store: a name cleaned at one door and not at another is how a list ends up holding "Tank"
--- and "Tank " looking identical, with no way to tell which one anything points at.
+-- and "Tank " looking identical, with no way to tell which one anything points at. It is set as soon
+-- as the name is legible, refusal or not, so a message about a clash can name the set it collided
+-- with rather than the half-typed string that found it — `ok` is what says whether to store it.
 --
 -- NOT reported, because it cannot be known from here: an action-bar macro the player placed by hand
 -- names the set in its body (`Core.MacroBody`), and that macro lives in the client's own data rather
@@ -1021,6 +1023,7 @@ function Core.RenameImpact(sets, rules, old, new)
         out.why = "bad-name"
         return out
     end
+    out.name = clean
     if clean == old then
         out.why = "same"
         return out
@@ -1030,7 +1033,7 @@ function Core.RenameImpact(sets, rules, old, new)
         return out
     end
 
-    out.ok, out.name = true, clean
+    out.ok = true
     -- Carried so the caller can re-apply it: the key travels with the set's own table, but the
     -- binding is built from the set NAME (`Bindings.Apply` rebuilds from scratch through
     -- `Core.MacroBody`), so a rename that does not re-apply leaves the key pointing at the old name.
@@ -1056,6 +1059,31 @@ function Core.RenameImpact(sets, rules, old, new)
     end
 
     return out
+end
+
+--- The live line a rename in progress shows (UI-29).
+--
+-- Pure for `BindingRefusalLabel`'s reason: the visible sentence is an outcome of the policy in
+-- `RenameImpact`, not a second policy hidden in a frame script where it could drift from the
+-- refusal it describes. The edit box asks this on every keystroke, so the clash arrives while the
+-- name is still being typed rather than as a chat message after a press that looked like it worked.
+--
+-- Promises `impact.name` rather than what was typed: the player who typed trailing spaces is about
+-- to get a set without them, and a confirmation that echoes the typing instead of the outcome is
+-- how a list ends up holding "Tank" and "Tank " looking identical.
+function Core.RenameLabel(old, impact)
+    if type(impact) ~= "table" or impact.why == "no-set" then
+        return string.format("There is no set called %s.", tostring(old))
+    end
+    if impact.why == "bad-name" then return "Type a name for this set." end
+    if impact.why == "same" then return string.format("%s is already its name.", old) end
+    if impact.why == "exists" then
+        -- The clean form, so the line names the set it is actually colliding with rather than the
+        -- half-typed string that found it.
+        return string.format("Another set is already called %s.", impact.name)
+    end
+    if not impact.ok then return string.format("There is no set called %s.", tostring(old)) end
+    return string.format("Press Enter to rename %s to %s.", old, impact.name)
 end
 
 --- A set as another character would have to store it: flat, parentless, and nobody else's table

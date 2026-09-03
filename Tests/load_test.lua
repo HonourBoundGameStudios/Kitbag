@@ -1138,6 +1138,102 @@ H.eq(keyboard[#keyboard], false, "Escape leaves capture mode")
 H.eq(G.Kitbag.char.sets.Set07.key, "F9", "…without committing the proposed key")
 
 -- ---------------------------------------------------------------------------
+-- Renaming a set from the window (UI-29)
+-- ---------------------------------------------------------------------------
+--
+-- The clash is the whole of the risk, and it is the reason this is an edit box rather than a popup
+-- with an OK button: `Sets.Rename` refuses a taken name, but a refusal that arrives in chat AFTER
+-- the press is a control that appeared to work. `Core.RenameLabel` answers on every keystroke, so
+-- the answer is on screen while the name is still being typed.
+--
+-- Driven through the box's own scripts rather than by calling the service, because the wiring
+-- between a keystroke, the live line and the set that actually moves is precisely the part pure
+-- tests cannot reach — and the set that moves must be the one the box was OPENED on, not whatever
+-- the list has selected by the time Enter is pressed.
+UI.Select("Set07")
+local renameButton = G.KitbagRenameButton
+H.ok(renameButton ~= nil, "the action row has a Rename control, named so a check can measure it")
+
+renameButton:Click()
+local box = G.KitbagRenameBox
+H.ok(box ~= nil and box:IsShown(), "pressing it opens an edit box rather than a chat prompt")
+H.eq(box:GetText(), "Set07", "…prefilled with the set's current name, so a typo is a small edit")
+H.eq(G.KitbagStatusLine:GetText(), "Set07 is already its name.",
+    "…and the line under the list explains the box rather than leaving it unlabelled")
+
+-- A taken name, refused BEFORE the press. This is the assertion the whole control exists for.
+box:SetText("Set06")
+box:GetScript("OnTextChanged")(box, true)
+H.eq(G.KitbagStatusLine:GetText(), "Another set is already called Set06.",
+    "a taken name is refused while it is being typed")
+box:GetScript("OnEnterPressed")(box)
+H.ok(box:IsShown(), "…and pressing Enter on it does nothing rather than closing on a failure")
+H.ok(G.Kitbag.char.sets.Set07 ~= nil, "…the set keeps its name")
+H.ok(G.Kitbag.char.sets.Set06 ~= nil, "…and the set it would have collided with is untouched")
+
+-- An empty box is not an error yet — nobody has done anything wrong by clearing it.
+box:SetText("   ")
+box:GetScript("OnTextChanged")(box, true)
+H.eq(G.KitbagStatusLine:GetText(), "Type a name for this set.",
+    "an emptied box asks for a name rather than reporting a failure")
+
+box:SetText("  Raid Two  ")
+box:GetScript("OnTextChanged")(box, true)
+H.eq(G.KitbagStatusLine:GetText(), "Press Enter to rename Set07 to Raid Two.",
+    "a free name says what pressing Enter will do, in the trimmed form it will be stored under")
+
+-- The list stays live while the box is open, so a row clicked in between must not change which set
+-- moves. Delete's popup carries its name as `data` for this reason (BUG-8); the box has to hold the
+-- same discipline, and it is the same quiet way to rename the wrong set.
+G.KitbagSetRow2:Click()
+box:GetScript("OnEnterPressed")(box)
+H.ok(G.Kitbag.char.sets["Raid Two"] ~= nil, "Enter renames the set the box was OPENED on")
+H.ok(G.Kitbag.char.sets.Set07 == nil, "…so the old name is gone")
+H.ok(G.Kitbag.char.sets.Set02 ~= nil, "…and not the set selected while the box was up")
+H.ok(not box:IsShown(), "…and the box closes once the rename has happened")
+
+-- Escape is the way out, and it must leave the set alone. Same property the key capture has: a mode
+-- with no exit is indistinguishable from a frozen client.
+UI.Select("Set08")
+renameButton:Click()
+box:SetText("Something Else")
+box:GetScript("OnTextChanged")(box, true)
+box:GetScript("OnEscapePressed")(box)
+H.ok(not box:IsShown(), "Escape closes the box")
+H.ok(G.Kitbag.char.sets.Set08 ~= nil, "…without renaming anything")
+
+-- Closing the window mid-rename. Not by calling the handler: the question is whether hiding the
+-- WINDOW reaches a box several frames down, which is the whole point of registering OnHide.
+renameButton:Click()
+H.ok(box:IsShown(), "the box opens again after an Escape")
+G.KitbagFrame:Hide()
+H.ok(not box:IsShown(), "closing the window takes the open rename box with it")
+G.KitbagFrame:Show()
+UI.Refresh()
+
+-- Nothing selected is the one press that must do nothing rather than open a box over no set. It is
+-- reached the only way it can be — `UI.Select` refuses nil on purpose (UI-13), so the state exists
+-- only when there are no sets to select.
+local keptSets = G.Kitbag.char.sets
+G.Kitbag.char.sets = {}
+UI.Refresh()
+renameButton:Click()
+H.ok(not box:IsShown(), "with no set selected the control opens nothing")
+G.Kitbag.char.sets = keptSets
+UI.Refresh()
+
+-- Scrolled out of sight, which is the one case that cannot be reached by clicking a row: `UI.Select`
+-- is also how `/kit verify` and a freshly created set choose one, and a box anchored to a row that
+-- is not drawn would open over the wrong set entirely.
+FauxScrollFrame_SetOffset(G.KitbagScrollFrame, 0)
+UI.Refresh()
+UI.Select("Set19")
+renameButton:Click()
+H.ok(box:IsShown(), "renaming a set scrolled out of view brings it into view rather than refusing")
+H.eq(box:GetText(), "Set19", "…and the box opens on that set, not on the row that was there before")
+box:GetScript("OnEscapePressed")(box)
+
+-- ---------------------------------------------------------------------------
 -- The Import button takes itself away on the same refresh (VERIFY-14)
 -- ---------------------------------------------------------------------------
 --

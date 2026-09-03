@@ -48,6 +48,11 @@ local MAX_ROWS = 12
 local EQUIP_ICON = "Interface\\Icons\\INV_Chest_Plate06"
 
 local DELETE_ICON = "Interface\\Buttons\\UI-GroupLoot-Pass-Up"
+-- Rename (UI-29). The guild frame's public-note glyph: Blizzard's own "edit the words attached
+-- to this" picture, which is exactly the act, and UI art rather than an expansion icon for the
+-- reason the two above are. "Rename" has no universal symbol — a pencil would be inventing one —
+-- so the tooltip carries the word and the picture only has to not mean something else.
+local RENAME_ICON = "Interface\\Buttons\\UI-GuildButton-PublicNote-Up"
 local COPY_ICON = "Interface\\Icons\\INV_Misc_GroupLooking"
 
 -- The two acts on the bottom row (UI-27). A parchment for writing down what you have on, and
@@ -69,8 +74,14 @@ local PANEL_WIDTH = 300
 local PARENT_Y = -70       -- the inherit button, between the set's headline and the character model
 local KEY_WIDTH = 82       -- the keybinding button, sharing that row rather than taking one of its own
 
-local frame, rows, status, scroll, doll, importButton
+local frame, rows, status, scroll, doll, importButton, renameBox
 local selected = nil       -- the set the inspector is showing
+
+-- The set the rename box was OPENED on, or nil. Held rather than re-read from `selected` when Enter
+-- is pressed, for Delete's reason (BUG-8): the list underneath stays live while the box is up, and a
+-- row clicked in between must not change which set moves. A rename is not unrecoverable the way a
+-- delete is, but renaming the wrong set is discovered exactly as late.
+local renaming = nil
 
 -- How each slot state reads, in one place: the colour of the cell's border and the words the
 -- tooltip uses. Keeping them together is what stops the colour and the caption drifting apart.
@@ -859,6 +870,97 @@ local function buildDoll(parent)
     return panel
 end
 
+-- ---------------------------------------------------------------------------
+-- Renaming a set in place (UI-29)
+-- ---------------------------------------------------------------------------
+--
+-- An edit box over the row rather than a popup with an OK button, because the clash is the whole of
+-- the risk here. `Sets.Rename` refuses a name another set already holds, but a refusal that arrives
+-- in chat AFTER the press is a control that appeared to work — the same failure BUG-8 fixed for
+-- Delete from the other direction. `Core.RenameLabel` answers on every keystroke, so "that name is
+-- taken" is on screen while the name is still being typed.
+--
+-- The box is one widget moved onto whichever row is being renamed, for the reason there are twelve
+-- rows and not one per set: a per-row control would cost a column the 316-wide list does not have,
+-- and a control that only exists while it is being used costs none.
+
+--- Close the box without redrawing. The half that is safe to call from inside `UI.Refresh`.
+local function closeRenameBox()
+    if not renaming then return end
+    -- Cleared first: ClearFocus fires OnEditFocusLost, which comes back through here.
+    renaming = nil
+    renameBox:ClearFocus()
+    renameBox:Hide()
+end
+
+--- Close the box and put the window back the way it was.
+local function stopRename()
+    if not renaming then return end
+    closeRenameBox()
+    UI.Refresh()
+end
+
+--- What the box currently proposes, and the line that says so. Returns the impact so the commit and
+--- the line cannot form two opinions of whether the name is allowed.
+local function renameProposal()
+    if not renaming then return nil end
+    local impact = Core.RenameImpact(Kitbag.char.sets, Kitbag.char.rules, renaming,
+        renameBox:GetText())
+    status:SetText(Core.RenameLabel(renaming, impact))
+    return impact
+end
+
+--- Open the box on `name`.
+--
+-- Brings the set into view first. Selection does not only come from clicking a row — `/kit verify`
+-- and a freshly created set both go through `UI.Select` — so the set being renamed can be scrolled
+-- out of sight, and a box anchored to a row that is not drawing it would open over another set
+-- entirely. Scrolling is the honest answer: refusing would make the control unreliable for reasons
+-- the player cannot see.
+local function startRename(name)
+    if not name or not Kitbag.char.sets[name] then return end
+
+    local names = Sets.Names()
+    local index
+    for i, candidate in ipairs(names) do
+        if candidate == name then index = i break end
+    end
+    if not index then return end
+
+    local offset = Core.ScrollOffset(#names, MAX_ROWS, FauxScrollFrame_GetOffset(scroll))
+    if index <= offset or index > offset + MAX_ROWS then
+        FauxScrollFrame_SetOffset(scroll, Core.ScrollOffset(#names, MAX_ROWS, index - 1))
+    end
+
+    -- Both set before the redraw. The refresh blanks the row's name so the box is not typed over a
+    -- FontString still showing the old one, and it also re-asks for the line under the list — which
+    -- would otherwise be answered about whatever the box still held from the last rename.
+    renaming = name
+    renameBox:SetText(name)
+    UI.Refresh()
+
+    local target
+    for _, row in ipairs(rows) do
+        if row.setName == name then target = row end
+    end
+    if not target then
+        closeRenameBox()
+        return
+    end
+
+    -- Over the name column only. The readiness and item level beside it stay readable, which is
+    -- worth keeping: renaming a set is one of the moments you are looking at the list to tell two
+    -- of them apart.
+    renameBox:ClearAllPoints()
+    renameBox:SetPoint("LEFT", target.icon, "RIGHT", 2, 0)
+    renameBox:SetSize(130, ROW_HEIGHT - 6)
+    renameBox:Show()
+    renameBox:SetFocus()
+    -- Selected, so the commonest rename — a different name entirely — is one gesture rather than a
+    -- press, a select-all and then the typing.
+    renameBox:HighlightText()
+end
+
 --- The action bar: one action and two tools (UI-23), all three drawn rather than spelled (UI-26).
 ---
 --- It belongs to the SET LIST and hangs under it (UI-28). It used to sit in the bottom corner of the
@@ -881,7 +983,10 @@ local function buildActionRow(parent, anchor, panel)
     -- to carry the hierarchy, size is the only thing that can.
     local narrow = 24
     local wide = 34
-    local rowWidth = wide + 4 + narrow + 4 + narrow
+    -- Derived rather than typed, so a fourth tool (UI-29) widens the row instead of pushing the last
+    -- one off a row that stayed the width three needed.
+    local tools = 3
+    local rowWidth = wide + tools * (4 + narrow)
 
     local row = CreateFrame("Frame", "KitbagActionRow", parent)
     row:SetSize(rowWidth, wide)
@@ -913,8 +1018,38 @@ local function buildActionRow(parent, anchor, panel)
     end)
     panel.equip:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
+    -- Named, unlike Delete beside it, for Copy's reason: this control opens a box that only exists
+    -- while it is in use, so a check cannot reach it through anything it leaves behind.
+    --
+    -- Between Equip and Delete rather than on the end, and the position is structural: Copy HIDES on
+    -- an account with one character, so anything anchored to it would move on some accounts and not
+    -- others. It also puts a pixel of distance between the biggest button and the destructive one.
+    panel.rename = Skin.IconButton(row, "KitbagRenameButton", RENAME_ICON, narrow)
+    panel.rename:SetPoint("LEFT", panel.equip, "RIGHT", 4, 0)
+    panel.rename:SetScript("OnClick", function()
+        if renaming then
+            stopRename()
+            return
+        end
+        startRename(selected)
+    end)
+    panel.rename:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:AddLine(selected and ("Rename " .. selected) or "Rename the selected set",
+            1, 0.82, 0)
+        GameTooltip:AddLine("Everything that points at the set comes with it — its keybinding, " ..
+            "any set that inherits from it, and the selection.", 0.9, 0.9, 0.9, true)
+        -- The one consequence a rename cannot carry, said before the press rather than after it: a
+        -- macro the player dragged onto an action bar names the set in its body, and that lives in
+        -- the client's own data rather than in Kitbag's.
+        GameTooltip:AddLine("A macro you dragged to an action bar still names the old set — drag " ..
+            "it again.", 0.5, 0.5, 0.5, true)
+        GameTooltip:Show()
+    end)
+    panel.rename:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
     panel.delete = Skin.IconButton(row, nil, DELETE_ICON, narrow)
-    panel.delete:SetPoint("LEFT", panel.equip, "RIGHT", 4, 0)
+    panel.delete:SetPoint("LEFT", panel.rename, "RIGHT", 4, 0)
     -- Deleting asks first, in a popup, rather than demanding a modifier nobody can see (BUG-8). The
     -- guard itself was right — this is the only unrecoverable thing the window does — but it lived
     -- entirely in a chat line printed AFTER a click that appeared to do nothing, so the button read
@@ -957,6 +1092,7 @@ local function buildActionRow(parent, anchor, panel)
     -- The same three, on the row itself. `/kit verify` reaches a control's neighbours through
     -- `GetParent()` rather than through globals of their own, and the parent is the row now.
     row.equip, row.delete, row.copy = panel.equip, panel.delete, panel.copy
+    row.rename = panel.rename
     return row
 end
 
@@ -1130,6 +1266,10 @@ local function build()
     frame:SetScript("OnHide", function()
         Kitbag.Picker.Close()
         CloseDropDownMenus()
+        -- The rename box is a child of the list and hides with it, but `renaming` is a file-local
+        -- and would survive — the next press would then read as a second press and close a box that
+        -- was never open.
+        closeRenameBox()
     end)
 
     frame.title = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -1146,6 +1286,38 @@ local function build()
 
     rows = {}
     for i = 1, MAX_ROWS do rows[i] = createRow(list, i) end
+
+    -- One box for twelve rows (UI-29), created after them so it draws over the row it sits on.
+    -- `autoFocus` off: an InputBoxTemplate grabs the keyboard the moment it is shown otherwise, and
+    -- this one is shown by a press that has already decided when focus should move.
+    renameBox = CreateFrame("EditBox", "KitbagRenameBox", list, "InputBoxTemplate")
+    renameBox:SetAutoFocus(false)
+    renameBox:Hide()
+    renameBox:SetScript("OnTextChanged", function() renameProposal() end)
+    renameBox:SetScript("OnEscapePressed", function() stopRename() end)
+    -- Clicking away is a cancel rather than a commit. A box left floating over a list that has since
+    -- scrolled is the version that renames a set nobody was looking at.
+    renameBox:SetScript("OnEditFocusLost", function() stopRename() end)
+    renameBox:SetScript("OnEnterPressed", function(self)
+        local impact = renameProposal()
+        if not impact then return end
+        -- A name that did not change closes the box quietly: nothing went wrong, and an error
+        -- message for pressing Enter on an unedited name is a control scolding the player.
+        if impact.why == "same" then
+            stopRename()
+            return
+        end
+        -- Refused names leave the box open with the reason already on screen. There is nothing to
+        -- say that the line has not been saying since the keystroke that caused it.
+        if not impact.ok then return end
+
+        local from, to = renaming, impact.name
+        closeRenameBox()
+        -- Selection follows the set rather than the name: `Sets.Rename` carries `lastSet`, but the
+        -- window's own selection is a file-local and would be left naming a set that is gone, which
+        -- Refresh would silently repair by jumping to the first set in the list.
+        if Sets.Rename(from, to) then UI.Select(to) else UI.Refresh() end
+    end)
 
     -- FauxScrollFrame rather than a real scrolling child: the rows stay put and the *data* moves
     -- through them, so thirteen frames serve a hundred sets. It is also the one scrolling widget
@@ -1388,7 +1560,8 @@ function UI.Refresh()
             row.setName = name
             row.data.plan, row.data.totals = entry.plan, entry.totals
             row.icon.texture:SetTexture(Sets.Icon(name))
-            row.name:SetText(name)
+            -- Blank while the box is over it, or the old name reads through from underneath.
+            row.name:SetText(name ~= renaming and name or "")
             row.state:SetText(UI.RowText(entry.plan))
             row.totals:SetText(rowTotals(entry.totals))
             if name == selected then row.selection:Show() else row.selection:Hide() end
@@ -1397,6 +1570,17 @@ function UI.Refresh()
             row.setName = nil
             row:Hide()
         end
+    end
+
+    -- A set that scrolled away, or was deleted, under an open box. Closed rather than re-anchored:
+    -- the box is only ever opened by a press, and one that reappears somewhere else on its own is
+    -- worse than one that goes away.
+    if renaming then
+        local visible = false
+        for _, row in ipairs(rows) do
+            if row.setName == renaming then visible = true end
+        end
+        if not visible then closeRenameBox() end
     end
 
     local chosen = selected and overview[selected] or nil
@@ -1408,6 +1592,10 @@ function UI.Refresh()
         status:SetText(string.format("%d set%s. Click one to inspect it.",
             #names, #names == 1 and "" or "s"))
     end
+
+    -- Last, so the line describes the box rather than being overwritten by the count behind it. A
+    -- redraw can arrive mid-rename from anywhere — the death watcher is enough on its own.
+    if renaming then renameProposal() end
 
     -- Re-asked on every redraw rather than once at build: the import itself ends in a refresh, so
     -- this is what makes the button take itself away the moment its job is done.

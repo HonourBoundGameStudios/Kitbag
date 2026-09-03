@@ -304,9 +304,10 @@ function Sets.Rename(old, new)
     local impact = Core.RenameImpact(char().sets, rules, old, new)
     if not impact.ok then
         if impact.why == "exists" then
+            -- The impact's own name, not a second cleaning of the caller's string: one door, one
+            -- answer about what the name actually is.
             say("|cffff8080a set called|r |cffffd100%s|r |cffff8080already exists.|r " ..
-                "|cff808080Pick another name — Kitbag will not overwrite it.|r",
-                Core.CleanName(new))
+                "|cff808080Pick another name — Kitbag will not overwrite it.|r", impact.name)
         elseif impact.why == "bad-name" then
             -- No command is named, deliberately: there is no `/kit rename`, and the window is the
             -- only door in. A message citing a command that does not exist is worse than none.
