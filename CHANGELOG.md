@@ -3,6 +3,44 @@
 All notable changes to Kitbag. The version here is the one in `Kitbag.toc` — the number players
 actually see — and `Tests/toc_test.lua` holds the two together.
 
+## [0.2.0] — 2026-09-03
+
+**Alpha.** The window grew tabs, and the flavour list shrank to the one that has actually been played.
+
+### The window has tabs
+
+- **Main, Settings and About**, along the bottom in the game's own tab art — the same idiom as the
+  character sheet and the spellbook. Main is everything the window already did.
+- **Settings is no longer a second window.** The options used to open a separate frame reached
+  through a wrench icon; they are a page of the main window now. `/kit options`, the minimap's
+  right-click and the LDB broker's right-click all open that page instead. The wrench is gone.
+- **About is new.** Honour Bound Game Studios, what Kitbag is, the version you are running, and
+  three copyable links — the studio at <https://honourbound.games>, its games on Steam, and this
+  repository. Pick a link and it lands in a box, already selected, ready for Ctrl-C; the client has
+  no clipboard of its own, so that is the only way a URL gets out of the game.
+- The version on that page is read from the addon rather than typed into it, and says `unknown`
+  rather than going blank in the first seconds after a login, while the client is still indexing.
+
+### Fixed
+
+- **A refused keybinding no longer writes across the window.** Pressing a key Kitbag will not take —
+  one already bound to a player action — put the whole explanatory sentence on an 82-pixel button,
+  which does not clip its text: it spilled across the inspector and landed on the Inherit button.
+  The button now says `Try again…` and the reason goes to the status line under the set list, where
+  the rename refusal already goes.
+
+### Flavours
+
+Ships **Classic Era** only (interface `11509`), and the repository now contains no other `.toc`.
+Mists Classic, Cataclysm Classic and Retail were dropped: none of the three had ever had a frame
+drawn on it, and a `.toc` is a promise that the addon runs there. **If you installed 0.1.0 on Mists
+Classic, this release does not support it.** Nothing about your saved sets changes.
+
+### Still true from 0.1.0
+
+Auto-swap rules remain shelved in `Icebox/` — Kitbag changes gear only when you ask it to. Rules
+saved while following development are untouched in your SavedVariables.
+
 ## [0.1.0] — 2026-09-03
 
 First release. Gear sets that actually apply.

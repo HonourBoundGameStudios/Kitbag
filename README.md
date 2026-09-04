@@ -57,7 +57,7 @@ Supports **Classic Era**. That is the only flavour Kitbag ships for.
 
 ## Status
 
-**0.1.0 — early.** The planner, sets and set inheritance, the window with per-row readiness and
+**0.2.0 — alpha.** The planner, sets and set inheritance, the window with per-row readiness and
 move-by-move tooltips, paperdoll flyouts, set icons, the trinket bar, the settings and the ItemRack
 importer all work. Auto-swap rules are shelved in `Icebox/` — see the note at the top.
 
@@ -66,13 +66,13 @@ The window has **three tabs** along the bottom: **Main** (the set list and the p
 and three copyable links (the studio at <https://honourbound.games>, its games on Steam, and this
 repository), laid out the same way GearJourney's is.
 
-**Verified in the client on Classic Era only.** The window, the options panel, the paperdoll
+**Verified in the client on Classic Era only.** The window and all three of its tabs, the paperdoll
 flyouts, the slot picker, the set icon picker, the trinket bar and the confirmation popups have all
 been seen drawing in a running game.
 
-**The tab strip has NOT been seen in a running client yet.** It passes the suite and `/kit verify`
-has a check for it, but the three panels were rearranged after the last in-client pass, so the one
-thing no test can answer — whether it looks right — is still open.
+**Three things still want a person**, and `/kit session` lists them: dying with the window open and
+then releasing, binding a key and pressing it, and copying a set to another character and logging in
+as them. Each is an act in the world that no self-check can perform.
 
 **Classic Era is the only flavour.** Mists Classic, Cataclysm and Retail `.toc` files were dropped
 on 2026-09-03: none of the three had ever had a frame drawn on it, and a `.toc` file is a promise

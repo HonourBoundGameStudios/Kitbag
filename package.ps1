@@ -100,7 +100,9 @@ foreach ($line in Get-Content (Join-Path $root "CHANGELOG.md")) {
 if ($section.Count -eq 0) { Write-Error "CHANGELOG.md has no '## [$version]' entry to release from." }
 Set-Content -Path $notes -Value $section -Encoding utf8NoBOM
 
-$files = (Get-ChildItem $staging -File).Count
+# Recursive since UI-32: the count was the staging ROOT only, and the moment the zip grew a
+# Media/ folder it under-reported by exactly the file nobody would notice was missing.
+$files = (Get-ChildItem $staging -File -Recurse).Count
 $size = [math]::Round((Get-Item $zip).Length / 1KB, 1)
 Write-Host ""
 Write-Host "Packaged Kitbag $version — $files file(s), $size KB" -ForegroundColor Green
