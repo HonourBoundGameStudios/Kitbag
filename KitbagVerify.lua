@@ -1647,6 +1647,19 @@ Verify.ACTS = {
             .. "Equip icon rather than merely stopping it responding.",
     },
     {
+        item = "VERIFY-20", act = "Look at the ADDON LIST on the character screen, and at the "
+            .. "MINIMAP BUTTON, before opening anything.",
+        why = "The icon (UI-33) is the first texture Kitbag SHIPS that a control draws — the logo "
+            .. "is drawn once, on a page nobody has to open. A shipped file fails in ways a "
+            .. "Blizzard path cannot: left out of the zip, written as RLE, or in a folder the "
+            .. "client resolves differently — and all of them render as missing-texture magenta "
+            .. "rather than as an error. The gate reads the TGA's header and can prove it is the "
+            .. "right SHAPE; only this says the client found it. Both surfaces are OUTSIDE the "
+            .. "window, so the magenta sweep above cannot see either. It also draws at 17px on the "
+            .. "minimap: if the silhouette does not read at that size, that is the answer, and it "
+            .. "is a composition fix rather than a path one.",
+    },
+    {
         item = "VERIFY-11", act = "Open any set's ICON PICKER and spin the MOUSE WHEEL over "
             .. "the icons.",
         why = "Nothing in Kitbag enables the wheel — it is entirely Blizzard's scroll template. "

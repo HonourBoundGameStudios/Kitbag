@@ -12,6 +12,7 @@
 Kitbag = Kitbag or {}
 
 local Sets = Kitbag.Sets
+local Skin = Kitbag.Skin
 
 local Broker = {}
 
@@ -58,7 +59,7 @@ function Broker.Enable()
     object = ldb:NewDataObject("Kitbag", {
         type = "data source",
         text = "Kitbag",
-        icon = "Interface\\Icons\\INV_Chest_Plate06",
+        icon = Skin.ICON,
         label = "Kitbag",
         OnClick = onClick,
         OnTooltipShow = onTooltipShow,

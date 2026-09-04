@@ -426,4 +426,103 @@ for _, script in ipairs({ "deploy.ps1", "package.ps1" }) do
         script .. " copies Media/ — the glob it had would have shipped everything BUT the logo")
 end
 
+-- ---------------------------------------------------------------------------
+-- The addon's own icon (UI-33)
+-- ---------------------------------------------------------------------------
+--
+-- Kitbag wore `INV_Chest_Plate06` — one of Blizzard's own inventory icons — in FOUR places at once:
+-- the `## IconTexture` a player sees in the AddOns list, the minimap launcher, the Broker launcher
+-- and the Equip button. It is a breastplate, so it was never wrong; it was simply not Kitbag's, and
+-- four copies of a borrowed path is four places to forget when it stops being borrowed.
+--
+-- Three were known and the Broker's was not: it was the sweep at the bottom of this section that
+-- found it, which is the argument for sweeping rather than for listing the sites. A list of sites is
+-- written by the same person who is about to forget one.
+--
+-- The new icon is a file this addon ships, which changes what can go wrong. A Blizzard path either
+-- exists on every client or on none; a shipped TGA can be missing from the zip, be the wrong shape,
+-- or be written in a form the client will not decode — and ALL THREE render as missing-texture
+-- magenta rather than as an error. So the header is read here, not just the filename: WoW loads an
+-- UNCOMPRESSED 32-bit TGA and quietly refuses an RLE one, and that refusal looks exactly like a
+-- typo in the path.
+
+local ICON_FILE = "Media/Kitbag-Icon.tga"
+-- Doubled backslashes, for the reason the logo check above gives: Lua 5.1 compiles `"\A"` happily
+-- and keeps only the `A`. This constant was written singly first and the test failed comparing
+-- `InterfaceAddOnsKitbagMediaKitbag-Icon` against the real path — the exact mistake the comment
+-- warning about it is attached to, made while writing the check for it.
+local ICON_PATH = "Interface\\AddOns\\Kitbag\\Media\\Kitbag-Icon"
+
+local function tgaHeader(path)
+    local f = io.open(path, "rb")
+    if not f then return nil end
+    local head = f:read(18)
+    f:close()
+    if not head or #head < 18 then return nil end
+    local byte = function(i) return head:byte(i) end
+    return {
+        imageType = byte(3),
+        width  = byte(13) + byte(14) * 256,
+        height = byte(15) + byte(16) * 256,
+        bpp    = byte(17),
+    }
+end
+
+local header = tgaHeader(ICON_FILE)
+H.ok(header ~= nil, ICON_FILE .. " exists and is a readable TGA")
+if header then
+    -- Type 2 is uncompressed true-colour. Type 10 is the same picture RLE-packed, which every image
+    -- editor offers and the client will not draw.
+    H.eq(header.imageType, 2, "…uncompressed true-colour (type 2), not RLE — the client refuses RLE")
+    H.eq(header.bpp, 32, "…32-bit, so it carries the alpha channel a round icon mask needs")
+    -- Powers of two, and the same 128 the studio logo uses. A non-power-of-two texture is the other
+    -- silent magenta.
+    H.eq(header.width, 128, "…128 wide")
+    H.eq(header.height, 128, "…128 tall")
+end
+
+-- The path lives in ONE constant and the Lua call sites read it, rather than string literals that
+-- agree today. Evaluated rather than compared as source text, for the reason the logo check above
+-- spells out: single backslashes compile fine in Lua 5.1 and silently vanish.
+local skinBody = fileBody("KitbagSkin.lua")
+local iconLiteral = skinBody:match("Skin%.ICON%s*=%s*(\".-\")")
+H.ok(iconLiteral ~= nil, "KitbagSkin names the addon icon in one place, as Skin.ICON")
+local iconPath = iconLiteral and assert(loadstring("return " .. iconLiteral))()
+H.eq(iconPath, ICON_PATH, "…and it resolves to the deployed folder's path, extension omitted")
+
+-- The `.toc` cannot read a Lua constant, so this is the one genuine second copy. It is checked
+-- against the constant rather than restated.
+local function tocIcon(path)
+    local f = assert(io.open(path, "r"), "cannot open " .. path)
+    local found
+    for line in f:lines() do
+        found = found or line:match("^##%s*IconTexture%s*:%s*(.-)%s*$")
+    end
+    f:close()
+    return found
+end
+
+H.eq(tocIcon("Kitbag.toc"), ICON_PATH, "Kitbag.toc's ## IconTexture is the shipped icon")
+
+for _, site in ipairs({ "KitbagUI.lua", "KitbagMinimap.lua", "KitbagBroker.lua" }) do
+    H.ok(fileBody(site):find("Skin.ICON", 1, true) ~= nil,
+        site .. " draws the addon icon from Skin.ICON rather than a path of its own")
+end
+
+-- The borrowed icon must be gone from every file that ships, not merely unused in the two above.
+-- A leftover copy is not a broken picture — it is the OLD picture, in one control, forever.
+local sources = io.popen(WINDOWS and "dir /b *.lua *.toc" or "ls *.lua *.toc")
+if sources then
+    for name in sources:lines() do
+        name = name:gsub("\r$", ""):match("^%s*(.-)%s*$")
+        if name ~= "" then
+            H.ok(fileBody(name):find("INV_Chest_Plate06", 1, true) == nil,
+                name .. " no longer wears the borrowed INV_Chest_Plate06")
+        end
+    end
+    sources:close()
+else
+    print("  # skipped: no io.popen, cannot sweep the root for the borrowed icon")
+end
+
 H.done()

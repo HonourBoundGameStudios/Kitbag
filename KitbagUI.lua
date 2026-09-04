@@ -41,11 +41,11 @@ local MAX_ROWS = 12
 -- A path that turns out not to exist does not draw nothing — it renders as missing-texture magenta,
 -- which is about as loud as a UI fault gets. That is the useful property, and it is the same reason
 -- SLOT_ART below is written as paths rather than guarded.
--- Equip is the addon's own icon, the one in every `.toc`'s `## IconTexture` (UI-26). It is the
--- picture a player already associates with Kitbag by the time they reach this button, and "put
--- armour on" is the thing it depicts — which is a better answer than a generic tick, because a tick
--- means "confirm" and this button does not confirm anything.
-local EQUIP_ICON = "Interface\\Icons\\INV_Chest_Plate06"
+-- Equip is the addon's own icon, the one in the `.toc`'s `## IconTexture` (UI-26). It is the
+-- picture a player already associates with Kitbag by the time they reach this button, and "the kit
+-- bag you keep your sets in" is the thing it depicts — which is a better answer than a generic tick,
+-- because a tick means "confirm" and this button does not confirm anything.
+local EQUIP_ICON = Skin.ICON
 
 local DELETE_ICON = "Interface\\Buttons\\UI-GroupLoot-Pass-Up"
 -- Rename (UI-29). The guild frame's public-note glyph: Blizzard's own "edit the words attached

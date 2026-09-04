@@ -25,6 +25,17 @@ local Skin = {}
 Skin.EDGE   = { 0.33, 0.30, 0.24, 1 }
 Skin.GROUND = { 0.05, 0.05, 0.06, 0.85 }
 
+-- The addon's own icon (UI-33). Four controls draw it — the `## IconTexture` in the AddOns list, the
+-- minimap button, the Broker launcher and the Equip button — and it used to be one of Blizzard's own
+-- breastplate icons, written out as a path four times. That is one borrowed literal per place to
+-- forget, and three of the four were found by a sweep rather than by remembering.
+--
+-- Here rather than in KitbagUI because the minimap button and the Broker object are not the window
+-- and must not have to load it to know what Kitbag looks like. The extension is omitted: the client
+-- appends it, and naming `.tga` explicitly is how a texture path stops working the day it becomes a
+-- `.blp`.
+Skin.ICON = "Interface\\AddOns\\Kitbag\\Media\\Kitbag-Icon"
+
 --- Recess a frame: a one-pixel tinted edge with a dark ground inside it.
 ---
 --- Returns the frame, so it can wrap the `CreateFrame` call that made it rather than needing a line

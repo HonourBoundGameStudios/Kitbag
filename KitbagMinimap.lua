@@ -8,6 +8,7 @@
 Kitbag = Kitbag or {}
 
 local UI = Kitbag.UI
+local Skin = Kitbag.Skin
 
 local Minimap_ = {}
 
@@ -42,7 +43,7 @@ function Minimap_.Create()
     local icon = button:CreateTexture(nil, "BACKGROUND")
     icon:SetSize(17, 17)
     icon:SetPoint("CENTER", 0, 1)
-    icon:SetTexture("Interface\\Icons\\INV_Chest_Plate06")
+    icon:SetTexture(Skin.ICON)
     icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
 
     local border = button:CreateTexture(nil, "OVERLAY")
