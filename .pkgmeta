@@ -1,0 +1,45 @@
+# What CurseForge puts in the zip (SHIP-8).
+#
+# The CurseForge project is connected to this repository, and its automatic packaging builds the
+# addon FROM THE SOURCE — it does not take a zip attached to a GitHub release. So `package.ps1` no
+# longer decides what players receive; this file does, and the two are held to each other by
+# `Tests/toc_test.lua`, in both directions: nothing extra may ship, and nothing the client needs may
+# be dropped.
+#
+# `dist/Kitbag-<version>.zip` is still built and still worth building — it is the local rehearsal,
+# and it is what proves the packaged set loads — but nobody installs it any more.
+#
+# ⚠️ A TAG IS A PUBLISH NOW. CurseForge flags a tagged commit as alpha, beta or release by reading
+# the TAG TEXT: one containing "alpha" or "beta" is flagged as such, and anything else — `v0.2.1` —
+# becomes a full release to every installed client. There is no confirmation step in between.
+
+# The folder inside the zip, and therefore the folder in the player's AddOns directory. Without this
+# CurseForge names it after the project's URL slug, and the client resolves `Kitbag.toc` by looking
+# for a folder called `Kitbag` — a slug that differs by so much as a case-sensitive character is an
+# addon that installs and never loads.
+package-as: Kitbag
+
+# Otherwise the changelog on the project page is compiled from this repository's COMMIT MESSAGES.
+# Those are written to explain reasoning to whoever works here next; they are not release notes.
+# `CHANGELOG.md` is, and the gate already holds its newest entry to the version in the `.toc`.
+#
+# The map form rather than the `manual-changelog: CHANGELOG.md` shorthand: the shorthand leaves
+# markup-type at `plain`, which prints the literal `##` and `-` on the page.
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
+
+# The workshop, which is not the product. Dot-prefixed entries (`.github`, `.gitattributes`,
+# `.gitignore`) are dropped by CurseForge without being named, so they are not listed here.
+#
+# `Icebox/` is the one worth explaining: it holds the shelved rule engine, no `.toc` loads it, and it
+# would therefore never RUN in a player's client. It is ignored anyway, because the reason it was
+# moved into a folder rather than deleted was that it leaves the product — and "this addon ships only
+# what has been run" is a claim that has to survive the zip being built by something that never read
+# `package.ps1`.
+ignore:
+  - Tests
+  - Icebox
+  - CLAUDE.md
+  - deploy.ps1
+  - package.ps1

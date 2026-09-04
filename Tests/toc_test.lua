@@ -525,4 +525,154 @@ else
     print("  # skipped: no io.popen, cannot sweep the root for the borrowed icon")
 end
 
+-- ---------------------------------------------------------------------------
+-- What CurseForge ships, which is not what package.ps1 ships (SHIP-8)
+-- ---------------------------------------------------------------------------
+--
+-- The CurseForge project was connected to this repository on 2026-09-03, and that moved the decision
+-- about what players receive OUT of package.ps1. CurseForge's automatic packaging builds the zip
+-- from the REPOSITORY SOURCE — it does not take a zip attached to a GitHub release — so
+-- `dist/Kitbag-0.2.0.zip` is now a local artefact nobody installs, and every tracked file at the
+-- root ships unless something says otherwise.
+--
+-- Nothing said otherwise. `Tests/`, `Icebox/`, `CLAUDE.md`, `deploy.ps1` and `package.ps1` would all
+-- have landed in players' AddOns folders. Icebox is the shelved rule engine: no `.toc` loads it, so
+-- it would not RUN — but the point of shelving it into a folder was that it leaves the product, and
+-- "the addon ships only what has been run" stops being true the moment the zip is built by something
+-- that has never read package.ps1.
+--
+-- `.pkgmeta` is what says otherwise, and this section holds it to package.ps1 in BOTH directions:
+-- nothing extra may ship, and nothing the client needs may be dropped. The second direction is the
+-- one worth having — an `ignore` entry that swallowed `Media/` would take the icon and the logo out
+-- of the zip and render them magenta for everyone except the developer, whose deployed folder still
+-- has them.
+
+local PKGMETA = ".pkgmeta"
+
+-- A deliberately small YAML reader: `key: value` at the left margin, then either `- item` lines or
+-- indented `key: value` lines under it. `.pkgmeta` is two levels deep at most, and a real YAML
+-- parser would be a dependency this addon does not have.
+local function readPkgmeta(path)
+    local f = io.open(path, "r")
+    if not f then return nil end
+    local scalars, lists, maps, current = {}, {}, {}, nil
+    for line in f:lines() do
+        line = line:gsub("^\239\187\191", ""):gsub("\r$", "")
+        if not line:match("^%s*#") and line:match("%S") then
+            local key, value = line:match("^([%w%-_]+):%s*(.-)%s*$")
+            local item = line:match("^%s+%-%s*(.-)%s*$")
+            local nestedKey, nestedValue = line:match("^%s+([%w%-_]+):%s*(.-)%s*$")
+            if key then
+                current = key
+                if value ~= "" then scalars[key] = value else lists[key], maps[key] = {}, {} end
+            elseif item and current and lists[current] then
+                table.insert(lists[current], item)
+            elseif nestedKey and current and maps[current] then
+                maps[current][nestedKey] = nestedValue
+            end
+        end
+    end
+    f:close()
+    return scalars, lists, maps
+end
+
+local pkgScalars, pkgLists, pkgMaps = readPkgmeta(PKGMETA)
+H.ok(pkgScalars ~= nil, PKGMETA .. " exists — without it CurseForge ships the whole repository")
+
+if pkgScalars then
+    -- The folder inside the zip. CurseForge names it after the project's URL SLUG when this is
+    -- omitted, and a slug is not required to match the addon: the client resolves Kitbag.toc by
+    -- looking for a folder called Kitbag, so a mismatch is an addon that installs and never loads.
+    H.eq(pkgScalars["package-as"], "Kitbag",
+        PKGMETA .. " names the folder Kitbag — the client finds Kitbag.toc by that folder name")
+
+    -- Otherwise CurseForge compiles the changelog players read out of this repository's COMMIT
+    -- MESSAGES. The commit bodies here explain reasoning to the next agent; they are not release
+    -- notes, and CHANGELOG.md already is — held to the .toc's version by the section above.
+    --
+    -- The map form rather than the `manual-changelog: CHANGELOG.md` shorthand, which is also legal:
+    -- the shorthand leaves `markup-type` at `plain`, and a markdown file rendered as plain text puts
+    -- the literal `##` and `-` on the project page for every reader.
+    local changelog = (pkgMaps or {})["manual-changelog"] or {}
+    H.eq(changelog["filename"], "CHANGELOG.md",
+        PKGMETA .. " points the changelog at CHANGELOG.md rather than at commit messages")
+    H.eq(changelog["markup-type"], "markdown",
+        "…and says it is markdown, so the page renders it instead of printing the hashes")
+end
+
+-- What package.ps1 puts in the zip, READ OUT OF THE SCRIPT rather than restated here. A second list
+-- would agree with this test forever and with the zip never — the same reason $SHIPPED_TOCS is
+-- parsed above instead of copied. The concrete drift it prevents: a fourth document added to
+-- package.ps1 would ship from the local zip and be missing from CurseForge's, and only a player
+-- would find out.
+local function packagedTopLevel()
+    local body = fileBody("package.ps1")
+    local shipped = {}
+    -- `foreach ($doc in @("README.md", "CHANGELOG.md", "LICENSE"))`
+    local docs = body:match("%$doc%s+in%s+@%((.-)%)")
+    H.ok(docs ~= nil, "package.ps1 lists the documents it ships, in a foreach over @(...)")
+    for name in tostring(docs):gmatch('"([^"]+)"') do shipped[name] = true end
+    -- `$media = Join-Path $root "Media"`
+    local media = body:match('%$media%s*=%s*Join%-Path%s+%$root%s+"([^"]+)"')
+    H.ok(media ~= nil, "package.ps1 names the media folder it copies")
+    if media then shipped[media] = true end
+    for _, toc in ipairs(packaged) do shipped[toc] = true end
+    local list = io.popen(WINDOWS and "dir /b *.lua" or "ls *.lua")
+    if not list then return nil end
+    for name in list:lines() do
+        name = name:gsub("\r$", ""):match("^%s*(.-)%s*$")
+        if name ~= "" then shipped[name] = true end
+    end
+    list:close()
+    return shipped
+end
+
+-- What git would hand CurseForge: every tracked path, reduced to its top-level entry. Asked of GIT
+-- rather than of the working tree, for the reason the gitignore fleetcast gives — a check that reads
+-- the same state the bug lives in cannot see the bug, and the question here is precisely "what does
+-- a clone receive", not "what is on this disk".
+local function trackedTopLevel()
+    local list = io.popen("git ls-files 2>&1")
+    if not list then return nil end
+    local top, any = {}, false
+    for line in list:lines() do
+        line = line:gsub("\r$", ""):match("^%s*(.-)%s*$")
+        if line ~= "" and not line:find("fatal", 1, true) then
+            any = true
+            top[line:match("^([^/]+)") or line] = true
+        end
+    end
+    list:close()
+    return any and top or nil
+end
+
+local shippedSet = packagedTopLevel()
+local tracked = trackedTopLevel()
+
+if not shippedSet or not tracked then
+    print("  # skipped: no io.popen or no git, cannot ask what a clone receives")
+else
+    local ignored = {}
+    for _, entry in ipairs((pkgLists or {}).ignore or {}) do
+        -- A trailing slash is allowed in .pkgmeta and names the same folder.
+        ignored[entry:gsub("/$", "")] = true
+    end
+
+    for name in pairs(tracked) do
+        if not shippedSet[name] then
+            -- CurseForge drops dot-prefixed entries itself, so .github and .gitignore need no line.
+            local hidden = name:sub(1, 1) == "."
+            H.ok(hidden or ignored[name] == true,
+                name .. " is tracked but not shipped, so " .. PKGMETA .. " must ignore it")
+        end
+    end
+
+    -- The other direction. An ignore entry naming something the client needs is the failure that
+    -- LOOKS like a working release right up until somebody who is not the developer installs it.
+    for name in pairs(ignored) do
+        H.ok(shippedSet[name] ~= true,
+            PKGMETA .. " does not ignore " .. name .. ", which package.ps1 ships to the client")
+    end
+end
+
 H.done()
