@@ -3,6 +3,19 @@
 All notable changes to Kitbag. The version here is the one in `Kitbag.toc` — the number players
 actually see — and `Tests/toc_test.lua` holds the two together.
 
+## [0.2.1] — 2026-09-03
+
+Kitbag has its own icon.
+
+### Changed
+
+- **The addon wears its own picture instead of a borrowed one.** Kitbag has shown a Blizzard
+  breastplate icon since the first window — in the AddOns list, on the minimap button, on the
+  LibDataBroker launcher and on the Equip button. All four now show a kit bag drawn for this addon
+  and shipped with it. Nothing else moved: the same four controls do the same four things.
+
+If you are updating from 0.2.0 there is no other change, and your sets are untouched.
+
 ## [0.2.0] — 2026-09-03
 
 The window grew tabs, and the flavour list shrank to the one that has actually been played.

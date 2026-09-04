@@ -2,7 +2,7 @@
 ## Title: |cff8fd3ffKitbag|r
 ## Notes: Gear sets that actually apply. Save what you're wearing and swap it back in one click.
 ## Author: Honour Bound Game Studios Inc.
-## Version: 0.2.0
+## Version: 0.2.1
 ## IconTexture: Interface\AddOns\Kitbag\Media\Kitbag-Icon
 ## SavedVariables: KitbagDB
 ## X-Website: https://github.com/HonourBoundGameStudios/Kitbag
