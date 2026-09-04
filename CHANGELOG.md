@@ -5,7 +5,7 @@ actually see — and `Tests/toc_test.lua` holds the two together.
 
 ## [0.2.0] — 2026-09-03
 
-**Alpha.** The window grew tabs, and the flavour list shrank to the one that has actually been played.
+The window grew tabs, and the flavour list shrank to the one that has actually been played.
 
 ### The window has tabs
 
