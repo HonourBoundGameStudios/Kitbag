@@ -57,12 +57,13 @@ Supports **Classic Era**. That is the only flavour Kitbag ships for.
 
 ## Status
 
-**0.2.1 — the current release.** The planner, sets and set inheritance, the window with per-row
+**0.2.2 — the current release.** The planner, sets and set inheritance, the window with per-row
 readiness and move-by-move tooltips, paperdoll flyouts, set icons, the trinket bar, the settings and
 the ItemRack importer all work. Auto-swap rules are shelved in `Icebox/` — see the note at the top.
 
-Kitbag has its **own icon** as of 0.2.1, in the AddOns list, on the minimap button, on the broker
-launcher and on the Equip button. It used to borrow one of Blizzard's.
+Kitbag's **armoured pack icon** appears in the AddOns list, on the minimap button, on the broker
+launcher and on the Equip button. It replaced the first custom satchel icon in 0.2.2 because the new
+silhouette reads more clearly as gear at a glance.
 
 The window has **three tabs** along the bottom: **Main** (the set list and the paperdoll),
 **Settings** (what used to be a second window) and **About** — the studio page, the addon's version,

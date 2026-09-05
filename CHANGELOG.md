@@ -3,6 +3,19 @@
 All notable changes to Kitbag. The version here is the one in `Kitbag.toc` — the number players
 actually see — and `Tests/toc_test.lua` holds the two together.
 
+## [0.2.2] — 2026-09-05
+
+Kitbag's icon is clearer at a glance.
+
+### Changed
+
+- **The icon is now an armoured pack.** The first custom icon looked like a polished leather
+  satchel; its replacement has a darker, broader silhouette with a helmet strapped to it, so the
+  picture reads as gear rather than luggage in the AddOns list, on the minimap, on the broker and on
+  the Equip button.
+
+If you are updating from 0.2.1 there is no other change, and your sets are untouched.
+
 ## [0.2.1] — 2026-09-03
 
 Kitbag has its own icon.
