@@ -3,6 +3,12 @@
 All notable changes to Kitbag. The version here is the one in `Kitbag.toc` — the number players
 actually see — and `Tests/toc_test.lua` holds the two together.
 
+## [0.2.3] — 2026-09-07
+
+Packaging-only release: moves distribution off CurseForge's connected-repo webhook onto a GitHub
+Actions pipeline (`.github/workflows/release.yml`, SHIP-4), so a broken build fails loudly instead
+of uploading silently. No addon code changed; offline suite green (233/233).
+
 ## [0.2.2] — 2026-09-05
 
 Kitbag's icon is clearer at a glance.
