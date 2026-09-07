@@ -5,6 +5,7 @@
 ## Version: 0.2.2
 ## IconTexture: Interface\AddOns\Kitbag\Media\Kitbag-Icon
 ## SavedVariables: KitbagDB
+## X-Curse-Project-ID: 1651475
 ## X-Website: https://github.com/HonourBoundGameStudios/Kitbag
 ## X-License: MIT
 

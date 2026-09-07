@@ -1,0 +1,39 @@
+name: Package and release
+
+# Tag push IS a publish once CF_API_KEY is set and CurseForge's own automatic packaging is
+# switched to "No automatic packaging" -- otherwise this workflow and the connected-repo webhook
+# race to upload the same tag. See Boonkeeper's Process/ (skill: publish-curseforge) for the full
+# rationale; this is that same recipe (SHIP-3), applied here under SHIP-4.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write   # packager creates a GitHub release from the tag; default token perms are read-only
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      CF_API_KEY: ${{ secrets.CF_API_KEY }}
+      GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Install Lua 5.1
+        run: |
+          sudo apt-get update && sudo apt-get install -y lua5.1
+          sudo ln -sf /usr/bin/lua5.1 /usr/local/bin/lua
+
+      - name: Test gate
+        run: |
+          failed=0
+          for f in Tests/*_test.lua; do
+            echo "== $f"
+            lua5.1 "$f" || failed=1
+          done
+          exit $failed
+
+      - uses: BigWigsMods/packager@v2
