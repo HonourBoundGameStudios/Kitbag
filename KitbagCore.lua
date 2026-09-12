@@ -1271,9 +1271,10 @@ end
 --- The caption the key button wears while a refusal stands (BUG-16).
 --
 -- Separate from `BindingRefusalLabel` because the two answer different questions. The sentence
--- explains; the button is 82px of `UIPanelButtonTemplate` with an unclipped, centred FontString, so
--- a sentence written to it spills out both sides and lands on whatever shares the row. A control
--- says what the mode is and the line under the list carries the prose — the same division UI-29
+-- explains; the button is one row of `UIPanelButtonTemplate` with an unclipped, centred FontString,
+-- so a sentence written to it spills out both sides and lands on whatever it is next to — which is
+-- a property of the template, not of the width, and so did not go away when UI-34 widened it. A
+-- control says what the mode is and the line under the list carries the prose — the division UI-29
 -- settled on for the rename refusal.
 --
 -- It is a constant, and that is the point: the reason lives in exactly one string, so there is no

@@ -72,7 +72,7 @@ local CELL_GAP = 3
 local PITCH = CELL + CELL_GAP
 local PANEL_WIDTH = 300
 local PARENT_Y = -70       -- the inherit button, between the set's headline and the character model
-local KEY_WIDTH = 82       -- the keybinding button, sharing that row rather than taking one of its own
+local KEY_Y = PARENT_Y - 24 -- the keybinding button, on its own row beneath it
 
 local frame, rows, status, scroll, doll, importButton, renameBox
 
@@ -609,9 +609,10 @@ end
 --- Repaint the button and, when a refusal stands, the line that carries its reason (BUG-16).
 --
 -- Always both, and always through here. A refusal is prose and belongs on the 316px status line,
--- not on an 82px button whose FontString is centred and unclipped — written there the sentence
+-- not on a one-row button whose FontString is centred and unclipped — written there the sentence
 -- spilled out both sides of the control and landed on top of Inherit and the doll cells either
--- side. Painting the pair in one place is also what stops the two from disagreeing.
+-- side. UI-34 widened this button to the full gap; that buys a longer CHORD, not a sentence, so
+-- the division stands. Painting the pair in one place is also what stops the two from disagreeing.
 --- True while `status` is showing a capture refusal rather than describing the list, so the line
 --- can be handed back exactly once instead of on every keystroke of a capture that never refused.
 local refusalOnLine = false
@@ -708,8 +709,8 @@ end
 
 local function buildKeyButton(panel, gapWidth)
     panel.key = CreateFrame("Button", "KitbagKeyButton", panel, "UIPanelButtonTemplate")
-    panel.key:SetSize(KEY_WIDTH, 20)
-    panel.key:SetPoint("TOPRIGHT", panel, "TOP", gapWidth / 2, PARENT_Y)
+    panel.key:SetSize(gapWidth, 20)
+    panel.key:SetPoint("TOPLEFT", panel, "TOP", -gapWidth / 2, KEY_Y)
     panel.key:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 
     panel.key:SetScript("OnClick", function(self, button)
@@ -810,13 +811,16 @@ local function buildDoll(parent)
     local menu = CreateFrame("Frame", "KitbagParentMenu", panel, "UIDropDownMenuTemplate")
     UIDropDownMenu_Initialize(menu, initParentMenu, "MENU")
 
-    -- The inherit button gives up the right end of its row to the keybinding button (UI-12) rather
-    -- than the panel growing a row: the gap between the doll's two columns is the only real space
-    -- the window has, and everything below this line is the character model. Both are named so
+    -- The two controls each take a whole row. They shared one until UI-34, the keybinding button
+    -- squeezed into 82px on the right — which was never enough for the label it has to carry, since
+    -- a chord is spelled out in full and "CTRL-NUMPAD9" alone overruns it. UIPanelButtonTemplate
+    -- does not shrink a label that does not fit, it lets it out under its own edge, so the cost of
+    -- the narrow button was a key name spilling across the panel. A row costs 24px of the character
+    -- model, which has it to give; a clipped binding is unreadable at any size. Both are named so
     -- `/kit verify` can measure the clearance between them — a measurement needs both edges, and
-    -- this one varies, because the left button's label is a set name.
+    -- this one varies, because the upper button's label is a set name.
     panel.inherit = CreateFrame("Button", "KitbagInheritButton", panel, "UIPanelButtonTemplate")
-    panel.inherit:SetSize(gapWidth - KEY_WIDTH - 4, 20)
+    panel.inherit:SetSize(gapWidth, 20)
     panel.inherit:SetPoint("TOPLEFT", panel, "TOP", -gapWidth / 2, PARENT_Y)
     panel.inherit:SetScript("OnClick", function(self)
         ToggleDropDownMenu(1, nil, menu, self, 0, 0)
@@ -828,7 +832,7 @@ local function buildDoll(parent)
     -- it for us; without them a long name runs out over the doll's icons on both sides.
     local label = panel.inherit:GetFontString()
     if label then
-        label:SetWidth(gapWidth - KEY_WIDTH - 16)
+        label:SetWidth(gapWidth - 16)
         pcall(label.SetWordWrap, label, false)
     end
 
@@ -844,7 +848,7 @@ local function buildDoll(parent)
     --
     -- Guarded: `DressUpModel` and `TryOn` are ancient, but a flavour that lacks either would take
     -- the whole window down at build time, and the panel reads perfectly well without a model.
-    local modelTop = PARENT_Y - 26
+    local modelTop = KEY_Y - 26
 
     -- The well the preview sits in. Every other thing this panel draws sits in something — each of
     -- the nineteen cells has a tinted edge over a dark ground — and the model had neither, so the one

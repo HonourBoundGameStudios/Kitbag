@@ -216,14 +216,13 @@ H.ok(byId["import-button"] ~= nil,
 H.eq(byId["import-button"] and byId["import-button"].item, "VERIFY-14",
     "…and it names the item it answers")
 
--- VERIFY-16. The keybinding button (UI-12) took the right end of the inherit button's row rather
--- than growing the panel a row of its own, so "do these two overlap" is a real question with a
--- measurable answer — and it is asked on a row whose left half CHANGES WIDTH with the set name.
--- The label half matters as much: a button showing a key the set does not hold is the exact
--- symptom of a binding that lost an arbitration silently, which is what Bindings.Set was changed
--- to prevent.
+-- VERIFY-16. The keybinding button (UI-12) sits on a row of its own beneath the inherit button
+-- (UI-34), so "do these two overlap" is a real question with a measurable answer — and it is asked
+-- under a button whose own label CHANGES WIDTH with the set name. The label half matters as much:
+-- a button showing a key the set does not hold is the exact symptom of a binding that lost an
+-- arbitration silently, which is what Bindings.Set was changed to prevent.
 H.ok(byId["key-button"] ~= nil,
-    "a check measures the keybinding button against the inherit button it shares a row with")
+    "a check measures the keybinding button against the inherit button it sits under")
 H.eq(byId["key-button"] and byId["key-button"].item, "VERIFY-16",
     "…and it names the item it answers")
 
@@ -237,6 +236,17 @@ H.ok(not source:find("this is a verification run", 1, true),
     "the overwrite check does not fabricate the text it is supposed to be verifying")
 H.ok(source:find("LossText", 1, true) ~= nil,
     "…it goes through Sets.LossText, the same pure function the window uses")
+
+-- VERIFY-16's geometry, after the keybinding button came off the inherit button's row and took one
+-- of its own beneath it (UI-34). The check measured the horizontal gap to a neighbour it no longer
+-- has — with the two stacked and the same width that subtraction is a large NEGATIVE number, so the
+-- check would have reported an overlap that is not there and gone red on a layout that is correct.
+-- A measurement that survives the thing it measures moving is worse than no measurement: it reads
+-- like evidence.
+H.ok(source:find("inherit:GetBottom()", 1, true) ~= nil,
+    "the keybinding check measures the vertical gap below the inherit button it now sits under")
+H.ok(not source:find("button:GetLeft() - inherit:GetRight()", 1, true),
+    "…and no longer subtracts edges that stopped facing each other")
 
 -- A SKIP has to say which situation it is in, because the reader's next action differs completely.
 -- "Go and do it" and "there is nothing to do it with" are opposite instructions, and a skip that

@@ -1167,7 +1167,7 @@ end
 key:GetScript("OnKeyDown")(key, "W")
 H.eq(G.Kitbag.char.sets.Set07.key, nil, "a player-bound key never changes the selected set")
 -- BUG-16. The refusal is said in two places, and which half goes where is the whole fix: the
--- button is 82px and does not clip, so the sentence went to the 316px line under the list — where
+-- button does not clip at any width, so the sentence went to the 316px line under the list — where
 -- UI-29 already puts the rename refusal — and the button keeps a caption that fits it.
 H.eq(key:GetText(), "Try again…",
     "a refused press leaves the button saying the mode, not a sentence wider than the button")

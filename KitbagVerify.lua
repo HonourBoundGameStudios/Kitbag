@@ -1171,12 +1171,13 @@ Verify.CHECKS = {
     },
     {
         id = "key-button", item = "VERIFY-16", label = "Keybinding button reads and fits",
-        -- Two questions, and the cheap one is the more valuable. GEOMETRY: the button took the right
-        -- end of the inherit button's row instead of the panel growing a row, and the left half of
-        -- that row carries a set NAME — so the clearance between them is real, variable, and only
-        -- wrong on the characters with long names, which is nobody's test character. LABEL: a button
-        -- reading a key the set does not hold is the visible symptom of a binding that lost an
-        -- arbitration in silence, which is precisely what Bindings.Set was rewritten to stop.
+        -- Two questions, and the cheap one is the more valuable. GEOMETRY: the button has a row of
+        -- its own beneath the inherit button (UI-34), so what can go wrong is vertical — it rides
+        -- up into the row above, or down into the character model — and its label, which is the
+        -- whole reason it was widened, can still overrun a chord nobody on the test character binds.
+        -- LABEL: a button reading a key the set does not hold is the visible symptom of a binding
+        -- that lost an arbitration in silence, which is precisely what Bindings.Set was rewritten
+        -- to stop.
         run = function()
             local Sets = Kitbag.Sets
             if not Sets or not Sets.KeyOf then return nil, "KitbagSets is not loaded" end
@@ -1217,15 +1218,16 @@ Verify.CHECKS = {
                 end
             end
 
-            -- And the neighbour. The inherit button hides itself when there is nothing to inherit
-            -- from, so a gap can only be measured when it is actually up — and "it was hidden" is a
-            -- note rather than a pass, because a check that quietly measures nothing reads green.
-            if inherit and inherit:IsShown() and inherit:GetRight() and button:GetLeft() then
-                local gap = button:GetLeft() - inherit:GetRight()
+            -- And the neighbour above. The inherit button hides itself when there is nothing to
+            -- inherit from, so a gap can only be measured when it is actually up — and "it was
+            -- hidden" is a note rather than a pass, because a check that quietly measures nothing
+            -- reads green.
+            if inherit and inherit:IsShown() and inherit:GetBottom() and button:GetTop() then
+                local gap = inherit:GetBottom() - button:GetTop()
                 notes[#notes + 1] = string.format("clears the inherit button by %d",
                     math.floor(gap + 0.5))
                 if gap < 0 then
-                    faults[#faults + 1] = "it overlaps the inherit button beside it"
+                    faults[#faults + 1] = "it overlaps the inherit button above it"
                 end
             else
                 notes[#notes + 1] = "the inherit button is hidden, so the gap was not measured"
