@@ -40,7 +40,8 @@ only be tested by wearing the bug.
 
 ## The Process — NON-NEGOTIABLE
 
-**RED → GREEN → REVIEW (repeat until clean) → COMMIT → propose next → repeat.** One item, one commit.
+**RED → GREEN → REVIEW (repeat until clean) → COMMIT → DEPLOY → propose next → repeat.**
+One item, one commit.
 
 > **⭐ "propose next" applies at the end of EVERY completed goal or task** — not only backlog
 > items worked RED→GREEN. A fix, a spike, a tidy-up, a one-off chore: if anything is open when it
@@ -57,10 +58,19 @@ only be tested by wearing the bug.
 3. **REVIEW** — read the diff for correctness, style, and simplification. Fix, re-verify, repeat
    until the review is clean.
 4. **COMMIT** — immediately, one behaviour per commit.
-5. **Propose the next item and wait** for a go-ahead.
+5. **DEPLOY** — `pwsh -File deploy.ps1`, every time, without being asked.
+6. **Propose the next item and wait** for a go-ahead.
 
 **Hard rules:** never implement before the failure is confirmed; never skip the review; never batch
-two items into one commit; never commit with `run-all.ps1` red.
+two items into one commit; never commit with `run-all.ps1` red; never finish without deploying.
+
+**⭐ DEPLOY IS A STEP, NOT A FAVOUR.** The gate proves the pure logic; it cannot draw a frame, and
+most of what this addon does only exists in a client. Leaving the work in the repo means the next
+`/reload` loads the OLD addon — so the Admiral looks at the previous build, reports the bug again,
+and the round trip that in-client work is already expensive in gets spent twice. Deploy AFTER the
+commit, so what is installed is a build that exists in history and can be named. If `deploy.ps1`
+cannot find the client, say so and hand over the `-WowPath` line — a failed deploy is a reportable
+outcome, never a silent skip. *(Admiral's order, 2026-09-12.)*
 
 **Extract the testable seam.** Pull decisions out of the frame/event code into plain functions that
 take tables and return tables, and test *those* exhaustively. The wiring left behind is thin enough
@@ -71,7 +81,7 @@ to eye-verify. This is the single highest-leverage habit in this codebase.
 ```bash
 pwsh -File Tests/run-all.ps1                    # the gate — every pure test
 lua Tests/core_test.lua                         # one file (run from the project root)
-pwsh -File deploy.ps1                           # copy into the WoW AddOns folder
+pwsh -File deploy.ps1                           # THE LAST STEP OF EVERY TASK — into the AddOns folder
 pwsh -File deploy.ps1 -WowPath "D:\WoW\_classic_era_"
 ```
 
