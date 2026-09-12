@@ -1194,6 +1194,89 @@ key:GetScript("OnKeyDown")(key, "ENTER")
 H.eq(G.Kitbag.char.sets.Set07.key, "F9", "Enter commits the currently proposed key")
 H.eq(keyboard[#keyboard], false, "committing gives the keyboard back")
 
+-- VERIFY-16 does not pass, or fail, on a measurement it could not take
+-- ---------------------------------------------------------------------------
+--
+-- The check used to report a tidy PASS with "the inherit button is hidden, so the gap was not
+-- measured" tucked into its own detail line. Both 2026 runs before UI-34 said exactly that and were
+-- counted as passes — so the geometry half of VERIFY-16 had never once run, nobody knew, and the
+-- key button quietly overran its 82px on any character that had actually bound a key. A PASS
+-- carrying "not measured" is a SKIP wearing a pass's colour.
+--
+-- The same disease points the other way too, and that half is worse. Widths here are 0, because the
+-- mock cannot lay a window out and says so. `strWidth > width - 8` on two zeroes is `0 > -8` — so
+-- the check reported "the label clips its own button" about a button that has no geometry at all.
+-- A fault invented out of an absent measurement is exactly the red line somebody believes that the
+-- header of this section warns about.
+--
+-- One rule covers both: a number the client has not got yet is UNMEASURED. It never becomes a pass
+-- and it never becomes a fault. What WAS measured still goes in the detail, because withholding the
+-- pass is the point, not withholding the evidence.
+local keyCheck
+for _, check in ipairs(Kitbag.Verify.CHECKS) do
+    if check.id == "key-button" then keyCheck = check end
+end
+H.ok(keyCheck ~= nil, "the keybinding check is registered under the id the acts and tests use")
+
+UI.Select("Set07")
+local inheritButton = G.KitbagInheritButton
+-- Pinned, because the mock hands back a NEW font string on every call — an override written to the
+-- one you happened to fetch first would simply never be read, and the test would quietly measure
+-- the mock's zeroes while appearing to set up a layout.
+local keyLabel = key:GetFontString()
+rawset(key, "GetFontString", function() return keyLabel end)
+
+-- The mock's own state, unhelped: no geometry anywhere. This is what a check run before the window
+-- has ever been laid out sees in the client too.
+local blindOk, blindDetail = keyCheck.run()
+H.eq(blindOk, nil, "with no geometry at all the check SKIPS — it does not invent a clipping fault")
+H.ok(tostring(blindDetail):find("not measured", 1, true) ~= nil,
+    "…and says so, rather than reporting a width it never had")
+
+-- Now a laid-out window, using the numbers the real client reported on 2026-09-12: a
+-- "CTRL-NUMPAD9" label 100 wide in the 216-wide button, sitting 4 below the inherit button.
+local function layout(labelWidth, buttonWidth, gap)
+    rawset(keyLabel, "GetStringWidth", function() return labelWidth end)
+    rawset(key, "GetWidth", function() return buttonWidth end)
+    rawset(key, "GetTop", function() return 400 end)
+    rawset(inheritButton, "GetBottom", function() return 400 + gap end)
+end
+
+layout(100, 216, 4)
+local okPass, passDetail = keyCheck.run()
+H.eq(okPass, true, "a fully measured, correct layout passes")
+H.ok(tostring(passDetail):find("100 wide in 216", 1, true) ~= nil,
+    "…reporting the label against the button that has to hold it")
+H.ok(tostring(passDetail):find("clears the inherit button by 4", 1, true) ~= nil,
+    "…and the clearance UI-34 put there")
+
+-- The fault path, so this section cannot be satisfied by a check that never faults. These are the
+-- pre-UI-34 numbers: the same 100px label in the old 82px button.
+layout(100, 82, 4)
+local okClip, clipDetail = keyCheck.run()
+H.eq(okClip, false, "a label wider than its button is a FAIL, now that the width is real")
+H.ok(tostring(clipDetail):find("clips", 1, true) ~= nil, "…and says it clips")
+
+-- And the condition that produced a month of false confidence. The inherit button hides itself on a
+-- character with one set — which is every fresh character, and every test character anybody spins
+-- up to check something quickly.
+layout(100, 216, 4)
+inheritButton:Hide()
+local skipOk, skipDetail = keyCheck.run()
+H.eq(skipOk, nil, "a gap that could not be measured SKIPS — it does not ride inside a pass")
+H.ok(tostring(skipDetail):find("not measured", 1, true) ~= nil,
+    "…naming the measurement it could not take, so the reader knows what is still owed")
+H.ok(tostring(skipDetail):find("100 wide in 216", 1, true) ~= nil,
+    "…while still reporting what it COULD measure — a skip withholds the pass, not the evidence")
+
+-- A real fault outranks an unmeasured neighbour: something is wrong and saying "I could not fully
+-- check" would bury it.
+layout(100, 82, 4)
+local okBoth = keyCheck.run()
+H.eq(okBoth, false, "a fault still FAILS even when something else went unmeasured")
+inheritButton:Show()
+
+-- ---------------------------------------------------------------------------
 -- Closing the window mid-capture. Not by calling the handler directly: the whole question is whether
 -- hiding the WINDOW reaches a button several frames down, which is what OnHide is registered for.
 G.KitbagFrame:Hide()

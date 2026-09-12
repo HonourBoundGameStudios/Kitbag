@@ -1236,7 +1236,20 @@ Verify.CHECKS = {
                 return nil, "no set is selected, so there is nothing for it to bind — select one"
             end
 
-            local faults, notes = {}, {}
+            -- Three outcomes, and `unmeasured` is what keeps them apart. A number the client has
+            -- not got yet belongs in none of the other two buckets: it is not a pass, and it is not
+            -- a fault. Both mistakes were live in this check at once.
+            --
+            -- The PASS one cost a month. "the inherit button is hidden, so the gap was not
+            -- measured" was a NOTE on a passing check, so both runs before UI-34 reported a tidy
+            -- pass over geometry that had never been measured, while the button overran its 82px on
+            -- any character with a key actually bound.
+            --
+            -- The FAULT one is worse for being loud. A frame the client has not laid out answers 0
+            -- to every geometry question, and `strWidth > width - 8` on two zeroes is `0 > -8` — so
+            -- a check run before the window was ever drawn announced "the label clips its own
+            -- button" about a button with no geometry at all. That is a red line somebody believes.
+            local faults, notes, unmeasured = {}, {}, {}
 
             -- The label against the stored key, read through the same accessor the window uses. A
             -- separate reading of Kitbag.char.sets here would be a second reader of the schema and
@@ -1252,12 +1265,20 @@ Verify.CHECKS = {
             end
             notes[#notes + 1] = string.format("reads %q", tostring(text))
 
+            -- Whether there is any geometry to read, asked ONCE and off the subject's own width.
+            -- Every measurement below hangs on this rather than guessing separately, because "the
+            -- window has not been laid out" is one fact about the world and not one per number.
+            local width = button:GetWidth()
+            local laidOut = type(width) == "number" and width > 0
+
             -- Clipping. UIPanelButtonTemplate lets its text run under its own edge rather than
             -- shrinking, so a long chord — ALT-CTRL-SHIFT-F12 is bindable — simply spills.
             local label = button.GetFontString and button:GetFontString()
             local strWidth = label and label.GetStringWidth and label:GetStringWidth()
-            local width = button:GetWidth()
-            if strWidth and width then
+            if not laidOut or not strWidth then
+                unmeasured[#unmeasured + 1] =
+                    "the button has no width yet, so the label was not measured against it"
+            else
                 notes[#notes + 1] = string.format("%d wide in %d",
                     math.floor(strWidth + 0.5), math.floor(width + 0.5))
                 if strWidth > width - 8 then
@@ -1266,21 +1287,33 @@ Verify.CHECKS = {
             end
 
             -- And the neighbour above. The inherit button hides itself when there is nothing to
-            -- inherit from, so a gap can only be measured when it is actually up — and "it was
-            -- hidden" is a note rather than a pass, because a check that quietly measures nothing
-            -- reads green.
-            if inherit and inherit:IsShown() and inherit:GetBottom() and button:GetTop() then
-                local gap = inherit:GetBottom() - button:GetTop()
+            -- inherit from — a character with one saved set, which is every fresh character and
+            -- every scratch one anybody spins up to check something quickly.
+            if not laidOut then
+                unmeasured[#unmeasured + 1] =
+                    "the window has not been laid out, so the gap was not measured"
+            elseif not (inherit and inherit:IsShown()) then
+                unmeasured[#unmeasured + 1] =
+                    "the inherit button is hidden, so the gap was not measured"
+            else
+                local gap = (inherit:GetBottom() or 0) - (button:GetTop() or 0)
                 notes[#notes + 1] = string.format("clears the inherit button by %d",
                     math.floor(gap + 0.5))
                 if gap < 0 then
                     faults[#faults + 1] = "it overlaps the inherit button above it"
                 end
-            else
-                notes[#notes + 1] = "the inherit button is hidden, so the gap was not measured"
             end
 
+            -- A fault outranks an unmeasured neighbour: something IS wrong, and answering "I could
+            -- not fully check" would bury it. Otherwise anything unmeasured costs the pass — but
+            -- not the evidence, which is why what was measured is still printed alongside.
             if #faults > 0 then return false, table.concat(faults, "; ") end
+            if #unmeasured > 0 then
+                local said = {}
+                for _, line in ipairs(notes) do said[#said + 1] = line end
+                for _, line in ipairs(unmeasured) do said[#said + 1] = line end
+                return nil, table.concat(said, ", ")
+            end
             return true, table.concat(notes, ", ")
         end,
     },
