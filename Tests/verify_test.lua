@@ -248,6 +248,16 @@ H.ok(source:find("inherit:GetBottom()", 1, true) ~= nil,
 H.ok(not source:find("button:GetLeft() - inherit:GetRight()", 1, true),
     "…and no longer subtracts edges that stopped facing each other")
 
+-- VERIFY-10's picker check, which had the same disease pointed the other way: it returned FAIL —
+-- the report's most expensive line — on "a named piece of the picker is missing, so nothing could
+-- be measured". Nothing measured is not a fault found. The sentence is source-scanned rather than
+-- behaviour-tested because it is the wording itself that was wrong: it named no piece, so even a
+-- reader who trusted the red line had nowhere to go with it.
+H.ok(not source:find("a named piece of the picker is missing", 1, true),
+    "the picker check no longer FAILS on a measurement it never took, in a sentence naming nothing")
+H.ok(source:find("KitbagPickerScrollScrollBar does not exist", 1, true) ~= nil,
+    "…it names the one piece it does NOT create, which is the piece whose absence is a skip")
+
 -- VERIFY-1's OTHER half, and the reason it is a check at all. The scriptErrors act has sat at the
 -- top of the list since the first run, asking a person to turn Lua errors on — and on 2026-09-12 it
 -- turned out to have been ON for four days. Nobody could tell, because the only way to answer it

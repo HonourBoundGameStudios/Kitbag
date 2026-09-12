@@ -655,6 +655,11 @@ Verify.CHECKS = {
         -- is the one that cannot be reasoned from our side at all: FauxScrollFrameTemplate hangs its
         -- bar OUTSIDE the scroll frame by an amount Blizzard chooses, and BAR_STRIP is this addon's
         -- guess at that amount. A guess about someone else's layout is exactly what measuring is for.
+        --
+        -- Which is why the pieces this check needs are NOT four of a kind, and why treating them as
+        -- four of a kind produced a FAIL — the report's most expensive line, the one somebody acts
+        -- on — out of a run that had not looked at the picker's layout at all. VERIFY-16's disease,
+        -- one check over and wearing the opposite colour.
         run = function()
             local Picker, Sets = Kitbag.Picker, Kitbag.Sets
             if not Picker or not Sets then return nil, "KitbagPicker is not loaded" end
@@ -672,34 +677,61 @@ Verify.CHECKS = {
             local grid  = _G.KitbagPickerGrid
             local close = _G.KitbagPickerClose
             local title = _G.KitbagPickerTitle
-            local bar   = _G.KitbagPickerScrollScrollBar
-            if not (grid and close and title and bar) then
+
+            -- These three are created BY NAME in KitbagPicker, so one of them missing means the
+            -- picker did not build, or this check has gone stale against a rename. Something really
+            -- is broken either way: FAIL — and name the piece, because "a named piece is missing"
+            -- is not a sentence anybody can act on without diffing globals against a file.
+            local absent = {}
+            for _, piece in ipairs({
+                { name = "KitbagPickerGrid",  frame = grid },
+                { name = "KitbagPickerClose", frame = close },
+                { name = "KitbagPickerTitle", frame = title },
+            }) do
+                if not piece.frame then absent[#absent + 1] = piece.name end
+            end
+            if #absent > 0 then
                 Picker.Close()
-                -- Naming these is what makes the measurement possible, so a missing name is a broken
-                -- check rather than a skippable condition — say so instead of quietly passing.
-                return false, "a named piece of the picker is missing, so nothing could be measured"
+                return false, string.format("%s %s no global name, so the picker's layout cannot be "
+                    .. "measured", table.concat(absent, ", "), #absent == 1 and "has" or "have")
             end
 
-            local faults, notes = {}, {}
+            -- The fourth piece is Blizzard's, not ours: the template names its bar $parentScrollBar,
+            -- so KitbagPickerScrollScrollBar is a guess at someone else's naming as much as BAR_STRIP
+            -- is a guess at their spacing. Absent, it is a measurement this check could not take —
+            -- not a fault in a layout it never looked at.
+            local bar = _G.KitbagPickerScrollScrollBar
+
+            local faults, notes, unmeasured = {}, {}, {}
             local function edge(a, b) return a and b and (a - b) or nil end
 
             -- 1. The bar must start at or right of the grid's right edge, or it sits on the icons.
-            local clearance = edge(bar:GetLeft(), grid:GetRight())
-            if clearance then
-                notes[#notes + 1] = string.format("bar clears the last column by %d", clearance)
-                if clearance < 0 then
-                    faults[#faults + 1] = string.format(
-                        "the scroll bar overlaps the last column of icons by %d", -clearance)
-                end
-            end
-
             -- 2. The close button must sit above the bar, not on its top end.
-            local gap = edge(close:GetBottom(), bar:GetTop())
-            if gap then
-                notes[#notes + 1] = string.format("close clears the bar by %d", gap)
-                if gap < 0 then
-                    faults[#faults + 1] = string.format(
-                        "the close button overlaps the top of the scroll bar by %d", -gap)
+            if not bar then
+                unmeasured[#unmeasured + 1] = "KitbagPickerScrollScrollBar does not exist, so the "
+                    .. "bar's clearance of the last column and the close button's gap above it both "
+                    .. "went unread"
+            else
+                local clearance = edge(bar:GetLeft(), grid:GetRight())
+                if clearance then
+                    notes[#notes + 1] = string.format("bar clears the last column by %d", clearance)
+                    if clearance < 0 then
+                        faults[#faults + 1] = string.format(
+                            "the scroll bar overlaps the last column of icons by %d", -clearance)
+                    end
+                else
+                    unmeasured[#unmeasured + 1] = "the bar's clearance of the last column"
+                end
+
+                local gap = edge(close:GetBottom(), bar:GetTop())
+                if gap then
+                    notes[#notes + 1] = string.format("close clears the bar by %d", gap)
+                    if gap < 0 then
+                        faults[#faults + 1] = string.format(
+                            "the close button overlaps the top of the scroll bar by %d", -gap)
+                    end
+                else
+                    unmeasured[#unmeasured + 1] = "the close button's gap above the bar"
                 end
             end
 
@@ -712,15 +744,34 @@ Verify.CHECKS = {
                     faults[#faults + 1] = string.format(
                         "a long set name runs under the close button by %d", -room)
                 end
+            else
+                unmeasured[#unmeasured + 1] = "the title's room before the close button"
             end
-            if title.GetNumLines and title:GetNumLines() > 1 then
-                faults[#faults + 1] = "the title wrapped onto a second line, which lands on the icons"
+
+            -- A FontString reports NO lines until the client has laid it out, so "not more than one"
+            -- is an answer we may not have yet. Reading that absence as "it did not wrap" is how a
+            -- wrap that lands on the first row of icons rides inside a pass.
+            local lines = title.GetNumLines and title:GetNumLines()
+            if lines and lines >= 1 then
+                if lines > 1 then
+                    faults[#faults + 1] =
+                        "the title wrapped onto a second line, which lands on the icons"
+                end
+            else
+                unmeasured[#unmeasured + 1] = "whether the title wrapped onto a second line"
             end
 
             Picker.Close()
 
-            if #notes == 0 then return nil, "no edges could be read — the panel may not be laid out yet" end
+            -- A fault outranks anything unmeasured: something IS wrong, and "I could not fully
+            -- check" would bury it. Otherwise an unread edge costs the pass but NOT the evidence —
+            -- what was measured is still printed, because withholding the pass is the point.
             if #faults > 0 then return false, table.concat(faults, "; ") end
+            if #unmeasured > 0 then
+                local detail = "not measured: " .. table.concat(unmeasured, "; ")
+                if #notes > 0 then detail = detail .. "; measured: " .. table.concat(notes, ", ") end
+                return nil, detail
+            end
             return true, table.concat(notes, ", ")
         end,
     },

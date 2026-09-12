@@ -35,7 +35,7 @@ H.start("Kitbag load")
 local NUMBER_GETTERS = {
     GetWidth = true, GetHeight = true, GetScale = true, GetEffectiveScale = true,
     GetLeft = true, GetRight = true, GetTop = true, GetBottom = true,
-    GetNumPoints = true, GetStringWidth = true, GetTextWidth = true,
+    GetNumPoints = true, GetStringWidth = true, GetTextWidth = true, GetNumLines = true,
     GetFrameLevel = true, GetAlpha = true, GetValue = true,
 }
 local STRING_GETTERS = { GetName = true, GetText = true, GetFrameStrata = true, GetObjectType = true }
@@ -1747,5 +1747,90 @@ H.ok(G.KitbagPreviewModel and G.KitbagPreviewModel:GetParent() == previewFrame,
     "…and the model is INSIDE it, so it hides, clips and moves with the well rather than beside it")
 H.ok(previewFrame and previewFrame:GetParent() == G.KitbagInspector,
     "…and the well belongs to the inspector panel that owns the cells around it")
+
+-- ---------------------------------------------------------------------------
+-- picker-layout does not paint a FAULT over a measurement it never took (VERIFY-10)
+-- ---------------------------------------------------------------------------
+--
+-- VERIFY-16's disease, one check over, and wearing the opposite colour. That check reported a PASS
+-- carrying "not measured"; this one reported a FAIL carrying "nothing could be measured" — a red
+-- line asserting the picker's layout is wrong, produced by a run that never looked at the picker's
+-- layout. A FAIL is the most expensive line in the report, because it is the one somebody acts on.
+--
+-- The four names it needs are not four of a kind, and that is the whole fix. Three of them —
+-- KitbagPickerGrid, KitbagPickerClose, KitbagPickerTitle — are created BY NAME in KitbagPicker, so
+-- one going missing means the picker did not build or this check has gone stale against a rename.
+-- Either way something really is broken, and FAIL is right. The fourth is Blizzard's:
+-- FauxScrollFrameTemplate names its bar $parentScrollBar, and KitbagPickerScrollScrollBar is this
+-- addon's GUESS at someone else's template. Absent, it is a measurement we could not take.
+--
+-- The mock has no templates, so the bar is genuinely absent here — this file IS the blind case, the
+-- same way it is for VERIFY-16.
+local pickerCheck
+for _, check in ipairs(Kitbag.Verify.CHECKS) do
+    if check.id == "picker-layout" then pickerCheck = check end
+end
+H.ok(pickerCheck ~= nil, "the picker layout check is registered under the id the acts and tests use")
+
+H.eq(rawget(G, "KitbagPickerScrollScrollBar"), nil,
+    "the mock expands no templates, so the scroll bar is absent exactly as it would be in a client "
+    .. "whose template did not name it")
+
+local blindOk, blindDetail = pickerCheck.run()
+H.eq(blindOk, nil,
+    "a bar this addon never creates going missing SKIPS — nothing was measured, so nothing is wrong")
+H.ok(tostring(blindDetail):find("KitbagPickerScrollScrollBar", 1, true) ~= nil,
+    "…naming the piece it could not find, so the reader knows which measurement is still owed")
+H.ok(tostring(blindDetail):find("title stops", 1, true) ~= nil,
+    "…while still reporting the one edge that never needed the bar — a skip withholds the pass, "
+    .. "not the evidence")
+
+local pickerTitle, pickerClose, pickerGrid = G.KitbagPickerTitle, G.KitbagPickerClose, G.KitbagPickerGrid
+local function edges(titleRight, closeLeft)
+    rawset(pickerTitle, "GetRight", function() return titleRight end)
+    rawset(pickerClose, "GetLeft", function() return closeLeft end)
+end
+
+-- A real fault outranks an unmeasured neighbour: something IS wrong, and "I could not fully check"
+-- would bury it. This is the one VERIFY-10 was written for — a set name long enough to run under
+-- the close button, which is unreadable rather than ugly.
+edges(200, 188)
+local faultOk, faultDetail = pickerCheck.run()
+H.eq(faultOk, false, "a name running under the close button FAILS even with the bar unmeasured")
+H.ok(tostring(faultDetail):find("under the close button by 12", 1, true) ~= nil,
+    "…and the FAIL says what is wrong and by how much, rather than that it saw nothing")
+edges(0, 0)
+
+-- A name the addon creates ITSELF is different in kind, and still a FAIL — but it has to say which
+-- one, or the reader is sent to diff four globals against a file to find out.
+local realTitle = G.KitbagPickerTitle
+G.KitbagPickerTitle = nil
+local brokenOk, brokenDetail = pickerCheck.run()
+G.KitbagPickerTitle = realTitle
+H.eq(brokenOk, false,
+    "a piece KitbagPicker names itself going missing is a FAIL — the picker did not build, or this "
+    .. "check has gone stale against a rename")
+H.ok(tostring(brokenDetail):find("KitbagPickerTitle", 1, true) ~= nil,
+    "…naming which one, because 'a named piece' is not something anybody can act on")
+
+-- And the measured case, so this section cannot be satisfied by a check that never passes. The
+-- title's 0 is the real client number from 2026-08-16: a fixed-width FontString whose right edge
+-- lands exactly on the close button. No margin, and by construction — which is why the PASS line
+-- has to print it rather than merely not complain.
+local mockBar = newWidget("KitbagPickerScrollScrollBar")
+rawset(mockBar, "GetLeft", function() return 210 end)
+rawset(mockBar, "GetTop", function() return 380 end)
+rawset(pickerGrid, "GetRight", function() return 206 end)
+rawset(pickerClose, "GetBottom", function() return 384 end)
+rawset(pickerTitle, "GetNumLines", function() return 1 end)
+G.KitbagPickerScrollScrollBar = mockBar
+local laidOk, laidDetail = pickerCheck.run()
+G.KitbagPickerScrollScrollBar = nil
+H.eq(laidOk, true, "with every edge readable and clear, the check passes")
+H.ok(tostring(laidDetail):find("bar clears the last column by 4", 1, true) ~= nil,
+    "…reporting the clearance BAR_STRIP guesses at, which is the number VERIFY-10 exists to take")
+H.ok(tostring(laidDetail):find("close clears the bar by 4", 1, true) ~= nil, "…the close button's gap")
+H.ok(tostring(laidDetail):find("title stops 0 short of close", 1, true) ~= nil,
+    "…and the title's zero margin, which a reader can only judge if the pass prints it")
 
 H.done()
