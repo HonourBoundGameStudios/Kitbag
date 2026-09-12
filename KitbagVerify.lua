@@ -124,6 +124,53 @@ end
 
 Verify.CHECKS = {
     {
+        id = "script-errors", item = "VERIFY-1", label = "Lua errors are being surfaced",
+        -- FIRST in the list, because it says how much every result under it is worth. A frame that
+        -- was built and then threw leaves exactly the trace of one that worked, so with errors off
+        -- the whole report is weaker than it reads.
+        --
+        -- It exists because the ACT failed, in the most instructive way available. "Type /console
+        -- scriptErrors 1" sat at the top of `/kit session` from the first run, and on 2026-09-12 it
+        -- emerged that it had been ON for four days: the only way anyone could answer it was to
+        -- read a `.wtf` off disk, and the file everyone reaches for is the WRONG one.
+        -- `WTF/Config.wtf` is MACHINE-scoped; `/console` writes per-account CVars to
+        -- `WTF/Account/<ACCOUNT>/config-cache.wtf`. A month of notes recorded "never run" on the
+        -- strength of grepping the wrong path, and the mistake survived because the conclusion was
+        -- re-read rather than the measurement re-taken.
+        --
+        -- The client knew all along and was never asked. That is the general rule worth keeping: a
+        -- fact the addon can READ must never be a fact a person has to REMEMBER — what failed here
+        -- was the remembering, not the setting.
+        --
+        -- It FAILS rather than SKIPS when errors are off. A skip means "I could not answer"; this
+        -- check answered, and the answer was bad. The distinction is the one this whole file is
+        -- built on, and it would be a poor place to blur it.
+        run = function()
+            if not GetCVar then return nil, "this client has no GetCVar to ask" end
+
+            -- Guarded like every other client call here: an unknown CVar name throws on some
+            -- flavours rather than returning nil, and a self-check that dies on its own first
+            -- question takes the whole report with it.
+            local ok, value = pcall(GetCVar, "scriptErrors")
+            if not ok or value == nil then
+                return nil, "the client would not say — scriptErrors could not be read"
+            end
+
+            -- Compared as a NUMBER. The CVar reads back as the string "1" here, but CVars are
+            -- stringly typed by convention rather than by guarantee, and `value == "1"` failing
+            -- against a numeric 1 would report the net down while it was up — which is the exact
+            -- error this check was written to end, committed a second time.
+            if tonumber(value) == 1 then
+                return true, "scriptErrors is " .. tostring(value)
+                    .. ", so a frame that throws says so on screen rather than failing silently"
+            end
+
+            return false, "scriptErrors is " .. tostring(value)
+                .. " — Lua errors are NOT shown, so every PASS in this run is weaker than it "
+                .. "looks. This is the SESSION, not the addon: /console scriptErrors 1, then reload"
+        end,
+    },
+    {
         id = "forms", item = "VERIFY-1", label = "Shapeshift form labels",
         -- The silent failure this whole check exists for: GetShapeshiftFormInfo's signature differs
         -- between flavours and reading it wrong does not error, it labels everything "form <n>".
@@ -1634,7 +1681,14 @@ end
 Verify.ACTS = {
     {
         item = "VERIFY-1", act = "Type /console scriptErrors 1 before anything else.",
-        why = "Errors are OFF. A frame that was built and then threw later leaves the same trace "
+        -- `answeredBy` is what makes the sentence below TRUE WHENEVER IT IS PRINTED. The act used
+        -- to assert "Errors are OFF" unconditionally, and was therefore wrong on every run where
+        -- they were on — which turned out to be four days' worth nobody noticed. With a check
+        -- behind it the act appears only when that check did not pass, so the claim and the world
+        -- cannot drift apart: the list stops asking the moment the client says it is done.
+        answeredBy = "script-errors",
+        why = "Errors are NOT KNOWN TO BE ON — the check above either read them off, or could not "
+            .. "read them at all. A frame that was built and then threw later leaves the same trace "
             .. "as one that worked, so every PASS below is weaker than it looks until this is on.",
     },
     {

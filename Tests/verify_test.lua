@@ -248,6 +248,27 @@ H.ok(source:find("inherit:GetBottom()", 1, true) ~= nil,
 H.ok(not source:find("button:GetLeft() - inherit:GetRight()", 1, true),
     "…and no longer subtracts edges that stopped facing each other")
 
+-- VERIFY-1's OTHER half, and the reason it is a check at all. The scriptErrors act has sat at the
+-- top of the list since the first run, asking a person to turn Lua errors on — and on 2026-09-12 it
+-- turned out to have been ON for four days. Nobody could tell, because the only way to answer it
+-- was to read a `.wtf` file off disk, and the first file anyone reaches for is the WRONG one:
+-- `WTF/Config.wtf` is machine-scoped, while `/console` writes per-account CVars to
+-- `WTF/Account/<ACCOUNT>/config-cache.wtf`. A month of notes said "never run" on the strength of
+-- grepping the wrong path.
+--
+-- The client knows the answer and can simply be asked. That is the whole argument for this check:
+-- a fact the addon can read must never be a fact a person has to remember, because the remembering
+-- is what went wrong — not the setting.
+H.ok(byId["script-errors"] ~= nil,
+    "a check asks the CLIENT whether Lua errors are being surfaced, instead of asking a person")
+H.eq(byId["script-errors"] and byId["script-errors"].item, "VERIFY-1",
+    "…and it names the item it answers")
+-- `GetCVar`, not the string "scriptErrors": that word is in the ACT text as well, so finding it
+-- proved only that the checklist still mentions the thing — which was true throughout the month
+-- the claim was wrong. The call is what distinguishes asking the client from asking a person.
+H.ok(source:find("pcall(GetCVar", 1, true) ~= nil,
+    "…by actually calling GetCVar, guarded, rather than restating what the checklist already said")
+
 -- A SKIP has to say which situation it is in, because the reader's next action differs completely.
 -- "Go and do it" and "there is nothing to do it with" are opposite instructions, and a skip that
 -- gives the first when the second is true sends someone off to reproduce a thing that cannot happen.
@@ -367,12 +388,35 @@ H.ok(skipping:find("A fixture act", 1, true) ~= nil,
 
 V.ACTS[#V.ACTS] = nil
 
--- And the count that keeps the claim above honest as acts are added.
+-- And what keeps the mechanism honest as acts are added. This USED to assert that no shipped act
+-- carried `answeredBy` at all — true from the restore-previous removal until 2026-09-12, and an
+-- assertion that could only ever get weaker: it passed by measuring nothing.
+--
+-- The scriptErrors act now has a real check behind it, so the invariant that matters is different
+-- and stronger: an `answeredBy` must name a check that EXISTS. A typo there does not error and does
+-- not fail — `isAnswered` simply never matches, and the act is asked for forever by a mechanism
+-- that looks like it is working. That is the same shape as the wrong-`.wtf`-file mistake this check
+-- was written about, which is why it is worth a test rather than care.
+local answeredBy = 0
 for _, act in ipairs(V.ACTS) do
-    H.eq(act.answeredBy, nil,
-        "no shipped act claims a check can perform it — an act retired by a check that did NOT "
-        .. "perform it is worse than no checklist at all")
+    if act.answeredBy then
+        answeredBy = answeredBy + 1
+        H.ok(byId[act.answeredBy] ~= nil,
+            "an act retired by a check names a check that EXISTS (" .. tostring(act.answeredBy)
+            .. ") — a typo here asks for the act forever and looks like it is working")
+    end
 end
+H.ok(answeredBy > 0,
+    "…and at least one shipped act really is settled by a check, so the loop measures something")
+
+-- Named outright, because this is the one the mechanism was rebuilt for.
+local errorsAct
+for _, act in ipairs(V.ACTS) do
+    if act.act:find("scriptErrors", 1, true) then errorsAct = act end
+end
+H.ok(errorsAct ~= nil, "the scriptErrors act is still shipped — a person must still turn it ON")
+H.eq(errorsAct and errorsAct.answeredBy, "script-errors",
+    "…but it stops being asked for the moment the check can see that they did")
 
 -- With no run at all, everything is owed. The failure this prevents is the opposite of the one
 -- VERIFY-11's last question — "does the wheel scroll over the ROWS, or only over the bar" — is asked
