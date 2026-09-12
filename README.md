@@ -57,7 +57,7 @@ Supports **Classic Era**. That is the only flavour Kitbag ships for.
 
 ## Status
 
-**0.2.2 — the current release.** The planner, sets and set inheritance, the window with per-row
+**0.2.4 — the current release.** The planner, sets and set inheritance, the window with per-row
 readiness and move-by-move tooltips, paperdoll flyouts, set icons, the trinket bar, the settings and
 the ItemRack importer all work. Auto-swap rules are shelved in `Icebox/` — see the note at the top.
 
@@ -80,7 +80,7 @@ as them. Each is an act in the world that no self-check can perform.
 
 **Classic Era is the only flavour.** Mists Classic, Cataclysm and Retail `.toc` files were dropped
 on 2026-09-03: none of the three had ever had a frame drawn on it, and a `.toc` file is a promise
-that the addon runs there. If you installed 0.1.0 on Mists Classic, 0.2.0 will not load for you —
+that the addon runs there. If you installed 0.1.0 on Mists Classic, 0.2.4 will not load for you —
 your saved sets are untouched. Please report what breaks.
 
 ## Licence

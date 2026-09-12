@@ -3,6 +3,36 @@
 All notable changes to Kitbag. The version here is the one in `Kitbag.toc` — the number players
 actually see — and `Tests/toc_test.lua` holds the two together.
 
+## [0.2.4] — 2026-09-12
+
+A long keybinding is readable again, and the self-check report stops answering questions it never
+asked.
+
+### Fixed
+
+- **A bound key with a modifier no longer spills across the panel.** The keybinding button shared a
+  row with Inherit on 82 pixels, and the game spells a chord out in full: `CTRL-NUMPAD9` does not fit
+  in 82 pixels, and the button does not shrink a label that will not fit — it lets it out under its
+  own edges, across the set inspector and the paperdoll either side. The button now has a row of its
+  own beneath Inherit, the full width of the gap between the doll's two columns, and the character
+  model gives up the 24 pixels. A clipped binding is unreadable at any size; the model is not.
+- **`/kit verify` no longer reports results for measurements it never took.** The report is what the
+  addon asks you to paste into a bug report, so a line in it has to mean what its colour says. Three
+  did not. One passed while noting that the thing it checks was not on screen to be measured — a skip
+  wearing a pass's colour, which hid the clipped keybinding above for a month. One announced that a
+  label overran its button, about a window the client had not drawn yet, where every measurement
+  reads zero. One reported a fault in the icon picker without having looked at the picker. A
+  measurement that could not be taken now says so in its own words, and a real fault still outranks
+  it, so nothing gets buried.
+
+### Added
+
+- **The self-check report now opens by saying whether Lua errors are switched on**, because that
+  single line is what every result under it is worth. If errors are off it says so as a failure
+  rather than staying quiet: it asked, and the answer was bad.
+
+If you are updating from 0.2.3 your sets, keybindings and settings are untouched.
+
 ## [0.2.3] — 2026-09-07
 
 Packaging-only release: moves distribution off CurseForge's connected-repo webhook onto a GitHub
