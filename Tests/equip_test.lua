@@ -310,8 +310,22 @@ H.eq(decide({ hasAction = true, satisfied = false, busy = false, tries = 0, wait
 -- after three refused attempts, and it has a different fix. Saying so is our own reading of our own
 -- IsBusy, not a guess at what the client meant — the one thing this seam refuses to invent (BUG-11).
 H.eq(E.Reason({ to = 17 }, nil, "busy"),
-    "stuck on Off hand — you were dead or casting the whole time",
+    "stuck on Off hand — you could not act the whole time",
     "a swap abandoned because the player never became able to act says that, not 'stuck'")
+
+-- BUG-17. "Dead or casting" was the whole vocabulary, and combat lockdown is neither: the sentence
+-- offered the player two things to check that were both false while the real one went unnamed. The
+-- driver knows which condition it waited out — that is its own reading of its own IsBusy — so it
+-- names that one rather than the list it might have been.
+H.eq(E.Reason({ to = 17 }, nil, "combat"),
+    "stuck on Off hand — you were in combat the whole time",
+    "a swap abandoned to combat lockdown names combat, not a menu of conditions")
+H.eq(E.Reason({ to = 17 }, nil, "dead"),
+    "stuck on Off hand — you were dead the whole time",
+    "…and death names death alone, which is the half of the old sentence that was true")
+H.eq(E.Reason({ to = 17 }, nil, "casting"),
+    "stuck on Off hand — you were casting the whole time",
+    "…and casting names casting")
 H.eq(E.Reason({ to = 17 }, "You are dead.", "busy"),
     "stuck on Off hand — the game said: You are dead.",
     "…but the client's own words still win when there are any, since they are the better answer")

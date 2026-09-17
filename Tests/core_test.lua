@@ -1236,11 +1236,29 @@ local blockedCast, castWhy = C.CanSwap({ casting = true })
 H.eq(blockedCast, false, "a casting player may not swap — a swap mid-cast cancels the cast")
 H.eq(castWhy, "casting", "…named distinctly from death, which asks a different thing of the player")
 
--- Combat and mounted are recorded by ActionState and are deliberately NOT blockers: we do not yet
--- know that the client refuses either, and greying a control the client would have honoured is a
--- worse bug than the one this fixes.
+-- Mounted is recorded by ActionState and is deliberately NOT a blocker: we do not know that the
+-- client refuses it, and greying a control the client would have honoured is a worse bug than the
+-- one this fixes. `combat` is UnitAffectingCombat — what the PLAYER is doing — and it is not the
+-- gate the client actually closes, so it stays recorded too. `lockdown` below is that gate.
 H.ok(C.CanSwap({ combat = true, mounted = true }),
-    "combat and mounted are recorded, not refused — guessing would block swaps the client allows")
+    "being in combat is recorded, not refused — the protected-call gate is what decides")
+
+-- BUG-17, and the one condition here that is not a guess about what the client might refuse:
+-- `lockdown` IS the client's own answer to "will a protected call be blocked right now", and
+-- PickupInventoryItem is protected. The driver called it anyway and the client answered with
+-- ADDON_ACTION_BLOCKED — a swap that stopped where it stood, and a popup naming Kitbag to the
+-- player as an addon that did something forbidden.
+local blockedCombat, combatWhy = C.CanSwap({ lockdown = true })
+H.eq(blockedCombat, false, "an addon may not move gear while the client is in combat lockdown")
+H.eq(combatWhy, "combat",
+    "…named for what the player can see about it, not for the API that reports it")
+
+-- Combat outranks casting for the same reason death outranks it: a fight does end by itself, but
+-- not in the second or two the driver waits a cast out, so it is the one to send the player to.
+H.eq(select(2, C.CanSwap({ lockdown = true, casting = true })), "combat",
+    "in combat and casting names combat — the durable condition, as everywhere else here")
+H.eq(select(2, C.CanSwap({ dead = true, lockdown = true })), "dead",
+    "…and death still outranks it: a fight ends without the player choosing, and death does not")
 
 -- Dead outranks casting: a cast ends by itself in a second or two and death does not, so naming the
 -- transient one would send the player off to wait for the wrong thing to pass.
@@ -1255,8 +1273,36 @@ H.ok(C.CanSwap({}), "an empty state is 'nothing is wrong', not 'everything is'")
 -- The wording lives with the decision for the same reason the decision does: three frames writing
 -- their own sentence is three chances to explain the grey differently, or not at all (UI-11).
 H.ok(type(C.SWAP_BLOCKED) == "table", "the reasons carry player-facing wording")
-H.ok(type(C.SWAP_BLOCKED.dead) == "string" and type(C.SWAP_BLOCKED.casting) == "string",
+H.ok(type(C.SWAP_BLOCKED.dead) == "string" and type(C.SWAP_BLOCKED.casting) == "string"
+    and type(C.SWAP_BLOCKED.combat) == "string",
     "…for every reason CanSwap can return")
+
+
+-- ---------------------------------------------------------------------------
+-- CanUse — the same question asked on behalf of a SECURE control (BUG-17)
+-- ---------------------------------------------------------------------------
+--
+-- The trinket bar's buttons are SecureActionButtonTemplate with their attributes fixed at creation,
+-- so the click that fires them is the PLAYER's and the client honours it mid-fight — which is the
+-- only time anyone clicks a trinket. Combat lockdown shuts the door on Kitbag's own calls and on
+-- nothing else, so a bar dimmed for the length of every fight would be the addon reporting its own
+-- limitation as the player's.
+--
+-- Asked here rather than by the frame subtracting a condition it disagrees with: a frame with its
+-- own opinion of what "blocked" means is the drift UI-19 was about, pointing the other way.
+
+H.ok(C.CanUse({ lockdown = true }),
+    "a secure control still works in combat — the lockdown is on the addon, not on the player")
+H.eq(select(2, C.CanUse({ lockdown = true })), nil,
+    "…so there is no refusal to explain, and no tooltip line to look up")
+
+local useDead, useDeadWhy = C.CanUse({ dead = true })
+H.eq(useDead, false, "death still refuses: the client will not use a trinket for a corpse either")
+H.eq(useDeadWhy, "dead", "…and it is the same reason key, so the same sentence explains it")
+H.eq(select(2, C.CanUse({ casting = true })), "casting",
+    "casting likewise — the conditions that are about the PLAYER are unchanged")
+H.ok(C.CanUse({ lockdown = true, dead = true }) == false,
+    "combat does not excuse a condition that stands on its own")
 
 
 -- ---------------------------------------------------------------------------

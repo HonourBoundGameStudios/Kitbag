@@ -249,11 +249,18 @@ end
 -- guessing wrong in IsBusy would refuse swaps the client would have accepted. Recording them costs
 -- nothing and settles the question the next time a swap fails (BUG-9).
 --
+-- `lockdown` is the exception, and it is not a guess about the player at all: InCombatLockdown is
+-- the client's own report that protected functions are closed, and the driver's PickupInventoryItem
+-- is one. It is kept separate from `combat` because they are different claims — one is what the
+-- player is doing, the other is what the client will let an addon do — and only the second one
+-- decides (BUG-17).
+--
 -- Feature-detected rather than branched on flavour: a condition this client cannot answer comes back
 -- nil, which the dump renders as "no" — the honest reading, since an unasked question is not a yes.
 function Compat.ActionState()
     return {
         combat = _G.UnitAffectingCombat and _G.UnitAffectingCombat("player") or false,
+        lockdown = _G.InCombatLockdown and _G.InCombatLockdown() or false,
         mounted = _G.IsMounted and _G.IsMounted() or false,
         dead = _G.UnitIsDeadOrGhost and _G.UnitIsDeadOrGhost("player") or false,
         casting = (_G.UnitCastingInfo and _G.UnitCastingInfo("player")) ~= nil
@@ -306,7 +313,9 @@ function Compat.ConfirmBind()
     return false
 end
 
---- Is the player currently in a state where swapping gear will be refused or wasted?
+--- Is the player currently in a state where swapping gear will be refused or wasted? Returns
+--- `busy` and, when busy, the `SWAP_BLOCKED` key naming which condition — the driver quotes it in
+--- the failure, and a driver that could only say "busy" reported combat as "dead or casting".
 --
 -- Delegates to `Core.CanSwap` rather than keeping its own copy of the rule (UI-19). This decides
 -- whether the DRIVER acts; the same answer decides whether the control offering the action is even
@@ -318,7 +327,8 @@ end
 function Compat.IsBusy()
     local Core = Kitbag.Core
     if not Core then return false end
-    return not Core.CanSwap(Compat.ActionState())
+    local can, why = Core.CanSwap(Compat.ActionState())
+    return not can, why
 end
 
 Kitbag.Compat = Compat

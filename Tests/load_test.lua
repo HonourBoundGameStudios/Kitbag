@@ -554,7 +554,7 @@ end
 -- is the one function whose whole job is asking the client four questions, and the mock client is
 -- the only place outside the game those can be asked at all.
 local state = G.Kitbag.Compat.ActionState()
-for _, key in ipairs({ "combat", "mounted", "dead", "casting" }) do
+for _, key in ipairs({ "combat", "lockdown", "mounted", "dead", "casting" }) do
     H.ok(state[key] ~= nil, "ActionState answers '" .. key .. "' rather than leaving it absent")
     H.ok(type(state[key]) == "boolean",
         "…as a boolean, so the dump renders it rather than printing a cast's spell name")
@@ -578,6 +578,17 @@ H.eq(G.Kitbag.Compat.IsBusy(), true, "…and a dead one is")
 H.eq(G.Kitbag.Core.CanSwap(G.Kitbag.Compat.ActionState()), false,
     "IsBusy and CanSwap are the same answer read from the same client, not two rules")
 G.UnitIsDeadOrGhost = nil
+
+-- BUG-17, asserted against the live reading for the same reason: the claim is that the driver asks
+-- the CLIENT whether a protected call will be blocked, not that a hand-made table carrying a
+-- lockdown key is refused. InCombatLockdown is stubbed false above, so flipping it is the whole
+-- experiment.
+G.InCombatLockdown = function() return true end
+local combatBusy, combatWhy = G.Kitbag.Compat.IsBusy()
+H.eq(combatBusy, true, "combat lockdown is busy — the client would block the driver's own calls")
+H.eq(combatWhy, "combat",
+    "…and the reason travels with the answer, so the failure can name what it waited out")
+G.InCombatLockdown = function() return false end
 
 -- Sets.Inherit clearing a parent (VERIFY-13), exercised here for exactly the reason ActionState is:
 -- Sets reads the character bucket and the client, so the mock is the only place outside the game it

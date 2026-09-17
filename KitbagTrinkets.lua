@@ -30,9 +30,10 @@ local function onEnter(self)
         GameTooltip:AddLine("Drag the frame to move it.", 0.6, 0.6, 0.6)
     end
     -- UI-19. Set by Refresh, which is polling anyway, so the reason is never staler than a fifth of
-    -- a second. Same sentence as the window and the flyouts, from Core.SWAP_BLOCKED — the two
-    -- conditions it names are both real here: the client refuses to USE an item while you are dead
-    -- or mid-cast exactly as it refuses to equip one.
+    -- a second. Same sentence as the window and the flyouts, from Core.SWAP_BLOCKED — and only the
+    -- conditions that are real here can arrive, because Refresh asks Core.CanUse: the client refuses
+    -- to USE an item while you are dead or mid-cast exactly as it refuses to equip one, and combat
+    -- refuses neither to a secure button.
     if frame and frame.blocked then
         GameTooltip:AddLine(Kitbag.Core.SWAP_BLOCKED[frame.blocked], 1, 0.5, 0.5, true)
     end
@@ -105,8 +106,12 @@ function Trinkets.Refresh()
     -- fixing their attributes at creation is that this file touches nothing protected once combat
     -- starts. A greyed-out look is the honest signal; taking the click away is not worth reaching
     -- into secure state for.
-    local canSwap, why = Kitbag.Core.CanSwap(Kitbag.Compat.ActionState())
-    frame.blocked = (not canSwap) and why or nil
+    --
+    -- CanUse, not CanSwap, and that is the same fact stated once more: the player's click gets
+    -- through in combat where Kitbag's own call does not, so the condition that stops the driver
+    -- must not dim the one control here that still works (BUG-17).
+    local canUse, why = Kitbag.Core.CanUse(Kitbag.Compat.ActionState())
+    frame.blocked = (not canUse) and why or nil
 
     for _, button in ipairs(buttons) do
         local texture = GetInventoryItemTexture("player", button.slotId)

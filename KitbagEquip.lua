@@ -29,6 +29,11 @@ local SETTLE = 0.4
 -- right for the state people actually hit — a cast ends by itself in a second or two — but IsBusy is
 -- also true for DEAD, which does not clear until the player chooses to release, and might not clear
 -- this hour. An unbounded wait is not patience, it is a wedge (BUG-11).
+--
+-- Combat is now inside that bound too (BUG-17), and ten seconds is a deliberate refusal to become
+-- ItemRack: a swap pressed mid-fight is given the chance to land if the fight is ending, and is
+-- otherwise reported. Holding it until the fight ends would put gear on minutes after it was asked
+-- for, which is its own bug and a feature to decide on rather than to arrive at by widening a limit.
 local BUSY_LIMIT = 10
 
 -- How long the driver waits for a question the client has put on screen — the Bind-on-Equip
@@ -91,11 +96,26 @@ end
 -- or it arrived and `satisfied` refused to recognise it. Those want opposite fixes and are one
 -- string apart, and the driver had that string in its hand and dropped it (BUG-9, Amoondi's "stuck
 -- on Chest" with nothing blocking and no client message at all).
--- `blocked` names what the driver was waiting on when it gave up: nil, "busy" (the player could
--- never act — our own reading of our own IsBusy, the one interpretation this function is entitled to
--- make) or "bind" (the client asked a question nobody answered). An unanswered question is not a
--- failure of the addon and must not read like one — the sentence should send the player back to the
--- dialog, not to a bug report. The client's own words still win over both.
+-- `blocked` names what the driver was waiting on when it gave up: nil, "bind" (the client asked a
+-- question nobody answered), or the `SWAP_BLOCKED` key IsBusy handed back — our own reading of our
+-- own IsBusy, the one interpretation this function is entitled to make. An unanswered question is
+-- not a failure of the addon and must not read like one — the sentence should send the player back
+-- to the dialog, not to a bug report. The client's own words still win over both.
+--
+-- Keyed rather than composed into one sentence covering every case, because the one sentence was
+-- "you were dead or casting the whole time" and combat lockdown is neither (BUG-17): it offered the
+-- player two things to check that were both false while the real condition went unnamed.
+local BLOCKED_TEXT = {
+    bind = "the bind confirmation was not answered",
+    combat = "you were in combat the whole time",
+    dead = "you were dead the whole time",
+    casting = "you were casting the whole time",
+}
+
+-- A block the driver could not name. It never says WHICH condition, because inventing one is how the
+-- report became wrong in the first place.
+local BLOCKED_UNNAMED = "you could not act the whole time"
+
 function Equip.Reason(failedAction, lastError, blocked, found)
     local slot = failedAction and Core.SlotById(failedAction.to)
     local where = "stuck on " .. (slot and slot.label or "an unknown slot")
@@ -104,10 +124,8 @@ function Equip.Reason(failedAction, lastError, blocked, found)
     -- with nothing after it reads as the addon losing the answer, which is worse than not asking.
     if type(lastError) == "string" and not lastError:match("^%s*$") then
         where = where .. " — the game said: " .. lastError
-    elseif blocked == "bind" then
-        where = where .. " — the bind confirmation was not answered"
     elseif blocked then
-        where = where .. " — you were dead or casting the whole time"
+        where = where .. " — " .. (BLOCKED_TEXT[blocked] or BLOCKED_UNNAMED)
     end
 
     -- Kept alongside the client's message rather than instead of it: the message explains, the keys
@@ -297,7 +315,7 @@ local function step(_, elapsed)
     -- Counted only while the client is refusing to let us act, and reset the moment it stops, so a
     -- player who is dead for eight seconds and then alive does not carry those eight seconds into
     -- the next thing that blocks. It is the plan's patience, not a stopwatch on the plan.
-    local busy = Compat.IsBusy()
+    local busy, busyWhy = Compat.IsBusy()
     queue.blockedFor = busy and (queue.blockedFor + elapsed) or 0
 
     -- Counted separately from `blockedFor`, and reset when the dialog goes away, so answering one
@@ -332,7 +350,7 @@ local function step(_, elapsed)
         -- Read the slot one last time, for the report rather than for the decision. `satisfied` has
         -- already said no; what it does not say is WHAT is in there, and that is the whole difference
         -- between "the item never arrived" and "it arrived and we did not recognise it".
-        return finish(false, action, pendingBind and "bind" or (busy and "busy" or nil),
+        return finish(false, action, pendingBind and "bind" or (busy and (busyWhy or "busy") or nil),
             Core.ItemKey(GetInventoryItemLink("player", action.to)))
     elseif decision == "confirm" then
         -- Not a retry: the action was already performed and is waiting on an answer, so spending a

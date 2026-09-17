@@ -1151,6 +1151,11 @@ end
 Core.SWAP_BLOCKED = {
     dead = "You cannot change gear while dead.",
     casting = "You cannot change gear while casting.",
+    -- Worded as Kitbag's limitation rather than the player's, because that is what it is: the client
+    -- lets you drag a weapon on mid-fight and refuses the same move to an addon. "You cannot change
+    -- gear in combat" would be a sentence the player can disprove in one click.
+    combat = "Kitbag cannot change gear in combat — the game blocks addons from it until the fight "
+        .. "ends.",
 }
 
 --- May gear move right now? Takes a `Compat.ActionState()` reading and returns `true`, or
@@ -1165,9 +1170,16 @@ Core.SWAP_BLOCKED = {
 -- drift would be invisible in exactly one direction — a control that offers what the driver will
 -- refuse — which is the bug, not a variation of it.
 --
--- Combat and mounted are read by `ActionState` and are deliberately not refused here. We do not know
--- that the client blocks either, and greying a control the client would have honoured is a worse
--- failure than the one being fixed, because nothing about it looks like a bug.
+-- Mounted is read by `ActionState` and is deliberately not refused here. We do not know that the
+-- client blocks it, and greying a control the client would have honoured is a worse failure than
+-- the one being fixed, because nothing about it looks like a bug. `combat` — UnitAffectingCombat,
+-- what the PLAYER is doing — is not refused either, for the same reason.
+--
+-- `lockdown` is refused, and it is the one condition here that was never a guess: it is the client's
+-- own answer to "will a protected call be blocked right now", and the driver's PickupInventoryItem
+-- is protected. Kitbag called it anyway and the client answered with ADDON_ACTION_BLOCKED, which
+-- stops the swap where it stands and tells the player, by name, that Kitbag tried something
+-- forbidden (BUG-17).
 --
 -- An unreadable state permits the swap. A missing reading is not evidence of a problem, and treating
 -- it as one would disable the controls permanently and silently on any flavour whose API we failed
@@ -1177,8 +1189,29 @@ function Core.CanSwap(state)
     -- Death first: a cast clears itself in a second or two and death does not, so naming the
     -- transient condition would send the player off waiting for the wrong thing to pass.
     if state.dead then return false, "dead" end
+    -- Above casting for the reason death is above both: a fight does end by itself, but not in the
+    -- second or two a cast takes, so naming the cast would send the player off to wait for the wrong
+    -- thing to pass.
+    if state.lockdown then return false, "combat" end
     if state.casting then return false, "casting" end
     return true
+end
+
+--- The same question asked on behalf of a SECURE control — one the player's own click drives.
+--- Takes and returns exactly what `CanSwap` does.
+--
+-- The trinket bar is the caller: SecureActionButtonTemplate buttons whose attributes are fixed at
+-- creation, so the click that fires them is the player's and the client honours it mid-fight —
+-- which is the only time anybody clicks a trinket. Combat lockdown closes the door on Kitbag's own
+-- calls and on nothing else, so a bar dimmed for the length of every fight would be the addon
+-- reporting its own limitation as the player's.
+--
+-- Asked here rather than by the frame subtracting the condition it disagrees with: a frame with its
+-- own opinion of what "blocked" means is the drift UI-19 exists to prevent, pointing the other way.
+function Core.CanUse(state)
+    local can, why = Core.CanSwap(state)
+    if not can and why == "combat" then return true end
+    return can, why
 end
 
 -- Modifier keys that arrive on their own while a chord is still being formed. Taking one as the
