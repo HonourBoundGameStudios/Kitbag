@@ -694,4 +694,40 @@ else
     end
 end
 
+-- The Process statement itself, held to the phases it must name.
+--
+-- Fleetcast 2026-09-14: the cycle now lives centrally as the `tdd` skill, and a ship that states the
+-- Process in its own words must carry the SAME phases. The failure that fleetcast was written about
+-- is a collapse to "RED → GREEN → COMMIT" — the dropped phases are REVIEW and UX REVIEW, nothing
+-- announces their absence, and a crew that never read the long version cannot miss them.
+--
+-- This is holdable here for one reason: CLAUDE.md is TRACKED. Process/, Research/ and Design/ are
+-- gitignored, so no test can read them on CI and nothing catches their drift; the one working note
+-- that IS in the repository is the one the gate can defend, so it should.
+--
+-- UX REVIEW earns its own line on this ship in particular. The gate cannot draw a frame, so a change
+-- to the window is unverified until a client has drawn it, and "the tests are green" has been taken
+-- for "it works" on exactly that kind of change more than once here.
+-- The statement is read whole rather than by line: it is one sentence, it is bold from "**RED" to
+-- the closing "**", and where it happens to wrap at the file's ~100 columns is not a fact about the
+-- Process. A check that fails when a sentence is rewrapped is a check that trains people to rewrap
+-- around it.
+local processLine
+do
+    local parts
+    for line in io.lines("CLAUDE.md") do
+        if not parts and line:find("^%*%*RED") then parts = {} end
+        if parts then
+            parts[#parts + 1] = line
+            if line:find("%*%*%s*$") then break end
+        end
+    end
+    processLine = parts and table.concat(parts, " ")
+end
+H.ok(processLine ~= nil, "CLAUDE.md states the Process, in bold, starting with RED")
+for _, phase in ipairs({ "RED", "GREEN", "REVIEW", "UX REVIEW", "COMMIT", "DEPLOY", "propose next" }) do
+    H.ok((processLine or ""):find(phase, 1, true) ~= nil,
+        "…and the Process statement names " .. phase)
+end
+
 H.done()

@@ -40,8 +40,12 @@ only be tested by wearing the bug.
 
 ## The Process — NON-NEGOTIABLE
 
-**RED → GREEN → REVIEW (repeat until clean) → COMMIT → DEPLOY → propose next → repeat.**
+**RED → GREEN → REVIEW (repeat until clean) → UX REVIEW (if UI) → COMMIT → DEPLOY →
+propose next → repeat.**
 One item, one commit.
+
+`Tests/toc_test.lua` holds that statement to every phase it names — see the fleetcast note under
+UX REVIEW for why a Process statement is worth a gate line of its own.
 
 > **⭐ "propose next" applies at the end of EVERY completed goal or task** — not only backlog
 > items worked RED→GREEN. A fix, a spike, a tidy-up, a one-off chore: if anything is open when it
@@ -57,12 +61,16 @@ One item, one commit.
 2. **GREEN** — the minimum code to pass. `Tests\run-all.ps1` must be green.
 3. **REVIEW** — read the diff for correctness, style, and simplification. Fix, re-verify, repeat
    until the review is clean.
-4. **COMMIT** — immediately, one behaviour per commit.
-5. **DEPLOY** — `pwsh -File deploy.ps1`, every time, without being asked.
-6. **Propose the next item and wait** for a go-ahead.
+4. **UX REVIEW** — *if the change draws anything.* State what should now be on screen, then get
+   a client to draw it: deploy, `/reload`, and look — or have the Admiral look, and say so. A
+   change to the window is **not reviewed until it has been seen.**
+5. **COMMIT** — immediately, one behaviour per commit.
+6. **DEPLOY** — `pwsh -File deploy.ps1`, every time, without being asked.
+7. **Propose the next item and wait** for a go-ahead.
 
-**Hard rules:** never implement before the failure is confirmed; never skip the review; never batch
-two items into one commit; never commit with `run-all.ps1` red; never finish without deploying.
+**Hard rules:** never implement before the failure is confirmed; never skip the review; never call a
+UI change done on a green gate alone; never batch two items into one commit; never commit with
+`run-all.ps1` red; never finish without deploying.
 
 **⭐ DEPLOY IS A STEP, NOT A FAVOUR.** The gate proves the pure logic; it cannot draw a frame, and
 most of what this addon does only exists in a client. Leaving the work in the repo means the next
@@ -71,6 +79,16 @@ and the round trip that in-client work is already expensive in gets spent twice.
 commit, so what is installed is a build that exists in history and can be named. If `deploy.ps1`
 cannot find the client, say so and hand over the `-WowPath` line — a failed deploy is a reportable
 outcome, never a silent skip. *(Admiral's order, 2026-09-12.)*
+
+**⭐ UX REVIEW IS THE ONE PHASE THE GATE CANNOT DO FOR YOU.** `run-all.ps1` proves the deciding;
+it has never seen a pixel. So the evidence for a UI change is a client having drawn it, and the only
+two honest reports are *"seen, here is what it looked like"* and *"NOT seen — here is what to look
+for"*. Never the silence in between, which reads as the first and means the second. Kitbag has paid
+for that silence twice: UI-34's keybinding row shipped on a layout measured before its last change,
+and BUG-17's combat refusal is in players' hands today having met a test suite and never a fight.
+When the agent cannot look, the ask goes last under its own heading, per the standing orders.
+*(Fleetcast 2026-09-14 — the fleet's `tdd` skill names eight phases; this ship was stating seven.
+The collapse that fleetcast was written about drops REVIEW and UX REVIEW without announcing it.)*
 
 **Extract the testable seam.** Pull decisions out of the frame/event code into plain functions that
 take tables and return tables, and test *those* exhaustively. The wiring left behind is thin enough
