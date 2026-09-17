@@ -646,6 +646,28 @@ local function trackedTopLevel()
     return any and top or nil
 end
 
+-- The other direction, as a pure (verdict, sentence) pair. An ignore entry naming something the
+-- client needs is the failure that LOOKS like a working release right up until somebody who is not
+-- the developer installs it — so this line gets read, and the sentence is half of what it reports.
+-- It lives out here, above the git/io.popen skip, because the wording can be held on a machine that
+-- cannot answer what a clone receives.
+local function shipDirection(name, shipped)
+    return shipped[name] ~= true,
+        name .. " is ignored by " .. PKGMETA .. ", so package.ps1 must not ship it to the client"
+end
+
+-- The case the repository itself cannot supply: an ignore entry that IS shipped. Every real run
+-- takes this direction green, and a check only ever seen passing is a check whose failure — and
+-- whose wording — nobody has read. `Media` is the concrete one to fear: ignore it and the zip loses
+-- both textures while still installing.
+do
+    local verdict, sentence = shipDirection("Media", { Media = true })
+    H.ok(not verdict, "an ignore entry that package.ps1 ships fails the ship-direction check")
+    H.eq(sentence,
+        "Media is ignored by " .. PKGMETA .. ", so package.ps1 must not ship it to the client",
+        "…and the sentence says what was measured: ignored here, therefore not shipped there")
+end
+
 local shippedSet = packagedTopLevel()
 local tracked = trackedTopLevel()
 
@@ -667,11 +689,8 @@ else
         end
     end
 
-    -- The other direction. An ignore entry naming something the client needs is the failure that
-    -- LOOKS like a working release right up until somebody who is not the developer installs it.
     for name in pairs(ignored) do
-        H.ok(shippedSet[name] ~= true,
-            PKGMETA .. " does not ignore " .. name .. ", which package.ps1 ships to the client")
+        H.ok(shipDirection(name, shippedSet))
     end
 end
 
