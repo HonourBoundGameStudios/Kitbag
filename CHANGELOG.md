@@ -3,13 +3,21 @@
 All notable changes to Kitbag. The version here is the one in `Kitbag.toc` — the number players
 actually see — and `Tests/toc_test.lua` holds the two together.
 
-## [0.2.4] — 2026-09-12
+## [0.2.4] — 2026-09-16
 
-A long keybinding is readable again, and the self-check report stops answering questions it never
-asked.
+Kitbag stops reaching for your gear mid-fight, a long keybinding is readable again, and the
+self-check report stops answering questions it never asked.
 
 ### Fixed
 
+- **Kitbag no longer tries to change gear in combat.** The game does not let an addon touch your
+  equipment while you are in a fight — you can drag a weapon on yourself, but an addon cannot do it
+  for you — and Kitbag asked anyway. The client refused the call, the swap stopped wherever it had
+  got to, and you got a red message naming Kitbag as an addon that tried something it should not
+  have. Now the Equip button greys for the length of the fight and says why, a set pressed as a
+  fight is ending still lands, and one pressed in earnest is reported in a sentence that names
+  combat instead of guessing at "dead or casting". **The trinket bar is unaffected and stays
+  clickable** — that click is yours, not the addon's, and the game has never had a problem with it.
 - **A bound key with a modifier no longer spills across the panel.** The keybinding button shared a
   row with Inherit on 82 pixels, and the game spells a chord out in full: `CTRL-NUMPAD9` does not fit
   in 82 pixels, and the button does not shrink a label that will not fit — it lets it out under its

@@ -61,6 +61,11 @@ Supports **Classic Era**. That is the only flavour Kitbag ships for.
 readiness and move-by-move tooltips, paperdoll flyouts, set icons, the trinket bar, the settings and
 the ItemRack importer all work. Auto-swap rules are shelved in `Icebox/` — see the note at the top.
 
+**Kitbag will not change gear in combat**, because the game will not let any addon do it. The Equip
+button greys for the length of the fight and says why; a set pressed as a fight ends still lands,
+and one pressed in earnest is reported rather than half-applied. The trinket bar keeps working —
+that click is the player's, not the addon's.
+
 Kitbag's **armoured pack icon** appears in the AddOns list, on the minimap button, on the broker
 launcher and on the Equip button. It replaced the first custom satchel icon in 0.2.2 because the new
 silhouette reads more clearly as gear at a glance.
