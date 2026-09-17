@@ -398,53 +398,62 @@ Verify.CHECKS = {
         end,
     },
     {
-        id = "death-watch", item = "VERIFY-15", label = "The window is told about dying and reviving",
+        id = "death-watch", item = "VERIFY-15",
+        label = "The window is told about dying, reviving and combat",
         -- The item's own reading: greying the controls is Core.CanSwap and is covered pure, so a
         -- control that behaves wrongly around death is most likely a window nobody TOLD. That telling
-        -- is three events on a watcher of the window's own, registered inside a pcall because an
-        -- event a flavour does not have is a hard error — so a missing one is silent, and the two
-        -- halves are silent in opposite directions.
+        -- is five events on a watcher of the window's own, registered inside a pcall because an event
+        -- a flavour does not have is a hard error — so a missing one is silent, and the two halves
+        -- are silent in opposite directions.
         --
-        -- PLAYER_DEAD missing leaves the controls live and offering a swap that cannot happen, which
-        -- is UI-19's original complaint returning. The other pair missing is worse and stranger: the
-        -- controls stay greyed after a release, so the player is alive, well, and looking at a window
-        -- that says they cannot change gear — with nothing to click, since the repaint is the very
-        -- thing that did not arrive.
+        -- PLAYER_DEAD or PLAYER_REGEN_DISABLED missing leaves the controls live and offering a swap
+        -- that cannot happen, which is UI-19's original complaint returning — and in combat's case
+        -- the swap is one the client will answer with ADDON_ACTION_BLOCKED (BUG-17). The other three
+        -- missing is worse and stranger: the controls stay greyed after a release or a fight, so the
+        -- player is alive, out of combat, and looking at a window that says they cannot change gear —
+        -- with nothing to click, since the repaint is the very thing that did not arrive.
         run = function()
-            local watcher = _G.KitbagDeathWatcher
+            local watcher = _G.KitbagStateWatcher
             if not watcher then return nil, "KitbagUI is not loaded, so nothing is watching at all" end
 
-            local asked, on = pcall(watcher.IsEventRegistered, watcher, "PLAYER_DEAD")
+            local asked = pcall(watcher.IsEventRegistered, watcher, "PLAYER_DEAD")
             if not asked then
                 return nil, "this client will not answer IsEventRegistered, so registration cannot "
                     .. "be established from here"
             end
 
-            -- The two directions are reported separately rather than as a count, because the reader's
-            -- next move differs: one is "the greying never starts", the other is "the greying never
-            -- ends", and a line saying "2 of 3 registered" makes them look like the same fault.
-            local wake = {}
-            for _, event in ipairs({ "PLAYER_ALIVE", "PLAYER_UNGHOST" }) do
-                local ok, has = pcall(watcher.IsEventRegistered, watcher, event)
-                if not (ok and has) then wake[#wake + 1] = event end
+            local function missing(events)
+                local out = {}
+                for _, event in ipairs(events) do
+                    local ok, has = pcall(watcher.IsEventRegistered, watcher, event)
+                    if not (ok and has) then out[#out + 1] = event end
+                end
+                return out
             end
 
-            if not on and #wake > 0 then
-                return false, "none of the three death events registered — the window will neither "
-                    .. "grey its controls when you die nor bring them back when you rise"
+            -- The two directions are reported separately rather than as a count, because the reader's
+            -- next move differs: one is "the greying never starts", the other is "the greying never
+            -- ends", and a line saying "3 of 5 registered" makes them look like the same fault.
+            local grey = missing({ "PLAYER_DEAD", "PLAYER_REGEN_DISABLED" })
+            local wake = missing({ "PLAYER_ALIVE", "PLAYER_UNGHOST", "PLAYER_REGEN_ENABLED" })
+
+            if #grey > 0 and #wake > 0 then
+                return false, "none of the five states registered — the window will neither grey its "
+                    .. "controls when you die or pull nor bring them back afterwards"
             end
-            if not on then
-                return false, "PLAYER_DEAD did not register — the controls stay live while you are "
-                    .. "dead and will offer a swap that cannot happen (UI-19)"
+            if #grey > 0 then
+                return false, string.format(
+                    "%s did not register — the controls stay live and will offer a swap that cannot "
+                    .. "happen (UI-19)", table.concat(grey, " and "))
             end
             if #wake > 0 then
                 return false, string.format(
-                    "%s did not register — the controls grey on death and never come back on "
-                    .. "release, which looks like the window having locked up",
-                    table.concat(wake, " and "))
+                    "%s did not register — the controls grey and never come back, which looks like "
+                    .. "the window having locked up", table.concat(wake, " and "))
             end
-            return true, "PLAYER_DEAD, PLAYER_ALIVE and PLAYER_UNGHOST all registered, so the "
-                .. "window is told both when to grey its controls and when to give them back"
+            return true, "PLAYER_DEAD, PLAYER_REGEN_DISABLED and their three counterparts all "
+                .. "registered, so the window is told both when to grey its controls and when to "
+                .. "give them back"
         end,
     },
     {

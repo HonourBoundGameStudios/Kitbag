@@ -1925,25 +1925,30 @@ function UI.Refresh()
     refreshAbout(panels and panels.about)
 end
 
--- Dying and coming back changes whether Equip may be pressed, and nothing else in the addon redraws
--- the window for it (UI-19). A watcher of its own, and now the only one in the addon: the rule
--- engine that used to keep its own event list is shelved in Icebox/.
+-- Dying and coming back changes whether Equip may be pressed, and so does a fight starting and
+-- ending, and nothing else in the addon redraws the window for either (UI-19, BUG-17). One watcher
+-- for all of it, and the only one in the addon: the rule engine that used to keep its own event list
+-- is shelved in Icebox/.
 --
--- Death only. A cast also blocks a swap, but it clears itself in a second or two and the driver
--- simply waits it out and then succeeds — which is correct behaviour, not the bug. Registering the
--- seven spellcast events to grey a button for the length of a Frostbolt would put this frame in the
--- middle of every combat log for no outcome anyone would notice.
+-- These states and no others. A cast also blocks a swap, but it clears itself in a second or two and
+-- the driver simply waits it out and then succeeds — which is correct behaviour, not the bug.
+-- Registering the seven spellcast events to grey a button for the length of a Frostbolt would put
+-- this frame in the middle of every combat log for no outcome anyone would notice. Combat is the
+-- opposite case and that is why it is here: it lasts minutes, the client will not let an addon touch
+-- gear for any of them, and a button that stays bright through the whole fight is the exact promise
+-- UI-19 was written to stop making.
 --
--- Named, and for a reason: a watcher with no handle on it from outside can only be checked by dying,
--- and dying is the one act `/kit verify` cannot perform. The name is what lets a check ask whether
--- the client ACCEPTED these three — the registration is inside a
--- pcall, so an event a flavour lacks is silent, and silent in the worst direction: PLAYER_ALIVE and
--- PLAYER_UNGHOST are what bring the window back by itself on release (VERIFY-15).
-local deathWatcher = CreateFrame("Frame", "KitbagDeathWatcher")
-for _, event in ipairs({ "PLAYER_DEAD", "PLAYER_ALIVE", "PLAYER_UNGHOST" }) do
-    pcall(deathWatcher.RegisterEvent, deathWatcher, event)
+-- Named, and for a reason: a watcher with no handle on it from outside can only be checked by dying
+-- or by pulling something, and neither is an act `/kit verify` can perform. The name is what lets a
+-- check ask whether the client ACCEPTED these five — the registration is inside a pcall, so an event
+-- a flavour lacks is silent, and silent in the worst direction: PLAYER_ALIVE, PLAYER_UNGHOST and
+-- PLAYER_REGEN_ENABLED are what bring the window back by itself (VERIFY-15).
+local stateWatcher = CreateFrame("Frame", "KitbagStateWatcher")
+for _, event in ipairs({ "PLAYER_DEAD", "PLAYER_ALIVE", "PLAYER_UNGHOST",
+                         "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED" }) do
+    pcall(stateWatcher.RegisterEvent, stateWatcher, event)
 end
-deathWatcher:SetScript("OnEvent", function() UI.Refresh() end)
+stateWatcher:SetScript("OnEvent", function() UI.Refresh() end)
 
 --- Show one page. Returns the index shown, or nil if there is no such tab.
 ---

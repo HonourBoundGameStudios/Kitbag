@@ -1530,6 +1530,52 @@ H.ok(rawget(panel, "blocked") == nil, "…and the window stops holding a reason 
 H.ok(rawget(panel.equip, "kitbagDimmed") == false,
     "…and the picture comes back with it, rather than staying grey on a button that now works")
 
+
+-- ---------------------------------------------------------------------------
+-- Combat greys the same controls, and the window is TOLD about it (BUG-17)
+-- ---------------------------------------------------------------------------
+--
+-- The decision is `Core.CanSwap` and is covered pure. What is asked here is the half VERIFY-15
+-- learned about death: a control greys when the window is repainted, and nothing repaints it unless
+-- something is listening. Nothing in this addon fires on entering combat — the trinket bar polls and
+-- the window does not — so without the two REGEN events the Equip button stays bright for the whole
+-- fight, and clicking it now buys ten seconds of BUSY_LIMIT and a refusal, which is UI-19's original
+-- complaint wearing the new condition.
+G.InCombatLockdown = function() return true end
+UI.Refresh()
+H.ok(not panel.equip:IsEnabled(), "in combat, Equip greys — the client will block the driver's call")
+H.eq(rawget(panel, "blocked"), "combat", "…and the window holds the reason, so the grey explains")
+H.ok(panel.delete:IsEnabled(), "…while the controls that move no gear stay live, as when dead")
+
+G.InCombatLockdown = function() return false end
+UI.Refresh()
+H.ok(panel.equip:IsEnabled(), "the fight ending gives Equip back")
+H.ok(rawget(panel, "blocked") == nil, "…and the reason goes with it")
+
+-- One watcher for every state that greys these controls, rather than a second frame beside it: they
+-- all end in the same repaint, and two watchers is two places to forget one.
+local watcher = rawget(G, "KitbagStateWatcher")
+H.ok(watcher ~= nil, "the window keeps a watcher for the states that grey its controls")
+H.ok(watcher and watcher:IsEventRegistered("PLAYER_REGEN_DISABLED") == true,
+    "…and is told when a fight starts, or nothing greys until something else repaints the window")
+H.ok(watcher and watcher:IsEventRegistered("PLAYER_REGEN_ENABLED") == true,
+    "…and when it ends, or the greying outlives the fight with nothing on screen to press")
+H.ok(watcher and watcher:IsEventRegistered("PLAYER_DEAD") == true,
+    "…and death is still on the same watcher, not left behind by the rename")
+
+-- The in-client check has to ask about all five, for the reason it was written: a registration that
+-- silently did not happen is invisible from inside the addon's own code, and the pcall around it
+-- means a flavour lacking an event says nothing at all.
+local watchCheck
+for _, check in ipairs(Kitbag.Verify.CHECKS) do
+    if check.id == "death-watch" then watchCheck = check end
+end
+H.ok(watchCheck ~= nil, "the watcher check is registered under the id the acts and tests use")
+local watchOk, watchDetail = watchCheck.run()
+H.eq(watchOk, true, "…and it passes against a client that accepted every event")
+H.ok(tostring(watchDetail):find("PLAYER_REGEN_DISABLED", 1, true) ~= nil,
+    "…naming the combat events too, so a check that stopped covering them cannot look like a pass")
+
 -- ---------------------------------------------------------------------------
 -- The inherit menu ticks the real parent, and picking one redraws (VERIFY-13)
 -- ---------------------------------------------------------------------------
