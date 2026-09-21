@@ -1,9 +1,19 @@
 # Changelog
 
-All notable changes to Kitbag. The version here is the one in `Kitbag.toc` — the number players
-actually see — and `Tests/toc_test.lua` holds the two together.
+All notable changes to Kitbag. The version here is the one in `Kitbag.toc` - the number players
+actually see - and `Tests/toc_test.lua` holds the two together.
 
-## [0.2.4] — 2026-09-16
+## [0.2.5] - 2026-09-21
+
+Shortcut replacement is now a single, explicit confirmation instead of a blocked binding.
+
+### Fixed
+
+- **Replacing a player shortcut now asks once and commits immediately.** When a kit shortcut is
+  already assigned to a player action, Kitbag names that action in a confirmation dialog. Accepting
+  unbinds the old action and assigns the kit shortcut without requiring a second Enter confirmation.
+
+## [0.2.4] - 2026-09-16
 
 Kitbag stops reaching for your gear mid-fight, a long keybinding is readable again, and the
 self-check report stops answering questions it never asked.
