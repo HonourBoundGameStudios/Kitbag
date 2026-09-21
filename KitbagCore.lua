@@ -1281,6 +1281,18 @@ function Core.BindingCandidate(key, state)
     return { ok = true, key = key }
 end
 
+--- Describe the confirmation needed before replacing a player's binding.
+function Core.BindingOffer(candidate)
+    if type(candidate) ~= "table" or candidate.why ~= "player-binding" then return nil end
+    local key = candidate.key
+    local label = candidate.label or candidate.action or "that action"
+    return {
+        key = key,
+        label = label,
+        text = string.format("Unbind %s from %s and use it for this kit?", key, label),
+    }
+end
+
 --- Player-facing explanation for a refused capture (UI-31).
 --
 -- This is deliberately pure too. The visible sentence is an outcome of the policy above, not a

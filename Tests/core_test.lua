@@ -1352,6 +1352,11 @@ local occupied = C.BindingCandidate("W", {
 })
 H.eq(occupied.ok, false, "a player-bound key is never available to a gear set")
 H.eq(occupied.why, "player-binding", "…and explains the refusal as a player binding")
+local offer = C.BindingOffer(occupied)
+H.eq(offer.key, "W", "an occupied key offer keeps the key to unbind")
+H.eq(offer.label, "Move Forward", "the offer names the action that would be unbound")
+H.eq(offer.text, "Unbind W from Move Forward and use it for this kit?",
+    "the offer asks before replacing the player's binding")
 H.eq(C.BindingRefusalLabel("W", occupied), "W is bound to Move Forward — hold a modifier",
     "the button names the action the player would otherwise lose")
 

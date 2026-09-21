@@ -1172,11 +1172,26 @@ H.eq(propagate[#propagate], false, "…and stops the keystroke reaching the game
 -- is no longer showing.
 G.BINDING_NAME_MOVEFORWARD = "Move Forward"
 local normalBindingAction = G.GetBindingAction
+local normalSetBinding = G.SetBinding
+local normalStaticPopupShow = G.StaticPopup_Show
+local askedBinding = {}
 G.GetBindingAction = function(binding)
     return binding == "W" and "MOVEFORWARD" or ""
 end
+G.SetBinding = function(binding)
+    askedBinding.key = binding
+    return true
+end
+G.StaticPopup_Show = function(which, arg1, arg2, data)
+    askedBinding = { which = which, key = arg1, label = arg2, data = data }
+    return newWidget("StaticPopup1")
+end
 key:GetScript("OnKeyDown")(key, "W")
 H.eq(G.Kitbag.char.sets.Set07.key, nil, "a player-bound key never changes the selected set")
+H.eq(askedBinding.which, "KITBAG_UNBIND", "an occupied key asks before replacing the player binding")
+H.eq(askedBinding.key, "Unbind W from Move Forward and use it for this kit?",
+    "…and the popup names the captured key and action")
+H.eq(askedBinding.data.button, key, "…and carries the capture button for the answer")
 -- BUG-16. The refusal is said in two places, and which half goes where is the whole fix: the
 -- button does not clip at any width, so the sentence went to the 316px line under the list — where
 -- UI-29 already puts the rename refusal — and the button keeps a caption that fits it.
@@ -1184,9 +1199,14 @@ H.eq(key:GetText(), "Try again…",
     "a refused press leaves the button saying the mode, not a sentence wider than the button")
 H.eq(G.KitbagStatusLine:GetText(), "W is bound to Move Forward — hold a modifier",
     "…and the line under the list names the player action Kitbag refused to take")
-key:GetScript("OnKeyDown")(key, "ENTER")
-H.eq(G.Kitbag.char.sets.Set07.key, nil, "Enter cannot commit an earlier proposal after a refusal")
+G.StaticPopupDialogs.KITBAG_UNBIND.OnAccept({}, askedBinding.data)
+H.eq(askedBinding.key, "W", "accepting the popup calls the client unbind")
+H.eq(G.Kitbag.char.sets.Set07.key, "W", "accepting the popup commits the key immediately")
+H.eq(key:GetText(), "W", "accepting the popup leaves the committed key on the button")
+H.eq(keyboard[#keyboard], false, "accepting the popup gives the keyboard back")
 G.GetBindingAction = normalBindingAction
+G.SetBinding = normalSetBinding
+G.StaticPopup_Show = normalStaticPopupShow
 
 -- The first chord is a proposal, not a destructive write. Re-pressing replaces it, so a mis-hit
 -- costs nothing until Enter says this is the one to keep.
@@ -1194,7 +1214,7 @@ G.Kitbag.char.sets.Set06.key = "F8"
 key:GetScript("OnKeyDown")(key, "F8")
 H.ok(G.KitbagStatusLine:GetText() ~= "W is bound to Move Forward — hold a modifier",
     "a refusal that has been answered stops being displayed under a key the player has moved on from")
-H.eq(G.Kitbag.char.sets.Set07.key, nil, "capturing a key does not replace the committed binding")
+H.eq(G.Kitbag.char.sets.Set07.key, "W", "capturing a key does not replace the committed binding")
 H.eq(G.Kitbag.char.sets.Set06.key, "F8", "…or take the proposed key from another set")
 H.eq(key:GetText(), "F8 — Enter to keep, Escape to cancel (takes it from Set06)",
     "the proposal tells the player how to commit and what it would cost")

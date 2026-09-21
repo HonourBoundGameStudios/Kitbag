@@ -636,6 +636,7 @@ local function stopCapture(button)
     capturing = false
     pendingBinding = nil
     pendingRefusal = nil
+    StaticPopup_Hide("KITBAG_UNBIND")
     button:EnableKeyboard(false)
     -- Restored, not merely turned off. While capturing, this frame is the only thing in the game
     -- receiving keys — including the ones that open the menu and the ones that close this window —
@@ -662,7 +663,7 @@ local function onKeyCaptured(button, key)
 
     -- Core owns which raw keystrokes can form chords; Compat then asks the client whether the
     -- completed chord already belongs to the player. A capture that cannot prove the key is free
-    -- must not take it — the button names the action rather than silently appearing to ignore it.
+    -- must not take it without asking - the button names the action rather than silently replacing it.
     local binding, why = Core.BindingKey(key, IsShiftKeyDown(), IsControlKeyDown(), IsAltKeyDown())
     if not binding then
         pendingBinding = nil
@@ -676,6 +677,14 @@ local function onKeyCaptured(button, key)
         pendingBinding = nil
         pendingRefusal = candidate
         paintKey(button)
+        local offer = Core.BindingOffer(candidate)
+        if offer then
+            StaticPopup_Show("KITBAG_UNBIND", offer.text, nil, {
+                button = button,
+                key = offer.key,
+                set = selected,
+            })
+        end
         return
     end
 
@@ -1732,6 +1741,29 @@ local function build()
         button1 = DELETE or "Delete",
         button2 = CANCEL,
         OnAccept = function(self, name) Sets.Delete(name) end,
+        hideOnEscape = true,
+        whileDead = true,
+        timeout = 0,
+        preferredIndex = 3,
+    }
+
+    StaticPopupDialogs["KITBAG_UNBIND"] = {
+        text = "%s",
+        button1 = "Unbind and use",
+        button2 = CANCEL,
+        OnAccept = function(self, data)
+            if not data or not data.button or not data.key or not data.set then return end
+            if not capturing or selected ~= data.set then return end
+            if data.button.IsShown and not data.button:IsShown() then return end
+            if InCombatLockdown() then
+                Sets.Say("Keybindings cannot be changed in combat - leave combat and try again.")
+                return
+            end
+            if not SetBinding(data.key) then return end
+            if Kitbag.Bindings.Set(data.set, data.key) then
+                stopCapture(data.button)
+            end
+        end,
         hideOnEscape = true,
         whileDead = true,
         timeout = 0,
