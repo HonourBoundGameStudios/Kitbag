@@ -89,6 +89,9 @@ and BUG-17's combat refusal is in players' hands today having met a test suite a
 When the agent cannot look, the ask goes last under its own heading, per the standing orders.
 *(Fleetcast 2026-09-14 — the fleet's `tdd` skill names eight phases; this ship was stating seven.
 The collapse that fleetcast was written about drops REVIEW and UX REVIEW without announcing it.)*
+**Batches of independent items → `/mt-tdd`** (same cycle per item, parallel drafting, one merge). Step 0
+here: `run-all.ps1` is plain CLI, so drafting agents can self-verify the gate; the WoW client is the
+singleton — only the orchestrator deploys and looks, one item at a time.
 
 **Extract the testable seam.** Pull decisions out of the frame/event code into plain functions that
 take tables and return tables, and test *those* exhaustively. The wiring left behind is thin enough
@@ -223,3 +226,6 @@ network — the flagship's `tools/fleet-comms.ps1` resolves each ship's path fro
   uncommitted.
 
 > Security: keep the fleet roster need-to-know. Don't broadcast every ship's presence or location.
+## Fleetcast — backlog archive discipline
+
+When a backlog item is complete, move its detail verbatim to `Archive.md` and delete the item from `Backlog.md` in the same commit. The archive is the source of record; leave no completed checklist or shipped-summary stub behind.
