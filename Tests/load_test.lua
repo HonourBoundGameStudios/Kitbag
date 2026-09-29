@@ -1343,6 +1343,24 @@ UI.Select("Set07")
 local renameButton = G.KitbagRenameButton
 H.ok(renameButton ~= nil, "the action row has a Rename control, named so a check can measure it")
 
+-- BUG-18. Capture mode is a clamp on the keyboard, and two text boxes are the other things that want
+-- it. Opening either while the key button is still capturing left both listening: the keys typed
+-- into the name went to the keybinding proposal as well. Taking the keyboard for text ends capture.
+do
+    local keyboard = {}
+    rawset(G.KitbagKeyButton, "EnableKeyboard", function(_, on) keyboard[#keyboard + 1] = on end)
+    G.KitbagKeyButton:Click("LeftButton")
+    H.eq(keyboard[#keyboard], true, "BUG-18 setup: the key button is capturing")
+    renameButton:Click()
+    H.eq(keyboard[#keyboard], false, "opening the rename box ends keybinding capture")
+    renameButton:Click() -- closes the box again
+
+    G.KitbagKeyButton:Click("LeftButton")
+    H.eq(keyboard[#keyboard], true, "BUG-18 setup: capturing again")
+    G.KitbagNameBox:GetScript("OnEditFocusGained")(G.KitbagNameBox)
+    H.eq(keyboard[#keyboard], false, "focusing the new-set name box ends keybinding capture")
+end
+
 renameButton:Click()
 local box = G.KitbagRenameBox
 H.ok(box ~= nil and box:IsShown(), "pressing it opens an edit box rather than a chat prompt")

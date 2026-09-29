@@ -979,6 +979,9 @@ local function startRename(name)
     -- Both set before the redraw. The refresh blanks the row's name so the box is not typed over a
     -- FontString still showing the old one, and it also re-asks for the line under the list — which
     -- would otherwise be answered about whatever the box still held from the last rename.
+    -- Capture is a clamp on the keyboard, so it ends before text is typed. Left running, both
+    -- listened and every letter of the new name also proposed a keybinding (BUG-18).
+    if capturing then stopCapture(doll.key) end
     renaming = name
     renameBox:SetText(name)
     UI.Refresh()
@@ -1691,6 +1694,10 @@ local function build()
     nameBox:SetSize(306, 20)
     nameBox:SetPoint("BOTTOMLEFT", main, "BOTTOMLEFT", 20, 15)
     nameBox:SetAutoFocus(false)
+    -- The same reason as startRename: typing a set name must not also propose a keybinding.
+    nameBox:SetScript("OnEditFocusGained", function()
+        if capturing then stopCapture(doll.key) end
+    end)
 
     -- Both buttons take the name from the same box, so they read it the same way — through the same
     -- function the store uses. Selecting the RAW text would leave the inspector pointing at " Tank "
