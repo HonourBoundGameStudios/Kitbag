@@ -752,9 +752,13 @@ local function buildKeyButton(panel, gapWidth)
         pcall(self.SetPropagateKeyboardInput, self, false)
     end)
 
-    -- Explicitly off: the button must not be listening until a click says so. See onKeyCaptured.
-    panel.key:EnableKeyboard(false)
     panel.key:SetScript("OnKeyDown", onKeyCaptured)
+    -- Off, and AFTER the handler is set: the client appears to turn a frame's keyboard on when it is
+    -- given a key handler, which undid this when it came first. A listening frame also swallows what
+    -- it hears unless told otherwise, and that took Backspace and Enter away from the rename box
+    -- (BUG-18). Idle, this button neither listens nor swallows; a click flips both.
+    panel.key:EnableKeyboard(false)
+    pcall(panel.key.SetPropagateKeyboardInput, panel.key, true)
     panel.key:SetScript("OnEnter", onKeyEnter)
     panel.key:SetScript("OnLeave", onCellLeave)
     -- Nothing should be able to leave the game deaf. If the window goes away mid-capture — Escape

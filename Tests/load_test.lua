@@ -75,7 +75,17 @@ SCRIPT_METHODS = {
         local scripts = rawget(self, "_scripts")
         if not scripts then scripts = {}; rawset(self, "_scripts", scripts) end
         scripts[name] = fn
+        -- ASSUMED client behaviour, not yet confirmed in one: giving a frame a key handler turns its
+        -- keyboard on, so an EnableKeyboard(false) made BEFORE the handler is set is undone by it.
+        -- Modelled so the build order is tested rather than trusted (BUG-18).
+        if fn and (name == "OnKeyDown" or name == "OnKeyUp" or name == "OnChar") then
+            rawset(self, "_keyboard", true)
+        end
     end,
+    EnableKeyboard = function(self, on) rawset(self, "_keyboard", on and true or false) end,
+    IsKeyboardEnabled = function(self) return rawget(self, "_keyboard") == true end,
+    SetPropagateKeyboardInput = function(self, on) rawset(self, "_propagate", on and true or false) end,
+    GetPropagateKeyboardInput = function(self) return rawget(self, "_propagate") end,
     GetScript = function(self, name)
         local scripts = rawget(self, "_scripts")
         return scripts and scripts[name] or nil
@@ -1360,6 +1370,16 @@ do
     H.eq(keyboard[#keyboard], true, "BUG-18 setup: capturing again")
     G.KitbagNameBox:GetScript("OnEditFocusGained")(G.KitbagNameBox)
     H.eq(keyboard[#keyboard], false, "focusing the new-set name box ends keybinding capture")
+
+    -- Backspace and Enter in the rename box died on the same button. A keyboard-enabled frame swallows
+    -- what it hears unless told to pass it on, so an idle key button must be neither listening nor
+    -- swallowing. (`rawset` overrides above shadow the mock's methods, so read the shadows away.)
+    rawset(G.KitbagKeyButton, "EnableKeyboard", nil)
+    rawset(G.KitbagKeyButton, "SetPropagateKeyboardInput", nil)
+    H.ok(not G.KitbagKeyButton:IsKeyboardEnabled(),
+        "an idle key button is not listening to the keyboard, whatever order its scripts were set in")
+    H.eq(G.KitbagKeyButton:GetPropagateKeyboardInput(), true,
+        "…and what it might still hear is passed on rather than swallowed")
 
     -- The one that was actually reported. A live client delivered keys to the button with capture
     -- never entered (the trace read `capturing=false focus=KitbagRenameBox`), so the handler must
