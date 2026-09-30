@@ -3,6 +3,18 @@
 All notable changes to Kitbag. The version here is the one in `Kitbag.toc` - the number players
 actually see - and `Tests/toc_test.lua` holds the two together.
 
+## [0.2.6] - 2026-09-30
+
+Typing a set's name no longer fights the keybinding button.
+
+### Fixed
+
+- **Typing in the name box no longer changes the keybinding.** With the set window open, typing a
+  name - or renaming a set - also made the key button react: letters were heard as a proposed
+  shortcut, and Backspace and Enter stopped working in the box. The key button now listens only after
+  you click it, ends capture the moment a name box takes the keyboard, and otherwise neither hears
+  nor swallows keys, so Backspace and Enter work in the rename box and Enter commits.
+
 ## [0.2.5] - 2026-09-21
 
 Shortcut replacement is now a single, explicit confirmation instead of a blocked binding.
