@@ -646,6 +646,11 @@ local function stopCapture(button)
 end
 
 local function onKeyCaptured(button, key)
+    -- The client can deliver keys to this button without a click having started capture: the trace
+    -- from a live client heard LSHIFT, P and ESCAPE here with `capturing` false while the rename box
+    -- held the keyboard (BUG-18). The mode is this file's to decide, not the client's to imply.
+    if not capturing then return end
+
     -- Escape always cancels, whether there is a proposal already or the player has only just
     -- entered capture. It reaches here rather than closing the window because propagation is off.
     if key == "ESCAPE" then
@@ -747,6 +752,8 @@ local function buildKeyButton(panel, gapWidth)
         pcall(self.SetPropagateKeyboardInput, self, false)
     end)
 
+    -- Explicitly off: the button must not be listening until a click says so. See onKeyCaptured.
+    panel.key:EnableKeyboard(false)
     panel.key:SetScript("OnKeyDown", onKeyCaptured)
     panel.key:SetScript("OnEnter", onKeyEnter)
     panel.key:SetScript("OnLeave", onCellLeave)

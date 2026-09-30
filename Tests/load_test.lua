@@ -1211,6 +1211,7 @@ G.StaticPopup_Show = normalStaticPopupShow
 -- The first chord is a proposal, not a destructive write. Re-pressing replaces it, so a mis-hit
 -- costs nothing until Enter says this is the one to keep.
 G.Kitbag.char.sets.Set06.key = "F8"
+key:Click("LeftButton") -- the popup answer ended capture, so a press is only heard after a new click
 key:GetScript("OnKeyDown")(key, "F8")
 H.ok(G.KitbagStatusLine:GetText() ~= "W is bound to Move Forward — hold a modifier",
     "a refusal that has been answered stops being displayed under a key the player has moved on from")
@@ -1359,6 +1360,18 @@ do
     H.eq(keyboard[#keyboard], true, "BUG-18 setup: capturing again")
     G.KitbagNameBox:GetScript("OnEditFocusGained")(G.KitbagNameBox)
     H.eq(keyboard[#keyboard], false, "focusing the new-set name box ends keybinding capture")
+
+    -- The one that was actually reported. A live client delivered keys to the button with capture
+    -- never entered (the trace read `capturing=false focus=KitbagRenameBox`), so the handler must
+    -- decide for itself that it is not listening, not trust that a click came first.
+    local before, kept = G.KitbagKeyButton:GetText(), G.Kitbag.char.sets.Set07.key
+    local statusBefore = G.KitbagStatusLine:GetText()
+    for _, k in ipairs({ "LSHIFT", "P", "ESCAPE", "ENTER" }) do
+        G.KitbagKeyButton:GetScript("OnKeyDown")(G.KitbagKeyButton, k)
+    end
+    H.eq(G.KitbagKeyButton:GetText(), before, "keys heard outside capture do not change the button")
+    H.eq(G.Kitbag.char.sets.Set07.key, kept, "…and never touch a set's binding")
+    H.eq(G.KitbagStatusLine:GetText(), statusBefore, "…nor put a refusal on the line under the list")
 end
 
 renameButton:Click()
